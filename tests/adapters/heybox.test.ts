@@ -5,6 +5,7 @@ import { checkJsonRoundTrip, validateDocument, type ContentDocument } from '../.
 import { mountFixture, readExpectedMd } from '../helpers';
 
 const POST_URL = 'https://www.xiaoheihe.cn/app/bbs/link/187550351';
+const IMAGE_TEXT_URL = 'https://www.xiaoheihe.cn/app/bbs/link/188074063';
 
 function extract(): ContentDocument {
   mountFixture('heybox', 'normal-post');
@@ -61,6 +62,46 @@ describe('小黑盒 adapter', () => {
     mountFixture('heybox', 'normal-post');
     expect(heyboxAdapter.detectTitle?.(new URL(POST_URL), document, 'heybox-post')).toBe(
       '大二大模型实习，独立开发招聘agent过程',
+    );
+  });
+});
+
+describe('小黑盒 图文帖（image-text）', () => {
+  function extractImageText(): ContentDocument {
+    mountFixture('heybox', 'image-text');
+    return heyboxAdapter.extract(document, new URL(IMAGE_TEXT_URL));
+  }
+
+  it('提取 + 渲染与期望一致，且通过结构校验与 JSON round-trip', () => {
+    const doc = extractImageText();
+    expect(validateDocument(doc)).toEqual([]);
+    expect(checkJsonRoundTrip(doc)).toBeNull();
+    expect(renderDocument(doc).trim()).toBe(readExpectedMd('heybox', 'image-text'));
+  });
+
+  it('元数据正确', () => {
+    const doc = extractImageText();
+    expect(doc.metadata.title).toBe('美国豆包站起来了吗');
+    expect(doc.metadata.author.name).toBe('JackyZZ');
+    expect(doc.metadata.published).toBe('');
+    expect(doc.metadata.id).toBe('188074063');
+  });
+
+  it('头部图片并入正文，评论/标签/轮播控件绝不混入', () => {
+    const md = renderDocument(extractImageText());
+    expect(md).toContain('thumb1.jpeg');
+    expect(md).toContain('thumb2.jpeg');
+    expect(md).toContain('谷歌 3.7 flash');
+    expect(md).not.toContain('1/2');
+    expect(md).not.toContain('这是评论');
+    expect(md).not.toContain('CodeX');
+    expect(md).not.toContain('关注');
+  });
+
+  it('detectTitle 返回图文帖标题', () => {
+    mountFixture('heybox', 'image-text');
+    expect(heyboxAdapter.detectTitle?.(new URL(IMAGE_TEXT_URL), document, 'heybox-post')).toBe(
+      '美国豆包站起来了吗',
     );
   });
 });

@@ -75,9 +75,24 @@ function extractBody(item: Element, baseUrl: string): BlockNode[] {
   for (const sel of HEYBOX_SELECTORS.remove) {
     for (const el of Array.from(clone.querySelectorAll(sel))) el.remove();
   }
-  const bodyEl = firstIn(clone, HEYBOX_SELECTORS.body) ?? clone;
   const ctx = createDomToAstContext(baseUrl);
-  const content = elementToBlocks(bodyEl, ctx);
+  const content: BlockNode[] = [];
+
+  // 图文帖头部图片轮播（位于文本之前，保持原始阅读顺序）
+  for (const sel of HEYBOX_SELECTORS.heroImages) {
+    for (const el of Array.from(clone.querySelectorAll(sel))) {
+      content.push(...elementToBlocks(el, ctx));
+    }
+  }
+
+  const bodyEl = firstIn(clone, HEYBOX_SELECTORS.body);
+  if (bodyEl) {
+    content.push(...elementToBlocks(bodyEl, ctx));
+  } else if (content.length === 0) {
+    // 兜底：没有明确正文容器时用整个 item
+    content.push(...elementToBlocks(clone, ctx));
+  }
+
   if (content.length === 0) {
     throw new ExtractionError('NOT_FOUND_BODY', ERROR_MESSAGES.NOT_FOUND_BODY);
   }

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"></head>
+<body>
+<div id="react-root">
+  <!-- 回复：不同作者，绝不能被保存 -->
+  <article role="article">
+    <div data-testid="User-Name">
+      <div class="user">
+        <a href="/bob"><span><span>Bob</span></span></a>
+        <span>@bob</span>
+      </div>
+    </div>
+    <div data-testid="tweetText"><span>这是一条回复评论，绝对不能出现在输出里。</span></div>
+    <div role="group"><span>👍 1</span></div>
+    <a href="/bob/status/999"><time datetime="2024-05-01T12:01:00.000Z">May 1</time></a>
+  </article>
+
+  <!-- 焦点推文 -->
+  <article role="article">
+    <div data-testid="User-Name">
+      <div class="user">
+        <a href="/alice"><span><span>Alice</span></span></a>
+        <span>@alice</span>
+      </div>
+    </div>
+    <div data-testid="tweetText">
+      <span>今天天气不错，分享一张照片，<a href="/hashtag/test">#test</a>。</span>
+    </div>
+    <div role="group">
+      <span>👍 100</span>
+      <span>🔁 20</span>
+    </div>
+    <a href="/alice/status/123456"><time datetime="2024-05-01T12:00:00.000Z">May 1, 2024</time></a>
+  </article>
+</div>
+</body>
+</html>

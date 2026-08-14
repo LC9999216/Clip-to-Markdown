@@ -1,0 +1,78 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --muted: #6b7280;
+  --brand: #1e64dc;
+  --danger: #dc2626;
+  --border: #e5e7eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 280px;
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+#app {
+  padding: 14px 16px 16px;
+}
+
+.app-header h1 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.panel {
+  margin-bottom: 12px;
+}
+
+.status-text {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.status-text.error {
+  color: var(--danger);
+}
+
+.status-text.ok {
+  color: var(--fg);
+}
+
+.doc-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+#save-btn {
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  border-radius: 6px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#save-btn:disabled {
+  background: #c6d4f0;
+  cursor: not-allowed;
+}
+
+.hidden {
+  display: none;
+}

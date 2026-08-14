@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>Clip2MD</title>
+</head>
+<body>
+  <main id="app">
+    <header class="app-header">
+      <h1>Clip2MD</h1>
+    </header>
+    <section id="status-panel" class="panel">
+      <p id="status-text" class="status-text">正在检测当前页面…</p>
+    </section>
+    <section id="action-panel" class="panel hidden">
+      <p id="doc-title" class="doc-title"></p>
+      <button id="save-btn" type="button" disabled>保存为 Markdown</button>
+    </section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

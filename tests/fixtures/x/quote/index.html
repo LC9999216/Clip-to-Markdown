@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"></head>
+<body>
+<div id="react-root">
+  <article role="article">
+    <div data-testid="User-Name">
+      <div class="user">
+        <a href="/alice"><span><span>Alice</span></span></a>
+        <span>@alice</span>
+      </div>
+    </div>
+    <div data-testid="tweetText"><span>转发了一条内容：</span></div>
+
+    <!-- 引用推文容器 -->
+    <div data-testid="tweetQuote">
+      <div data-testid="User-Name">
+        <div class="user">
+          <a href="/carol"><span><span>Carol</span></span></a>
+          <span>@carol</span>
+        </div>
+      </div>
+      <div data-testid="tweetText"><span>被引用的推文内容</span></div>
+      <a href="/carol/status/555"><time datetime="2024-04-01T00:00:00.000Z">Apr 1</time></a>
+    </div>
+
+    <a href="/alice/status/777"><time datetime="2024-05-01T12:00:00.000Z">May 1</time></a>
+  </article>
+</div>
+</body>
+</html>

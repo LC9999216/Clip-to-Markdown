@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"></head>
+<body>
+<div id="react-root">
+  <!-- 推广推文：必须被排除 -->
+  <article role="article">
+    <div data-testid="User-Name">
+      <div class="user">
+        <span>广告</span>
+        <span>@adsponsor</span>
+      </div>
+    </div>
+    <div data-testid="promotedIndicator"></div>
+    <div data-testid="tweetText"><span>这是推广内容，绝不能保存。</span></div>
+    <a href="/adsponsor/status/888"><time datetime="2024-05-03T00:00:00.000Z">May 3</time></a>
+  </article>
+
+  <!-- 焦点推文 -->
+  <article role="article">
+    <div data-testid="User-Name">
+      <div class="user">
+        <a href="/alice"><span><span>Alice</span></span></a>
+        <span>@alice</span>
+      </div>
+    </div>
+    <div data-testid="tweetText"><span>正常的推文内容</span></div>
+    <a href="/alice/status/456"><time datetime="2024-05-04T00:00:00.000Z">May 4</time></a>
+  </article>
+</div>
+</body>
+</html>

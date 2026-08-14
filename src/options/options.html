@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="options.css" />
+  <title>Clip2MD 设置</title>
+</head>
+<body>
+  <main id="app">
+    <header class="app-header">
+      <h1>Clip2MD 设置</h1>
+      <p class="subtitle">配置保存 Markdown 文件的位置</p>
+    </header>
+
+    <section class="block">
+      <h2>自定义文件夹（写入任意位置）</h2>
+      <p class="hint">
+        选择一个文件夹后，文件会直接写入该文件夹，绕过浏览器下载目录。
+      </p>
+      <div class="folder-row">
+        <button id="choose-folder" type="button">选择文件夹…</button>
+        <span id="folder-name" class="folder-name">未选择</span>
+        <button id="clear-folder" type="button" class="link-btn" hidden>清除</button>
+      </div>
+      <p id="folder-status" class="hint status" role="status"></p>
+    </section>
+
+    <hr />
+
+    <form id="settings-form" novalidate>
+      <section class="block">
+        <h2>浏览器下载目录（未选择自定义文件夹时生效）</h2>
+
+        <div class="field">
+          <label for="subfolder">子目录（相对浏览器下载目录）</label>
+          <input
+            id="subfolder"
+            name="subfolder"
+            type="text"
+            placeholder="例如：Clip2MD/知乎"
+            spellcheck="false"
+          />
+          <p class="hint">留空则直接保存到浏览器下载目录。子目录不存在时 Chrome 会自动创建。</p>
+        </div>
+
+        <div class="field">
+          <label class="checkbox">
+            <input id="save-as" name="save-as" type="checkbox" />
+            <span>每次下载都弹出「另存为」，让我手动选择位置</span>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="save-btn" type="submit">保存设置</button>
+          <span id="save-status" class="save-status" role="status"></span>
+        </div>
+      </section>
+    </form>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

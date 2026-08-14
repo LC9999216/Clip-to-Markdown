@@ -5,6 +5,7 @@
 
 import { downloadMarkdown } from '../core/downloader';
 import { sanitizeFilenamePart } from '../core/filename';
+import { loadSettings, resolveDownloadPath } from '../core/settings';
 import { isDownloadRequest } from '../types/messages';
 
 /** 与 manifest host_permissions 保持一致 */
@@ -47,7 +48,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   // background 独立入口：sanitize 后可能为空，兜底避免下载失败
   const safe = sanitizeFilenamePart(filename) || `clip2md-${Date.now()}.md`;
-  downloadMarkdown({ markdown, filename: safe })
+  loadSettings()
+    .then((settings) => resolveDownloadPath(safe, settings))
+    .then(({ filename: path, saveAs }) => downloadMarkdown({ markdown, filename: path, saveAs }))
     .then((r) => sendResponse({ success: true, filename: r.filename }))
     .catch((e) => sendResponse({ success: false, error: String(e) }));
   return true; // 保持异步响应通道

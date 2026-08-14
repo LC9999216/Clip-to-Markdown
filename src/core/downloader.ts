@@ -6,6 +6,8 @@
 export interface DownloadArgs {
   markdown: string;
   filename: string;
+  /** 每次弹「另存为」由用户手动选位置（默认 false） */
+  saveAs?: boolean;
 }
 
 export async function downloadMarkdown(args: DownloadArgs): Promise<{ filename: string }> {
@@ -16,7 +18,7 @@ export async function downloadMarkdown(args: DownloadArgs): Promise<{ filename: 
         url: dataUrl,
         filename: args.filename,
         conflictAction: 'uniquify',
-        saveAs: false,
+        saveAs: args.saveAs ?? false,
       },
       () => {
         const err = chrome.runtime.lastError;

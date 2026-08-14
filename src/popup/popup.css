@@ -24,10 +24,33 @@ body {
   padding: 14px 16px 16px;
 }
 
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .app-header h1 {
   margin: 0 0 12px;
   font-size: 16px;
   font-weight: 700;
+}
+
+#settings-btn {
+  margin: 0 0 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+#settings-btn:hover {
+  color: var(--fg);
+  border-color: var(--muted);
 }
 
 .panel {

@@ -42,6 +42,7 @@ const common = {
 const entryPoints = [
   { entryPoints: ['src/content/content-script.ts'], outfile: 'dist/content.js', format: 'iife' },
   { entryPoints: ['src/popup/popup.ts'], outfile: 'dist/popup.js', format: 'iife' },
+  { entryPoints: ['src/options/options.ts'], outfile: 'dist/options.js', format: 'iife' },
   { entryPoints: ['src/background/background.ts'], outfile: 'dist/background.js', format: 'esm' },
 ];
 
@@ -50,6 +51,8 @@ for (const [from, to] of [
   ['src/manifest.json', 'dist/manifest.json'],
   ['src/popup/popup.html', 'dist/popup.html'],
   ['src/popup/popup.css', 'dist/popup.css'],
+  ['src/options/options.html', 'dist/options.html'],
+  ['src/options/options.css', 'dist/options.css'],
 ]) {
   copyFileSync(join(root, from), join(root, to));
 }

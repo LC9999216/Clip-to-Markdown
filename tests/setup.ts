@@ -12,9 +12,12 @@ window.scrollBy = vi.fn() as unknown as typeof window.scrollBy;
 // ---- chrome.* shim ----
 // 暴露可断言的数据结构，供各测试引用
 export const chromeCalls = {
-  downloads: [] as Array<{ url: string; filename: string }>,
+  downloads: [] as Array<{ url: string; filename: string; saveAs: boolean }>,
   tabsQueried: [] as Array<{ active: boolean; currentWindow: boolean }>,
 };
+
+/** 测试可读写的 mock 存储：storage.local 的 get/set 都反映到这个对象 */
+export const mockStoredSettings: Record<string, unknown> = {};
 
 type MessageListener = (
   msg: unknown,
@@ -73,22 +76,45 @@ const chromeMock = {
   },
   storage: {
     local: {
-      get: vi.fn(),
-      set: vi.fn(),
+      get: vi.fn((keys: unknown, cb?: (items: Record<string, unknown>) => void) => {
+        const items: Record<string, unknown> = {};
+        if (typeof keys === 'string') {
+          items[keys] = mockStoredSettings[keys];
+        } else if (Array.isArray(keys)) {
+          for (const k of keys as string[]) items[k] = mockStoredSettings[k];
+        } else if (keys && typeof keys === 'object') {
+          const defaults = keys as Record<string, unknown>;
+          for (const k of Object.keys(defaults)) {
+            items[k] = k in mockStoredSettings ? mockStoredSettings[k] : defaults[k];
+          }
+        }
+        if (cb) cb(items);
+      }),
+      set: vi.fn((items: Record<string, unknown>, cb?: () => void) => {
+        Object.assign(mockStoredSettings, items);
+        if (cb) cb();
+      }),
     },
   },
   downloads: {
-    download: vi.fn((options: { url: string; filename?: string }, cb?: (id: number) => void) => {
-      chromeCalls.downloads.push({ url: options.url, filename: options.filename ?? '' });
-      if (cb) cb(1);
-      return 1;
-    }),
+    download: vi.fn(
+      (options: { url: string; filename?: string; saveAs?: boolean }, cb?: (id: number) => void) => {
+        chromeCalls.downloads.push({
+          url: options.url,
+          filename: options.filename ?? '',
+          saveAs: options.saveAs === true,
+        });
+        if (cb) cb(1);
+        return 1;
+      },
+    ),
   },
 };
 
 beforeEach(() => {
   chromeCalls.downloads.length = 0;
   chromeCalls.tabsQueried.length = 0;
+  for (const k of Object.keys(mockStoredSettings)) delete mockStoredSettings[k];
 });
 
 // 暴露为全局 chrome

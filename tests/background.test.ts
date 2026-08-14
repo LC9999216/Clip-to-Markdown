@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import '../src/background/background';
-import { chromeCalls, dispatchRuntimeMessage } from './setup';
+import { chromeCalls, dispatchRuntimeMessage, mockStoredSettings } from './setup';
+
+const SETTINGS_KEY = 'clip2md.settings';
 
 const DOWNLOAD = {
   type: 'DOWNLOAD',
@@ -49,6 +51,41 @@ describe('background DOWNLOAD handler', () => {
     );
     expect(resp).toEqual({ success: true, filename: 'abc.md' });
     expect(chromeCalls.downloads[0]?.filename).toBe('abc.md');
+  });
+
+  it('无已存设置：下载到根目录、saveAs 为 false', async () => {
+    const resp = await dispatchRuntimeMessage(DOWNLOAD, {
+      url: 'chrome-extension://test-extension-id/popup.html',
+    });
+    expect(resp).toEqual({ success: true, filename: 'tweet.md' });
+    expect(chromeCalls.downloads[0]?.filename).toBe('tweet.md');
+    expect(chromeCalls.downloads[0]?.saveAs).toBe(false);
+  });
+
+  it('设置子目录：下载路径前缀子目录', async () => {
+    mockStoredSettings[SETTINGS_KEY] = { subfolder: 'Clip2MD/知乎', saveAs: false };
+    const resp = await dispatchRuntimeMessage(DOWNLOAD, {
+      url: 'chrome-extension://test-extension-id/popup.html',
+    });
+    expect(resp).toEqual({ success: true, filename: 'Clip2MD/知乎/tweet.md' });
+    expect(chromeCalls.downloads[0]?.filename).toBe('Clip2MD/知乎/tweet.md');
+  });
+
+  it('设置 saveAs：下载参数 saveAs 为 true', async () => {
+    mockStoredSettings[SETTINGS_KEY] = { subfolder: '', saveAs: true };
+    await dispatchRuntimeMessage(DOWNLOAD, {
+      url: 'chrome-extension://test-extension-id/popup.html',
+    });
+    expect(chromeCalls.downloads[0]?.saveAs).toBe(true);
+  });
+
+  it('恶意子目录（路径穿越）被清洗', async () => {
+    mockStoredSettings[SETTINGS_KEY] = { subfolder: '../../etc', saveAs: false };
+    const resp = await dispatchRuntimeMessage(DOWNLOAD, {
+      url: 'chrome-extension://test-extension-id/popup.html',
+    });
+    expect(resp).toEqual({ success: true, filename: 'etc/tweet.md' });
+    expect(chromeCalls.downloads[0]?.filename).toBe('etc/tweet.md');
   });
 
   it('非 DOWNLOAD 消息不处理', async () => {

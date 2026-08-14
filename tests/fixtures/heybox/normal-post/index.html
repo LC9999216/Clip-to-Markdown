@@ -2,29 +2,75 @@
 <html lang="zh-CN">
 <head><meta charset="utf-8"></head>
 <body>
-<div class="page">
-  <article class="post-detail">
-    <h1 class="post-title">小黑盒文章标题示例</h1>
-    <div class="meta-row">
-      <div class="author-name"><a href="/user/123">盒友小明</a></div>
-      <time class="post-time" datetime="2024-07-01T09:00:00+08:00">2024-07-01</time>
+<div id="app">
+  <main>
+    <div id="page-bbs-link" class="layout-normal">
+      <div class="content">
+        <div class="list">
+          <div class="hb-bbs-link">
+            <div class="hb-cpt__scroll-list hb-bbs-link__container">
+              <div class="hb-bbs-link__content">
+                <div class="hb-bbs-post">
+                  <div class="post__container">
+                    <div class="link-section-title">
+                      <div class="section-title__content">大二大模型实习，独立开发招聘agent过程</div>
+                    </div>
+                    <div class="link-section-user">
+                      <a href="https://www.xiaoheihe.cn/app/user/profile/75671264" class="link-user__user-wrapper">
+                        <div class="hb-cpt-avatar"><img class="hb-avatar__image" src="https://cdn.xiaoheihe.cn/avatar.jpg" alt=""></div>
+                        <div class="link-user__info">
+                          <div class="user-info__line-1">
+                            <div class="link-user__username">含含光光</div>
+                            <div class="hb-level-tag hb-level-15">Lv.15</div>
+                          </div>
+                          <div class="user-info__line-2">
+                            <div class="link-data__time">08-07</div>
+                            <div class="link-data__ip">·浙江</div>
+                          </div>
+                        </div>
+                      </a>
+                      <button class="link-user__follow-btn">关注</button>
+                    </div>
+                    <div class="link-section-tags"><a href="/tag/1">职场工作</a><a href="/tag/2">校园生活</a></div>
+                    <div class="post__content">
+                      <div class="hb-article">
+                        <h2 class="main-title">背景介绍：</h2>
+                        <p class="text">本人是大二升大三的一名双非计算机学生，今年四月在Boss上乱投，在宁波找到一份大模型实习。</p>
+                        <p class="text">项目做到现在，我觉得最值得记录的不是功能本身，而是它的开发过程。</p>
+                        <h3 class="sub-title">第一阶段：先找现成工具</h3>
+                        <p class="text">刚接到需求时，我先去 GitHub 找已有项目。</p>
+                        <div class="img">
+                          <div class="img-media">
+                            <img class="img-item" src="https://cdn.xiaoheihe.cn/pic1.jpg" alt="">
+                          </div>
+                        </div>
+                        <h4 class="img-desc">就是这个项目</h4>
+                        <p class="text">第二段正文内容，包含链接 <a href="https://example.com/tool">示例链接</a>。</p>
+                      </div>
+                    </div>
+                    <div class="link-section-tags"><a href="/tag/3">文章计划</a><a href="/tag/4">ai计算机</a></div>
+                    <div class="link-section-link-data"><a href="https://example.com/raw">链接数据</a></div>
+                  </div>
+                  <!-- 评论区：绝不能保存 -->
+                  <div class="link-comment">
+                    <div class="comment__comment-header">全部评论 26</div>
+                    <div class="link-comment__list">
+                      <div class="link-comment__comment-item top">
+                        <div class="comment-item__content-container">
+                          <div class="comment-item__content">如果对你有帮助可以关注一下主包嘛，这是评论，绝不能保存。</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="link-reply"><span>评论 (已有43条评论) 275 已收藏 43</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="post-content">
-      <p>这是小黑盒文章的正文第一段。</p>
-      <p>正文包含 <a href="https://example.com/game">链接</a> 和图片：</p>
-      <img src="https://img.xiaoheihe.cn/image/a.jpg" alt="游戏截图">
-      <blockquote><p>引用一段话</p></blockquote>
-      <ul>
-        <li>要点一</li>
-        <li>要点二</li>
-      </ul>
-    </div>
-    <div class="comment-list">
-      <div class="comment-item"><p>评论区内容，绝不能保存。</p></div>
-    </div>
-    <div class="recommend-list"><a href="/article/2">推荐帖子</a></div>
-    <div class="post-actions"><button>点赞</button></div>
-  </article>
+  </main>
 </div>
 </body>
 </html>

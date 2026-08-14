@@ -109,6 +109,7 @@ npx vitest run tests/adapters/x.test.ts   # 单平台
 ## 已知限制（V0.1）
 
 - 图片以**远程 URL** 形式保留在 Markdown 中（不下载本地）；X 的 `pbs.twimg.com` 图片会统一附加 `&name=large`。
+- **Obsidian 中查看图片**：Obsidian 默认在**阅读模式**（Ctrl/Cmd+E）就会加载远程 https 图片。若图片不显示，先确认不在源码模式；其次排查 Obsidian 里会自动"美化/转义"Markdown 的格式化插件——这类插件会把 `![Image](url)` 转成 `!\[Image](url)`（转义方括号），图片语法就被破坏了。被破坏的文件重新用 Clip2MD 保存一次即可恢复。
 - 知乎长回答若未展开，只保存已展开部分（`.RichContent-collapsedText` 会被移除）。
 - X 引用推文为尽力识别；识别失败时引用内容不写入。
 - 知乎/小黑盒的发布时间取自页面 meta，取不到时留空。

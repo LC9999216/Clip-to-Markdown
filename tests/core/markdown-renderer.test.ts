@@ -178,3 +178,44 @@ describe('renderDocument', () => {
     expect(md).toContain('> 原文链接：https://zhuanlan.zhihu.com/p/9');
   });
 });
+
+describe('Obsidian 图片渲染兼容性（回归）', () => {
+  function docWithImage(): ContentDocument {
+    return {
+      version: 1,
+      metadata: {
+        platform: 'heybox',
+        contentType: 'heybox-post',
+        sourceUrl: 'https://www.xiaoheihe.cn/app/bbs/link/187550351',
+        author: { name: '测试作者' },
+        published: '',
+        title: '测试文章',
+      },
+      body: {
+        type: 'article',
+        children: [
+          { type: 'paragraph', children: [{ type: 'text', value: '正文第一段' }] },
+          { type: 'image', url: 'https://cdn.example.com/pic1.jpg', alt: '' },
+          { type: 'paragraph', children: [{ type: 'text', value: '正文第二段' }] },
+        ],
+      },
+    };
+  }
+
+  it('图片语法干净：!\\[ 与 \\] 绝不出现', () => {
+    const md = renderDocument(docWithImage());
+    expect(md).toContain('![Image](https://cdn.example.com/pic1.jpg)');
+    expect(md).not.toContain('!\\[');
+    expect(md).not.toContain('\\]');
+  });
+
+  it('frontmatter 与 footer 分隔线无反斜杠', () => {
+    const md = renderDocument(docWithImage());
+    const lines = md.split('\n');
+    expect(lines[0]).toBe('---'); // frontmatter 开
+    expect(md).not.toMatch(/^\\---/m); // 任何行都不以 \--- 开头
+    const footerIdx = lines.findIndex((l) => l.startsWith('> 原文链接'));
+    // 结构为 ...正文 / --- / 空行 / > 原文链接
+    expect(lines[footerIdx - 2]).toBe('---'); // footer 分隔线干净
+  });
+});

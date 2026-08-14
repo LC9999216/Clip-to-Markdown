@@ -7,6 +7,7 @@ import { downloadMarkdown } from '../core/downloader';
 import { sanitizeFilenamePart } from '../core/filename';
 import { loadSettings, resolveDownloadPath } from '../core/settings';
 import { isDownloadRequest } from '../types/messages';
+import './quick-save';
 
 /** 与 manifest host_permissions 保持一致 */
 const ALLOWED_HOSTS = ['x.com', 'twitter.com', 'zhihu.com', 'xiaoheihe.cn'] as const;

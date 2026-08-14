@@ -14,6 +14,11 @@ window.scrollBy = vi.fn() as unknown as typeof window.scrollBy;
 export const chromeCalls = {
   downloads: [] as Array<{ url: string; filename: string; saveAs: boolean }>,
   tabsQueried: [] as Array<{ active: boolean; currentWindow: boolean }>,
+  notifications: [] as Array<{ title: string; message: string }>,
+  offscreenCreated: 0,
+  tabsCreated: [] as Array<{ url: string }>,
+  badgeText: [] as string[],
+  badgeColor: [] as string[],
 };
 
 /** 测试可读写的 mock 存储：storage.local 的 get/set 都反映到这个对象 */
@@ -26,6 +31,7 @@ type MessageListener = (
 ) => boolean | void;
 
 const runtimeListeners: MessageListener[] = [];
+let currentLastError: { message: string } | null = null;
 
 function sendResponseSafe(listener: MessageListener, msg: unknown, sender: unknown): Promise<unknown> | null {
   let resolve: (v: unknown) => void = () => {};
@@ -53,10 +59,77 @@ export async function dispatchRuntimeMessage(msg: unknown, sender: unknown = {})
   return undefined;
 }
 
+// ---- 各 API 的 mock（导出便于测试按需配置）----
+
+export const runtimeSendMessageMock = vi.fn();
+export const notificationsCreateMock = vi.fn(
+  (options: { title?: string; message?: string }, cb?: (id: string) => void) => {
+    chromeCalls.notifications.push({ title: options.title ?? '', message: options.message ?? '' });
+    if (cb) cb('notification-1');
+  },
+);
+
+export const tabsQueryMock = vi.fn(
+  (opts: unknown, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
+    chromeCalls.tabsQueried.push(opts as { active: boolean; currentWindow: boolean });
+    const tabs = [{ id: 1, active: true }] as chrome.tabs.Tab[];
+    if (cb) cb(tabs);
+    return tabs as unknown;
+  },
+);
+
+// 把 tabs.sendMessage 路由到 runtime.onMessage 监听（让 EXTRACT 能回读 fixture）
+export const tabsSendMessageMock = vi.fn(
+  (tabId: number, msg: unknown, cb?: (resp: unknown) => void) => {
+    const sender = { tab: { id: tabId } };
+    const result = dispatchRuntimeMessage(msg, sender);
+    if (result && typeof (result as Promise<unknown>).then === 'function') {
+      (result as Promise<unknown>).then((resp) => {
+        currentLastError = null;
+        if (cb) cb(resp);
+      });
+    } else {
+      currentLastError = { message: 'Could not establish connection. Receiving end does not exist.' };
+      if (cb) cb(undefined);
+    }
+  },
+);
+
+export const offscreenHasDocumentMock = vi.fn(async () => false);
+export const offscreenCreateDocumentMock = vi.fn(async () => {
+  chromeCalls.offscreenCreated += 1;
+});
+export const offscreenCloseDocumentMock = vi.fn(async () => {});
+
+export const commandsGetAllMock = vi.fn(async () => [] as chrome.commands.Command[]);
+export const tabsCreateMock = vi.fn((opts: { url?: string }, cb?: () => void) => {
+  chromeCalls.tabsCreated.push({ url: opts.url ?? '' });
+  if (cb) cb();
+});
+
+export const setBadgeTextMock = vi.fn((details: { text?: string }) => {
+  chromeCalls.badgeText.push(details.text ?? '');
+  return Promise.resolve();
+});
+export const setBadgeBackgroundColorMock = vi.fn((details: { color?: string }) => {
+  chromeCalls.badgeColor.push(details.color ?? '');
+  return Promise.resolve();
+});
+
+const commandListeners: Array<(command: string, tab?: chrome.tabs.Tab) => void> = [];
+
+/** 供测试触发 chrome.commands.onCommand 监听 */
+export function dispatchCommand(command: string): void {
+  for (const l of [...commandListeners]) l(command);
+}
+
 const chromeMock = {
   runtime: {
     id: 'test-extension-id',
-    lastError: null as { message: string } | null,
+    get lastError() {
+      return currentLastError;
+    },
+    getURL: (path: string) => `chrome-extension://test-extension-id/${path}`,
     onMessage: {
       addListener: (l: MessageListener) => runtimeListeners.push(l),
       removeListener: (l: MessageListener) => {
@@ -64,15 +137,12 @@ const chromeMock = {
         if (i >= 0) runtimeListeners.splice(i, 1);
       },
     },
-    sendMessage: vi.fn(),
+    sendMessage: runtimeSendMessageMock,
   },
   tabs: {
-    query: vi.fn((opts: unknown, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
-      chromeCalls.tabsQueried.push(opts as { active: boolean; currentWindow: boolean });
-      const result = cb ? (cb([]), undefined) : undefined;
-      return result as unknown;
-    }),
-    sendMessage: vi.fn(),
+    query: tabsQueryMock,
+    sendMessage: tabsSendMessageMock,
+    create: tabsCreateMock,
   },
   storage: {
     local: {
@@ -109,11 +179,39 @@ const chromeMock = {
       },
     ),
   },
+  notifications: {
+    create: notificationsCreateMock,
+  },
+  action: {
+    setBadgeText: setBadgeTextMock,
+    setBadgeBackgroundColor: setBadgeBackgroundColorMock,
+  },
+  commands: {
+    onCommand: {
+      addListener: (l: (command: string, tab?: chrome.tabs.Tab) => void) => commandListeners.push(l),
+      removeListener: (l: (command: string, tab?: chrome.tabs.Tab) => void) => {
+        const i = commandListeners.indexOf(l);
+        if (i >= 0) commandListeners.splice(i, 1);
+      },
+    },
+    getAll: commandsGetAllMock,
+  },
+  offscreen: {
+    hasDocument: offscreenHasDocumentMock,
+    createDocument: offscreenCreateDocumentMock,
+    closeDocument: offscreenCloseDocumentMock,
+  },
 };
 
 beforeEach(() => {
   chromeCalls.downloads.length = 0;
   chromeCalls.tabsQueried.length = 0;
+  chromeCalls.notifications.length = 0;
+  chromeCalls.offscreenCreated = 0;
+  chromeCalls.tabsCreated.length = 0;
+  chromeCalls.badgeText.length = 0;
+  chromeCalls.badgeColor.length = 0;
+  currentLastError = null;
   for (const k of Object.keys(mockStoredSettings)) delete mockStoredSettings[k];
 });
 

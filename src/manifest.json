@@ -3,7 +3,16 @@
   "name": "Clip2MD",
   "version": "0.1.0",
   "description": "一键把当前帖子/文章保存为干净 Markdown（X / 知乎 / 小黑盒）",
-  "permissions": ["activeTab", "downloads", "storage"],
+  "permissions": ["activeTab", "downloads", "storage", "notifications", "offscreen"],
+  "commands": {
+    "save-clip": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "保存当前帖子/文章为 Markdown"
+    }
+  },
   "host_permissions": [
     "*://x.com/*",
     "*://twitter.com/*",

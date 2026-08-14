@@ -22,6 +22,9 @@ const clearFolderBtn = document.getElementById('clear-folder') as HTMLButtonElem
 const folderNameEl = document.getElementById('folder-name') as HTMLSpanElement;
 const folderStatusEl = document.getElementById('folder-status') as HTMLParagraphElement;
 
+const shortcutValueEl = document.getElementById('shortcut-value') as HTMLSpanElement;
+const shortcutBtn = document.getElementById('shortcut-btn') as HTMLButtonElement;
+
 function setFolderStatus(text: string, kind: 'muted' | 'ok' | 'error' = 'muted'): void {
   folderStatusEl.textContent = text;
   folderStatusEl.className = `hint status ${kind === 'muted' ? '' : kind}`;
@@ -79,11 +82,44 @@ async function onClearFolder(): Promise<void> {
   setFolderStatus('已清除，改回保存到浏览器下载目录。', 'ok');
 }
 
+/** 只读展示当前快捷键；改键需到 Chrome 官方快捷键页。 */
+async function refreshShortcut(): Promise<void> {
+  try {
+    const commands = await getAllCommands();
+    const cmd = commands.find((c) => c.name === 'save-clip');
+    shortcutValueEl.textContent = cmd?.shortcut
+      ? `当前：${cmd.shortcut}`
+      : '当前：未绑定（点击右侧按钮绑定）';
+  } catch (e) {
+    shortcutValueEl.textContent = `读取失败：${String(e)}`;
+  }
+}
+
+/** 用回调形式读取命令（跨版本最稳；Promise 形式在部分环境返回 undefined） */
+function getAllCommands(): Promise<chrome.commands.Command[]> {
+  return new Promise((resolve, reject) => {
+    if (!chrome.commands || typeof chrome.commands.getAll !== 'function') {
+      reject(new Error('commands API 不可用，请重新加载扩展'));
+      return;
+    }
+    chrome.commands.getAll((commands) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(commands);
+    });
+  });
+}
+
+function onOpenShortcuts(): void {
+  void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+}
+
 async function init(): Promise<void> {
   const settings = await loadSettings();
   subfolderInput.value = settings.subfolder;
   saveAsInput.checked = settings.saveAs;
   await refreshFolderLabel();
+  await refreshShortcut();
 }
 
 form.addEventListener('submit', (e) => {
@@ -109,6 +145,7 @@ async function onSubmit(): Promise<void> {
 
 chooseFolderBtn.addEventListener('click', () => void onChooseFolder());
 clearFolderBtn.addEventListener('click', () => void onClearFolder());
+shortcutBtn.addEventListener('click', onOpenShortcuts);
 
 document.addEventListener('DOMContentLoaded', () => {
   void init();

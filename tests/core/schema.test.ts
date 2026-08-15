@@ -107,6 +107,45 @@ describe('validateDocument', () => {
   });
 });
 
+describe('markdown 块节点', () => {
+  function articleWithMarkdown(value: string): ContentDocument {
+    return {
+      version: 1,
+      metadata: {
+        platform: 'chatgpt',
+        contentType: 'chatgpt-chat',
+        sourceUrl: 'https://chatgpt.com/c/x',
+        author: { name: 'ChatGPT' },
+        published: '',
+        title: 'T',
+      },
+      body: { type: 'article', children: [{ type: 'markdown', value }] },
+    };
+  }
+
+  it('合法 markdown 节点通过 validateDocument', () => {
+    expect(validateDocument(articleWithMarkdown('- 项\n\n```ts\n1\n```'))).toEqual([]);
+  });
+
+  it('value 非字符串报错', () => {
+    const doc = articleWithMarkdown('x');
+    const body = doc.body as unknown as { type: 'article'; children: Record<string, unknown>[] };
+    body.children[0]!.value = 1;
+    const errors = validateDocument(doc);
+    expect(errors.some((e) => e.includes('必须为字符串'))).toBe(true);
+  });
+
+  it('value 含 NUL 被拒绝', () => {
+    const errors = validateDocument(articleWithMarkdown('a\u0000b'));
+    expect(errors.some((e) => e.includes('NUL'))).toBe(true);
+  });
+
+  it('JSON round-trip 不改变 value', () => {
+    const doc = articleWithMarkdown('```ts\nconst x = 1;\n```\n\n- 项');
+    expect(checkJsonRoundTrip(doc)).toBeNull();
+  });
+});
+
 describe('checkJsonRoundTrip', () => {
   it('合法文档 round-trip 通过', () => {
     expect(checkJsonRoundTrip(validTweetDoc())).toBeNull();

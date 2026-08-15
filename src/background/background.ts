@@ -10,7 +10,7 @@ import { isDownloadRequest } from '../types/messages';
 import './quick-save';
 
 /** 与 manifest host_permissions 保持一致 */
-const ALLOWED_HOSTS = ['x.com', 'twitter.com', 'zhihu.com', 'xiaoheihe.cn'] as const;
+const ALLOWED_HOSTS = ['x.com', 'twitter.com', 'zhihu.com', 'xiaoheihe.cn', 'chatgpt.com', 'openai.com'] as const;
 
 function hostAllowed(hostname: string): boolean {
   const host = hostname.replace(/^www\./, '').toLowerCase();

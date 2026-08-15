@@ -13,6 +13,7 @@ import type {
   InlineNode,
   ListNode,
   ListItemNode,
+  MarkdownBlockNode,
   ParagraphNode,
   TableNode,
   TweetNode,
@@ -125,7 +126,19 @@ function renderBlock(block: BlockNode): string {
       return '---';
     case 'table':
       return renderTable(block);
+    case 'markdown':
+      return renderMarkdownBlock(block);
   }
+}
+
+/**
+ * 已经是 Markdown 源文本的块：只做规范化（CRLF→LF、去 NUL、去首尾空白行），
+ * 保留内部 Markdown 语法，不转义、不围栏、不解析。
+ */
+function renderMarkdownBlock(node: MarkdownBlockNode): string {
+  let value = node.value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\u0000/g, '');
+  value = value.replace(/^(?:[ \t]*\n)+/, '').replace(/(?:\n[ \t]*)+$/, '');
+  return value;
 }
 
 function renderParagraph(p: ParagraphNode): string {
@@ -184,7 +197,8 @@ function maxBacktickRun(s: string): number {
 }
 
 function fenceFor(value: string): string {
-  return '`'.repeat(maxBacktickRun(value) + 1);
+  // 围栏至少 3 个反引号（```` 才是合法代码块），且比内容最大反引号串多一个
+  return '`'.repeat(Math.max(3, maxBacktickRun(value) + 1));
 }
 
 export function renderImage(img: ImageNode): string {

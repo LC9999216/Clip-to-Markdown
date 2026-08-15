@@ -8,13 +8,14 @@
  * - 字段命名与 mdast 对齐（children/value/depth/ordered），降低认知负担。
  */
 
-export type PlatformId = 'x' | 'zhihu' | 'heybox';
+export type PlatformId = 'x' | 'zhihu' | 'heybox' | 'chatgpt';
 
 export type PlatformContentType =
   | 'tweet'
   | 'zhihu-answer'
   | 'zhihu-article'
-  | 'heybox-post';
+  | 'heybox-post'
+  | 'chatgpt-chat';
 
 export interface ContentDocument {
   version: 1;
@@ -53,7 +54,8 @@ export type BlockNode =
   | CodeBlockNode
   | ImageNode
   | ThematicBreakNode
-  | TableNode;
+  | TableNode
+  | MarkdownBlockNode;
 
 export interface ParagraphNode {
   type: 'paragraph';
@@ -112,6 +114,15 @@ export interface TableRowNode {
 export interface TableCellNode {
   type: 'tableCell';
   children: InlineNode[];
+}
+
+/**
+ * 已经是 Markdown 源文本的块节点（如 ChatGPT 用户消息中的纯文本 Markdown）。
+ * Renderer 保留其 Markdown 语义，不做普通文本转义；不强制非空（提取器负责过滤）。
+ */
+export interface MarkdownBlockNode {
+  type: 'markdown';
+  value: string;
 }
 
 // ---------- Inline 节点 ----------
@@ -187,6 +198,7 @@ const BLOCK_TYPES = new Set([
   'image',
   'thematicBreak',
   'table',
+  'markdown',
 ]);
 
 const INLINE_TYPES = new Set(['text', 'link', 'strong', 'emphasis', 'inlineCode', 'break']);
@@ -301,6 +313,10 @@ function validateBlock(v: unknown, path: string, errors: string[]): void {
       validateImage(v, path, errors);
       break;
     case 'thematicBreak':
+      break;
+    case 'markdown':
+      if (typeof v.value !== 'string') errors.push(`${path}.value: 必须为字符串`);
+      else if (v.value.includes('\u0000')) errors.push(`${path}.value: 不允许包含 NUL`);
       break;
     case 'table': {
       const rows = [...(v.header ? [v.header] : []), ...(Array.isArray(v.children) ? (v.children as unknown[]) : [])];

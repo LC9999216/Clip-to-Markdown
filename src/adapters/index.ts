@@ -8,5 +8,6 @@
 import './x';
 import './zhihu';
 import './heybox';
+import './chatgpt';
 
 export { registry } from '../core/platform-registry';

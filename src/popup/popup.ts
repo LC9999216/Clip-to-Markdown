@@ -87,7 +87,7 @@ async function init(): Promise<void> {
   }
 
   if (!status.supported) {
-    setStatus('当前页面暂不支持。\n请打开 X / 知乎 / 小黑盒 的帖子或文章页。', 'error');
+    setStatus('当前页面暂不支持。\n请打开 X、知乎、小黑盒或 ChatGPT 的内容页面。', 'error');
     return;
   }
 
@@ -171,6 +171,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   x: 'X / Twitter',
   zhihu: '知乎',
   heybox: '小黑盒',
+  chatgpt: 'ChatGPT',
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -178,4 +179,5 @@ const TYPE_LABELS: Record<string, string> = {
   'zhihu-answer': '回答',
   'zhihu-article': '文章',
   'heybox-post': '帖子',
+  'chatgpt-chat': '对话',
 };

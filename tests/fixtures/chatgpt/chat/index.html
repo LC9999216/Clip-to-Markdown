@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>D盘空间转移到C盘</title>
+</head>
+<body>
+  <main>
+    <!-- system 消息：绝不能保存 -->
+    <div data-message-author-role="system" data-message-id="sys1">
+      这是系统提示，绝不能保存。
+    </div>
+
+    <!-- 第 1 轮：用户 -->
+    <div data-message-author-role="user" data-message-id="u1">
+      <div class="corner-superellipse">
+        <div class="whitespace-pre-wrap">有没有什么方法可以将D盘的剩余空间一部分转移到C盘当中吗?</div>
+      </div>
+    </div>
+
+    <!-- 第 1 轮：助手 -->
+    <div data-message-author-role="assistant" data-message-id="a1">
+      <div class="flex w-full flex-col">
+        <div class="markdown prose markdown-new-styling">
+          <p>可以，而且这事<strong>完全能做</strong>。但关键看你现在硬盘的<strong>分区排列顺序</strong>。</p>
+          <h3>最常见的情况</h3>
+          <p>假设你的磁盘是：</p>
+          <pre class="overflow-visible!">
+            <div class="cm-editor">
+              <div class="cm-content">
+                <div class="cm-line"># 磁盘分区示例</div>
+                <div class="cm-line">C盘: 150GB</div>
+                <div class="cm-line">D盘: 500GB</div>
+              </div>
+            </div>
+            <button aria-label="复制">复制</button>
+          </pre>
+          <ul>
+            <li>如果 C 和 D 相邻，可以直接扩展</li>
+            <li>如果中间夹着恢复分区，处理方式不同</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第 2 轮：用户 -->
+    <div data-message-author-role="user" data-message-id="u2">
+      <div class="whitespace-pre-wrap">那如果中间夹着恢复分区呢?</div>
+    </div>
+
+    <!-- 第 2 轮：助手 -->
+    <div data-message-author-role="assistant" data-message-id="a2">
+      <div class="markdown prose markdown-new-styling">
+        <p>那处理方式不同，<strong>不要盲操作</strong>，建议先备份数据。</p>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

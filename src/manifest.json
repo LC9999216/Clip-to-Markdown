@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Clip2MD",
   "version": "0.1.0",
-  "description": "一键把当前帖子/文章保存为干净 Markdown（X / 知乎 / 小黑盒）",
+  "description": "一键把当前帖子/文章/对话保存为干净 Markdown（X / 知乎 / 小黑盒 / ChatGPT）",
   "permissions": ["activeTab", "downloads", "storage", "notifications", "offscreen"],
   "commands": {
     "save-clip": {
@@ -10,7 +10,7 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "保存当前帖子/文章为 Markdown"
+      "description": "保存当前帖子/文章/对话为 Markdown"
     }
   },
   "host_permissions": [
@@ -18,7 +18,9 @@
     "*://twitter.com/*",
     "*://*.zhihu.com/*",
     "*://www.xiaoheihe.cn/*",
-    "*://xiaoheihe.cn/*"
+    "*://xiaoheihe.cn/*",
+    "*://chatgpt.com/*",
+    "*://chat.openai.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -50,7 +52,9 @@
         "*://twitter.com/*",
         "*://*.zhihu.com/*",
         "*://www.xiaoheihe.cn/*",
-        "*://xiaoheihe.cn/*"
+        "*://xiaoheihe.cn/*",
+        "*://chatgpt.com/*",
+        "*://chat.openai.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

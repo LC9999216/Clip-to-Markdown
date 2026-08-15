@@ -59,3 +59,53 @@ describe('content script 消息路由', () => {
     }
   });
 });
+
+describe('content script：ChatGPT', () => {
+  it('GET_STATUS：正式对话返回支持', async () => {
+    setLocation('https://chatgpt.com/c/abc');
+    mountFixture('chatgpt', 'chat');
+    const resp = (await dispatchRuntimeMessage({ type: 'GET_STATUS' })) as StatusResponse;
+    expect(resp.supported).toBe(true);
+    expect(resp.platform).toBe('chatgpt');
+    expect(resp.contentType).toBe('chatgpt-chat');
+  });
+
+  it('GET_STATUS：空首页返回不支持', async () => {
+    setLocation('https://chatgpt.com/');
+    document.body.innerHTML = '<div>空页面</div>';
+    const resp = (await dispatchRuntimeMessage({ type: 'GET_STATUS' })) as StatusResponse;
+    expect(resp.supported).toBe(false);
+  });
+
+  it('GET_STATUS：首页临时对话返回支持', async () => {
+    setLocation('https://chatgpt.com/');
+    mountFixture('chatgpt', 'chat');
+    const resp = (await dispatchRuntimeMessage({ type: 'GET_STATUS' })) as StatusResponse;
+    expect(resp.supported).toBe(true);
+    expect(resp.contentType).toBe('chatgpt-chat');
+  });
+
+  it('EXTRACT：ChatGPT 富文本用户消息返回合法 ContentDocument', async () => {
+    setLocation('https://chatgpt.com/c/rich-user');
+    mountFixture('chatgpt', 'rich-user');
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT' })) as ExtractResponse;
+    expect(resp.success).toBe(true);
+    if (resp.success) expect(resp.document.metadata.platform).toBe('chatgpt');
+  });
+
+  it('EXTRACT：正式路由未加载返回 NOT_FOUND_BODY', async () => {
+    setLocation('https://chatgpt.com/c/abc');
+    document.body.innerHTML = '<div>空页面</div>';
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT' })) as ExtractResponse;
+    expect(resp.success).toBe(false);
+    if (!resp.success) expect(resp.error.code).toBe('NOT_FOUND_BODY');
+  });
+
+  it('system/tool 消息不出现在支持判定（无 user/assistant → 不支持）', async () => {
+    setLocation('https://chatgpt.com/');
+    document.body.innerHTML =
+      '<div data-message-author-role="system">系统</div><div data-message-author-role="tool">工具</div>';
+    const resp = (await dispatchRuntimeMessage({ type: 'GET_STATUS' })) as StatusResponse;
+    expect(resp.supported).toBe(false);
+  });
+});

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Markdown 用户消息</title>
+</head>
+<body>
+  <main>
+    <div data-message-author-role="user" data-message-id="u1">
+      <div class="whitespace-pre-wrap">第一段
+
+第二段
+
+请检查下面代码：
+
+```ts
+const x = 1;
+console.log(x);
+```
+
+- 第一项
+- 第二项
+
+> 注意事项
+
+请看 [文档](https://example.com)，这是 **重点**。</div>
+    </div>
+    <div data-message-author-role="assistant" data-message-id="a1">
+      <div class="markdown prose markdown-new-styling">
+        <p>收到。</p>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

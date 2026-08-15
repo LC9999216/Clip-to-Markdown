@@ -76,6 +76,11 @@ describe('renderBlocks', () => {
     expect(renderBlocks(blocks)).toBe('````md\na\n```\nb\n````');
   });
 
+  it('代码块无反引号时用 3 个反引号围栏（合法代码块）', () => {
+    const blocks: BlockNode[] = [{ type: 'code', value: 'print("hi")' }];
+    expect(renderBlocks(blocks)).toBe('```\nprint("hi")\n```');
+  });
+
   it('表格输出 GFM 语法', () => {
     const blocks: BlockNode[] = [
       {
@@ -109,6 +114,32 @@ describe('renderBlocks', () => {
     expect(renderBlocks([{ type: 'image', url: 'https://x/1 2.jpg', alt: '图[1]' }])).toBe(
       '![图\\[1\\]](<https://x/1 2.jpg>)',
     );
+  });
+
+  it('markdown 块：保留代码围栏、列表、链接、粗体，不转义', () => {
+    const blocks: BlockNode[] = [
+      {
+        type: 'markdown',
+        value: '请检查：\n\n```ts\nconst x = 1;\n```\n\n- 第一项\n\n[文档](https://example.com) **重点**',
+      },
+    ];
+    expect(renderBlocks(blocks)).toBe(
+      '请检查：\n\n```ts\nconst x = 1;\n```\n\n- 第一项\n\n[文档](https://example.com) **重点**',
+    );
+  });
+
+  it('markdown 块：CRLF 转 LF，内部空行保留，NUL 去除', () => {
+    const blocks: BlockNode[] = [{ type: 'markdown', value: 'a\r\n\r\nb\u0000c' }];
+    expect(renderBlocks(blocks)).toBe('a\n\nbc');
+  });
+
+  it('markdown 块：去除首尾空白行', () => {
+    const blocks: BlockNode[] = [{ type: 'markdown', value: '\n\n正文\n\n' }];
+    expect(renderBlocks(blocks)).toBe('正文');
+  });
+
+  it('普通 TextNode 仍继续转义 Markdown（不影响既有平台安全行为）', () => {
+    expect(renderInline([{ type: 'text', value: '- 不是列表' }])).toBe('\\- 不是列表');
   });
 });
 

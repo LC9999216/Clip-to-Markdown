@@ -60,9 +60,11 @@ async function onChooseFolder(): Promise<void> {
 
   try {
     const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    // 兜底：部分版本 picker 不授予 readwrite，显式请求一次
-    if (handle.requestPermission) {
-      await handle.requestPermission({ mode: 'readwrite' });
+    // 只有拿到 granted 才保存句柄；denied/prompt 不保存新句柄，保留原有已配置句柄
+    const permission = await requestWritePermission(handle);
+    if (permission !== 'granted') {
+      setFolderStatus('未获得该文件夹的写入权限。', 'error');
+      return;
     }
     await saveDirectoryHandle(handle);
     await refreshFolderLabel();
@@ -74,6 +76,17 @@ async function onChooseFolder(): Promise<void> {
     }
     setFolderStatus(`选择文件夹失败：${String(e)}`, 'error');
   }
+}
+
+/** 请求 readwrite 权限；无权限 API（测试桩/旧实现）时视为已授权 */
+async function requestWritePermission(handle: FileSystemDirectoryHandle): Promise<PermissionState> {
+  if (typeof handle.requestPermission === 'function') {
+    return handle.requestPermission({ mode: 'readwrite' });
+  }
+  if (typeof handle.queryPermission === 'function') {
+    return handle.queryPermission({ mode: 'readwrite' });
+  }
+  return 'granted';
 }
 
 async function onClearFolder(): Promise<void> {

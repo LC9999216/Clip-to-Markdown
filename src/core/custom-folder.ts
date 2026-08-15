@@ -75,6 +75,7 @@ export async function writeMarkdownToDirectory(
   filename: string,
   markdown: string,
 ): Promise<string> {
+  await ensureWritePermission(dir);
   const finalName = await uniquifyAsync(filename, async (name) => {
     try {
       await dir.getFileHandle(name, { create: false });
@@ -92,6 +93,20 @@ export async function writeMarkdownToDirectory(
     await writable.close();
   }
   return finalName;
+}
+
+/**
+ * 每次实际写入前确认 readwrite 权限：
+ * - granted → 放行；
+ * - prompt / denied → 抛错（快捷键/offscreen 不弹权限窗口，由调用方降级下载）；
+ * - queryPermission 不存在（测试桩/旧实现）→ 视为已授权。
+ */
+async function ensureWritePermission(dir: FileSystemDirectoryHandle): Promise<void> {
+  if (typeof dir.queryPermission !== 'function') return;
+  const state = await dir.queryPermission({ mode: 'readwrite' });
+  if (state !== 'granted') {
+    throw new Error('未获得该文件夹的写入权限。');
+  }
 }
 
 /**

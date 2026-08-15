@@ -33,6 +33,11 @@ type MessageListener = (
 const runtimeListeners: MessageListener[] = [];
 let currentLastError: { message: string } | null = null;
 
+/** 测试中模拟 chrome.runtime.lastError（如「Receiving end does not exist」） */
+export function setRuntimeLastError(message: string | null): void {
+  currentLastError = message ? { message } : null;
+}
+
 function sendResponseSafe(listener: MessageListener, msg: unknown, sender: unknown): Promise<unknown> | null {
   let resolve: (v: unknown) => void = () => {};
   const responsePromise = new Promise<unknown>((r) => {
@@ -64,6 +69,7 @@ export async function dispatchRuntimeMessage(msg: unknown, sender: unknown = {})
 export const runtimeSendMessageMock = vi.fn();
 export const notificationsCreateMock = vi.fn(
   (options: { title?: string; message?: string }, cb?: (id: string) => void) => {
+    currentLastError = null; // 模拟「本次调用成功」的 lastError 作用域
     chromeCalls.notifications.push({ title: options.title ?? '', message: options.message ?? '' });
     if (cb) cb('notification-1');
   },
@@ -169,6 +175,7 @@ const chromeMock = {
   downloads: {
     download: vi.fn(
       (options: { url: string; filename?: string; saveAs?: boolean }, cb?: (id: number) => void) => {
+        currentLastError = null; // 模拟「本次调用成功」的 lastError 作用域
         chromeCalls.downloads.push({
           url: options.url,
           filename: options.filename ?? '',

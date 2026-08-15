@@ -3,6 +3,9 @@
  *
  * 流程：EXTRACT → renderDocument + buildFilename
  *       → 自定义文件夹（通过 offscreen document 写入）或 下载目录。
+ *
+ * offscreen 生命周期：不永久缓存「已就绪」状态；每次写入前重新确认文档存在，
+ * 缺失则重建。只缓存「正在创建」的 Promise 以合并并发请求。
  */
 
 import { renderDocument } from '../core/markdown-renderer';
@@ -10,15 +13,22 @@ import { buildFilename } from '../core/filename';
 import { loadSettings, resolveDownloadPath } from '../core/settings';
 import { loadDirectoryHandle } from '../core/custom-folder';
 import { downloadMarkdown } from '../core/downloader';
-import type { ExtractResponse } from '../types/messages';
+import type { ExtractResponse, WriteCustomResponse } from '../types/messages';
 
 const COMMAND = 'save-clip';
 
-interface WriteCustomResponse {
-  success: boolean;
-  filename?: string;
-  error?: string;
-}
+/** offscreen 就绪信号超时时间（毫秒） */
+export const OFFSCREEN_READY_TIMEOUT_MS = 2000;
+
+/** 属于 offscreen 生命周期错误的标记（可安全重建重试一次） */
+const LIFECYCLE_ERROR_MARKERS = [
+  'Could not establish connection',
+  'Receiving end does not exist',
+  'Message port closed before a response was received',
+];
+
+/** 离屏组件就绪超时的错误码（不拼进用户可见文案，仅用于生命周期判定） */
+const OFFSCREEN_READY_TIMEOUT_CODE = 'OFFSCREEN_READY_TIMEOUT';
 
 // 防御：commands API 不可用时跳过注册，避免整个 SW 启动崩溃
 if (chrome.commands?.onCommand) {
@@ -64,7 +74,9 @@ async function runQuickSave(): Promise<void> {
       notify('已保存', written);
       return;
     } catch (e) {
-      await downloadFallback(markdown, filename, `自定义文件夹写入失败，已改为下载目录：${String(e)}`);
+      // 错误详情只写开发日志，用户通知不拼接冗长的 Error
+      console.error('自定义文件夹写入失败：', e);
+      await downloadFallback(markdown, filename, '自定义文件夹写入失败，已保存到下载目录：');
       return;
     }
   }
@@ -83,66 +95,124 @@ async function downloadFallback(markdown: string, filename: string, note: string
   }
 }
 
-async function writeViaOffscreen(filename: string, markdown: string): Promise<string> {
-  await ensureOffscreen();
-  const resp = await runtimeSend<WriteCustomResponse>({
-    type: 'WRITE_CUSTOM',
-    payload: { filename, markdown },
-  });
-  if (!resp || !resp.success) throw new Error(resp?.error ?? '自定义文件夹写入失败。');
-  return resp.filename ?? filename;
+// ---------- 写入（最多重试一次，仅生命周期错误） ----------
+
+export async function writeViaOffscreen(filename: string, markdown: string): Promise<string> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await ensureOffscreenDocument();
+      const resp = await runtimeSend<WriteCustomResponse>({
+        type: 'WRITE_CUSTOM',
+        payload: { filename, markdown },
+      });
+      if (resp && resp.success) return resp.filename ?? filename;
+      // 非生命周期错误（权限/写入失败等）：直接抛出，不重试
+      throw new Error(resp?.error ?? '自定义文件夹写入失败。');
+    } catch (e) {
+      if (attempt === 0 && isLifecycleError(e)) {
+        await resetOffscreenForRetry();
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error('自定义文件夹写入失败。');
 }
 
 // ---------- offscreen 生命周期 ----------
 
-let offscreenReadyPromise: Promise<void> | null = null;
+/** 仅缓存「正在创建」的 Promise；创建结束后（无论成败）清空 */
+let offscreenCreationInFlight: Promise<void> | null = null;
 
-function ensureOffscreen(): Promise<void> {
-  if (!offscreenReadyPromise) {
-    offscreenReadyPromise = createOffscreen().catch((e) => {
-      offscreenReadyPromise = null;
-      throw e;
-    });
+export async function ensureOffscreenDocument(): Promise<void> {
+  if (await hasOffscreenDocument()) return;
+  if (!offscreenCreationInFlight) {
+    offscreenCreationInFlight = createOffscreenDocument();
   }
-  return offscreenReadyPromise;
+  try {
+    await offscreenCreationInFlight;
+  } finally {
+    offscreenCreationInFlight = null;
+  }
 }
 
-async function createOffscreen(): Promise<void> {
+/** 每次写入前重新确认 offscreen document 是否存在（不信任历史就绪状态） */
+export async function hasOffscreenDocument(): Promise<boolean> {
   const offscreen = chrome.offscreen;
-  // Chrome 150+ 才有 hasDocument；旧版直接尝试创建并忽略「已存在」错误
-  if (typeof offscreen.hasDocument === 'function' && (await offscreen.hasDocument())) {
-    return;
+  if (typeof offscreen.hasDocument === 'function') {
+    try {
+      return await offscreen.hasDocument();
+    } catch {
+      return false; // API 异常不能默认返回 true
+    }
   }
+  // API 不存在：无法确定，按不存在处理（createDocument 抛「已存在」时再兜底）
+  return false;
+}
+
+async function createOffscreenDocument(): Promise<void> {
   const ready = waitForOffscreenReady();
   try {
-    await offscreen.createDocument({
+    await chrome.offscreen.createDocument({
       url: 'offscreen.html',
       reasons: ['BLOBS'],
-      justification: '写入自定义文件夹需要 File System Access API',
+      justification: '写入用户明确选择的自定义文件夹',
     });
-  } catch {
-    // 已存在则忽略
+  } catch (e) {
+    // createDocument 抛错时再确认一次：若文档其实已存在，等待 ready 即可
+    if (!(await hasOffscreenDocument())) throw e;
   }
   await ready;
 }
 
-function waitForOffscreenReady(timeoutMs = 2000): Promise<void> {
-  return new Promise((resolve) => {
+/** 收到 OFFSCREEN_READY → resolve；超时 → reject；两种结果都清理 listener 与 timer */
+export function waitForOffscreenReady(timeoutMs = OFFSCREEN_READY_TIMEOUT_MS): Promise<void> {
+  return new Promise((resolve, reject) => {
     let settled = false;
     let timer: ReturnType<typeof setTimeout>;
-    function settle(): void {
-      if (settled) return;
-      settled = true;
+
+    function cleanup(): void {
       clearTimeout(timer);
       chrome.runtime.onMessage.removeListener(listener);
+    }
+    function settleOk(): void {
+      if (settled) return;
+      settled = true;
+      cleanup();
       resolve();
     }
-    function listener(msg: unknown): void {
-      if ((msg as { type?: string } | null)?.type === 'OFFSCREEN_READY') settle();
+    function settleTimeout(): void {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      const err = new Error('离屏写入组件启动超时。') as Error & { code?: string };
+      err.code = OFFSCREEN_READY_TIMEOUT_CODE;
+      reject(err);
     }
-    timer = setTimeout(settle, timeoutMs);
+    function listener(msg: unknown): void {
+      if ((msg as { type?: string } | null)?.type === 'OFFSCREEN_READY') settleOk();
+    }
+
+    timer = setTimeout(settleTimeout, timeoutMs);
     chrome.runtime.onMessage.addListener(listener);
   });
+}
+
+async function resetOffscreenForRetry(): Promise<void> {
+  offscreenCreationInFlight = null;
+  try {
+    if (await hasOffscreenDocument()) {
+      await chrome.offscreen.closeDocument();
+    }
+  } catch {
+    // 关闭失败不阻断重建
+  }
+}
+
+function isLifecycleError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (LIFECYCLE_ERROR_MARKERS.some((m) => msg.includes(m))) return true;
+  return (e as { code?: string } | null)?.code === OFFSCREEN_READY_TIMEOUT_CODE;
 }
 
 // ---------- 工具 ----------

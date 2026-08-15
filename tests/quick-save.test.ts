@@ -4,8 +4,11 @@ import '../src/content/content-script';
 import {
   chromeCalls,
   dispatchCommand,
+  offscreenCloseDocumentMock,
+  offscreenCreateDocumentMock,
   offscreenHasDocumentMock,
   runtimeSendMessageMock,
+  setRuntimeLastError,
 } from './setup';
 import { mountFixture } from './helpers';
 import { loadDirectoryHandle } from '../src/core/custom-folder';
@@ -34,6 +37,9 @@ describe('快捷键保存（save-clip）', () => {
     runtimeSendMessageMock.mockReset();
     offscreenHasDocumentMock.mockReset();
     offscreenHasDocumentMock.mockResolvedValue(false);
+    offscreenCreateDocumentMock.mockReset();
+    offscreenCloseDocumentMock.mockReset();
+    setRuntimeLastError(null);
   });
 
   it('支持页面：下载并通知成功', async () => {
@@ -76,5 +82,45 @@ describe('快捷键保存（save-clip）', () => {
       expect.objectContaining({ type: 'WRITE_CUSTOM' }),
       expect.any(Function),
     );
+  });
+
+  it('权限被拒：不重建 offscreen、不重试，直接下载兜底并通知', async () => {
+    setLocation('https://x.com/alice/status/123456');
+    mountFixture('x', 'normal');
+    vi.mocked(loadDirectoryHandle).mockResolvedValue({ name: 'notes' } as unknown as FileSystemDirectoryHandle);
+    offscreenHasDocumentMock.mockResolvedValue(true);
+    runtimeSendMessageMock.mockImplementation((msg: unknown, cb?: (r: unknown) => void) => {
+      const m = msg as { type?: string };
+      if (m.type === 'WRITE_CUSTOM') cb?.({ success: false, error: '未获得该文件夹的写入权限。' });
+      else cb?.({});
+    });
+    dispatchCommand('save-clip');
+
+    await vi.waitFor(() => expect(chromeCalls.downloads.length).toBe(1));
+    expect(offscreenCreateDocumentMock).not.toHaveBeenCalled();
+    expect(runtimeSendMessageMock).toHaveBeenCalledTimes(1); // 不进行第二次发送
+    expect(chromeCalls.notifications.some((n) => n.message.includes('自定义文件夹写入失败，已保存到下载目录'))).toBe(
+      true,
+    );
+  });
+
+  it('两次 offscreen 尝试都失败：最多两轮，只下载一次、只发一条最终通知', async () => {
+    setLocation('https://x.com/alice/status/123456');
+    mountFixture('x', 'normal');
+    vi.mocked(loadDirectoryHandle).mockResolvedValue({ name: 'notes' } as unknown as FileSystemDirectoryHandle);
+    offscreenHasDocumentMock.mockResolvedValue(true);
+    let sendCount = 0;
+    runtimeSendMessageMock.mockImplementation((_msg: unknown, cb?: (r: unknown) => void) => {
+      sendCount += 1;
+      setRuntimeLastError('Receiving end does not exist.');
+      cb?.(undefined);
+    });
+    dispatchCommand('save-clip');
+
+    await vi.waitFor(() => expect(chromeCalls.downloads.length).toBe(1));
+    expect(sendCount).toBe(2); // 最多两次发送
+    expect(chromeCalls.downloads.length).toBe(1);
+    expect(chromeCalls.notifications.length).toBe(1);
+    expect(chromeCalls.notifications[0]?.message).toContain('自定义文件夹写入失败，已保存到下载目录');
   });
 });

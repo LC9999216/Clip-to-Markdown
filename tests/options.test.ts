@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { commandsGetAllMock, mockStoredSettings, runtimeSendMessageMock } from './setup';
+import { commandsGetAllMock, mockStoredSettings, runtimeSendMessageMock, setRuntimeLastError } from './setup';
 
 const optionsHtml = readFileSync(
   join(process.cwd(), 'src', 'options', 'options.html'),
@@ -147,5 +147,44 @@ describe('保存位置状态', () => {
       expect((document.getElementById('fallback-download-settings') as HTMLDetailsElement).open).toBe(true);
       expect(document.getElementById('folder-status')?.textContent).toContain('浏览器下载目录');
     });
+  });
+});
+
+describe('表单保存状态', () => {
+  it('初始化时禁用保存按钮，用户修改后启用，保存成功后再次禁用', async () => {
+    await bootOptions(null);
+    const input = document.getElementById('subfolder') as HTMLInputElement;
+    const saveButton = document.getElementById('save-btn') as HTMLButtonElement;
+
+    expect(saveButton.disabled).toBe(true);
+    input.value = 'Clip2MD/知乎';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(saveButton.disabled).toBe(false);
+
+    saveButton.click();
+    await vi.waitFor(() => {
+      expect(document.getElementById('save-status')?.textContent).toBe('设置已保存');
+      expect(saveButton.disabled).toBe(true);
+      expect(mockStoredSettings['clip2md.settings']).toMatchObject({
+        subfolder: 'Clip2MD/知乎',
+      });
+    });
+  });
+
+  it('保存失败时保留可重试状态', async () => {
+    await bootOptions(null);
+    const input = document.getElementById('note-folder') as HTMLInputElement;
+    const saveButton = document.getElementById('save-btn') as HTMLButtonElement;
+
+    input.value = 'Clippings/Bilibili';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    setRuntimeLastError('storage unavailable');
+    saveButton.click();
+
+    await vi.waitFor(() => {
+      expect(document.getElementById('save-status')?.textContent).toContain('保存失败');
+      expect(saveButton.disabled).toBe(false);
+    });
+    setRuntimeLastError(null);
   });
 });

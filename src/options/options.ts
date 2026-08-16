@@ -34,14 +34,46 @@ const fallbackDownloadDetails = document.getElementById('fallback-download-setti
 const shortcutValueEl = document.getElementById('shortcut-value') as HTMLSpanElement;
 const shortcutBtn = document.getElementById('shortcut-btn') as HTMLButtonElement;
 
-function setFolderStatus(text: string, kind: 'muted' | 'ok' | 'error' = 'muted'): void {
-  folderStatusEl.textContent = text;
-  folderStatusEl.className = `hint status ${kind === 'muted' ? '' : kind}`;
+type StatusKind = 'muted' | 'ok' | 'error';
+
+function setInlineStatus(
+  element: HTMLElement,
+  text: string,
+  kind: StatusKind = 'muted',
+): void {
+  element.textContent = text;
+  element.dataset.kind = kind;
 }
 
-function setSaveStatus(text: string, kind: 'muted' | 'ok' | 'error' = 'muted'): void {
-  saveStatus.textContent = text;
-  saveStatus.className = `save-status ${kind === 'muted' ? '' : kind}`;
+function setFolderStatus(text: string, kind: StatusKind = 'muted'): void {
+  setInlineStatus(folderStatusEl, text, kind);
+}
+
+function setSaveStatus(text: string, kind: StatusKind = 'muted'): void {
+  setInlineStatus(saveStatus, text, kind);
+}
+
+function readFormSettings() {
+  return {
+    subfolder: sanitizeSubfolder(subfolderInput.value),
+    saveAs: saveAsInput.checked,
+    obsidianApiBaseUrl: obsidianApiBaseUrlInput.value,
+    obsidianApiKey: obsidianApiKeyInput.value,
+    noteFolder: noteFolderInput.value,
+  };
+}
+
+let initialized = false;
+
+function setDirty(dirty: boolean): void {
+  form.dataset.dirty = String(dirty);
+  saveBtn.disabled = !dirty;
+}
+
+function markDirty(): void {
+  if (!initialized) return;
+  setSaveStatus('');
+  setDirty(true);
 }
 
 /** 根据目录句柄渲染保存位置卡片：文件夹名称、连接状态与备用下载区展开状态。 */
@@ -152,7 +184,12 @@ async function init(): Promise<void> {
   noteFolderInput.value = settings.noteFolder;
   await refreshFolderState();
   await refreshShortcut();
+  initialized = true;
+  setDirty(false);
 }
+
+form.addEventListener('input', markDirty);
+form.addEventListener('change', markDirty);
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -160,24 +197,25 @@ form.addEventListener('submit', (e) => {
 });
 
 async function onSubmit(): Promise<void> {
-  const subfolder = sanitizeSubfolder(subfolderInput.value);
-  subfolderInput.value = subfolder;
+  if (!initialized || form.dataset.saving === 'true' || saveBtn.disabled) return;
 
+  const settings = readFormSettings();
+  subfolderInput.value = settings.subfolder;
+  form.dataset.saving = 'true';
   saveBtn.disabled = true;
+  saveBtn.textContent = '保存中…';
   setSaveStatus('保存中…');
+
   try {
-    await saveSettings({
-      subfolder,
-      saveAs: saveAsInput.checked,
-      obsidianApiBaseUrl: obsidianApiBaseUrlInput.value,
-      obsidianApiKey: obsidianApiKeyInput.value,
-      noteFolder: noteFolderInput.value,
-    });
-    setSaveStatus('已保存', 'ok');
-  } catch (e) {
-    setSaveStatus(`保存失败：${String(e)}`, 'error');
+    await saveSettings(settings);
+    setDirty(false);
+    setSaveStatus('设置已保存', 'ok');
+  } catch (error) {
+    setDirty(true);
+    setSaveStatus(`保存失败：${String(error)}`, 'error');
   } finally {
-    saveBtn.disabled = false;
+    form.dataset.saving = 'false';
+    saveBtn.textContent = '保存更改';
   }
 }
 

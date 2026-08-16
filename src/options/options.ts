@@ -21,7 +21,9 @@ const obsidianApiBaseUrlInput = document.getElementById('obsidian-api-base-url')
 const obsidianApiKeyInput = document.getElementById('obsidian-api-key') as HTMLInputElement;
 const noteFolderInput = document.getElementById('note-folder') as HTMLInputElement;
 const testObsidianBtn = document.getElementById('test-obsidian-btn') as HTMLButtonElement;
-const obsidianStatus = document.getElementById('obsidian-status') as HTMLSpanElement;
+const obsidianStatus = document.getElementById('obsidian-status') as HTMLElement;
+const toggleApiKeyBtn = document.getElementById('toggle-api-key') as HTMLButtonElement;
+const obsidianSummaryStateEl = document.getElementById('obsidian-summary-state') as HTMLSpanElement;
 
 const chooseFolderBtn = document.getElementById('choose-folder') as HTMLButtonElement;
 const clearFolderBtn = document.getElementById('clear-folder') as HTMLButtonElement;
@@ -175,6 +177,22 @@ function onOpenShortcuts(): void {
   void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
 }
 
+/** 依据 API Key 是否已填写，更新 Obsidian 折叠标题上的摘要标签。 */
+function refreshObsidianSummary(): void {
+  const configured = obsidianApiKeyInput.value.trim().length > 0;
+  obsidianSummaryStateEl.textContent = configured ? '已配置' : '未配置';
+  obsidianSummaryStateEl.dataset.kind = configured ? 'ok' : 'muted';
+}
+
+/** 切换 API Key 明/密文显示；只改页面临时状态，不视为表单修改。 */
+function onToggleApiKey(): void {
+  const reveal = obsidianApiKeyInput.type === 'password';
+  obsidianApiKeyInput.type = reveal ? 'text' : 'password';
+  toggleApiKeyBtn.textContent = reveal ? '隐藏' : '显示';
+  toggleApiKeyBtn.setAttribute('aria-pressed', String(reveal));
+  toggleApiKeyBtn.setAttribute('aria-label', `${reveal ? '隐藏' : '显示'} API Key`);
+}
+
 async function init(): Promise<void> {
   const settings = await loadSettings();
   subfolderInput.value = settings.subfolder;
@@ -182,6 +200,7 @@ async function init(): Promise<void> {
   obsidianApiBaseUrlInput.value = settings.obsidianApiBaseUrl;
   obsidianApiKeyInput.value = settings.obsidianApiKey;
   noteFolderInput.value = settings.noteFolder;
+  refreshObsidianSummary();
   await refreshFolderState();
   await refreshShortcut();
   initialized = true;
@@ -208,6 +227,7 @@ async function onSubmit(): Promise<void> {
 
   try {
     await saveSettings(settings);
+    refreshObsidianSummary();
     setDirty(false);
     setSaveStatus('设置已保存', 'ok');
   } catch (error) {
@@ -221,30 +241,36 @@ async function onSubmit(): Promise<void> {
 
 async function onTestObsidian(): Promise<void> {
   testObsidianBtn.disabled = true;
-  obsidianStatus.textContent = '测试中…';
-  obsidianStatus.className = 'save-status';
+  testObsidianBtn.textContent = '测试中…';
+  setInlineStatus(obsidianStatus, '正在连接…');
+
   try {
-    // 先保存当前输入，确保测试用的是最新配置
-    await saveSettings({
-      subfolder: sanitizeSubfolder(subfolderInput.value),
-      saveAs: saveAsInput.checked,
-      obsidianApiBaseUrl: obsidianApiBaseUrlInput.value,
-      obsidianApiKey: obsidianApiKeyInput.value,
-      noteFolder: noteFolderInput.value,
+    await saveSettings(readFormSettings());
+    setDirty(false);
+    refreshObsidianSummary();
+
+    const response = await runtimeSend<{ success: boolean; service?: string; error?: string }>({
+      type: 'TEST_OBSIDIAN',
     });
-    const resp = await runtimeSend<{ success: boolean; service?: string; error?: string }>({ type: 'TEST_OBSIDIAN' });
-    if (!resp.success) {
-      obsidianStatus.textContent = resp.error ?? '连接失败';
-      obsidianStatus.className = 'save-status error';
+    if (!response.success) {
+      setInlineStatus(
+        obsidianStatus,
+        response.error ? `连接失败：${response.error}` : '连接失败，请检查地址或 API Key。',
+        'error',
+      );
       return;
     }
-    obsidianStatus.textContent = `连接成功：${resp.service ?? 'Obsidian Local REST API'}`;
-    obsidianStatus.className = 'save-status ok';
-  } catch (e) {
-    obsidianStatus.textContent = `测试失败：${String(e)}`;
-    obsidianStatus.className = 'save-status error';
+
+    setInlineStatus(
+      obsidianStatus,
+      `连接成功：${response.service ?? 'Obsidian Local REST API'}`,
+      'ok',
+    );
+  } catch (error) {
+    setInlineStatus(obsidianStatus, `测试失败：${String(error)}`, 'error');
   } finally {
     testObsidianBtn.disabled = false;
+    testObsidianBtn.textContent = '测试连接';
   }
 }
 
@@ -262,6 +288,7 @@ chooseFolderBtn.addEventListener('click', () => void onChooseFolder());
 clearFolderBtn.addEventListener('click', () => void onClearFolder());
 shortcutBtn.addEventListener('click', onOpenShortcuts);
 testObsidianBtn.addEventListener('click', () => void onTestObsidian());
+toggleApiKeyBtn.addEventListener('click', onToggleApiKey);
 
 document.addEventListener('DOMContentLoaded', () => {
   void init();

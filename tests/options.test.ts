@@ -36,9 +36,11 @@ async function bootOptions(handle: FileSystemDirectoryHandle | null = null): Pro
     callback?.(commands);
     return Promise.resolve(commands) as never;
   });
-  runtimeSendMessageMock.mockImplementation((_message, callback?: (response: unknown) => void) => {
-    callback?.({ success: true, service: 'Obsidian Local REST API' });
-  });
+  if (runtimeSendMessageMock.getMockImplementation() === undefined) {
+    runtimeSendMessageMock.mockImplementation((_message, callback?: (response: unknown) => void) => {
+      callback?.({ success: true, service: 'Obsidian Local REST API' });
+    });
+  }
 
   await import('../src/options/options');
   document.dispatchEvent(new Event('DOMContentLoaded'));
@@ -186,5 +188,63 @@ describe('表单保存状态', () => {
       expect(saveButton.disabled).toBe(false);
     });
     setRuntimeLastError(null);
+  });
+});
+
+describe('Obsidian 高级设置', () => {
+  it('默认收起并允许显示或隐藏 API Key，但不把显示状态视为表单修改', async () => {
+    await bootOptions(null);
+    const details = document.getElementById('obsidian-settings') as HTMLDetailsElement;
+    const input = document.getElementById('obsidian-api-key') as HTMLInputElement;
+    const toggle = document.getElementById('toggle-api-key') as HTMLButtonElement;
+    const saveButton = document.getElementById('save-btn') as HTMLButtonElement;
+
+    expect(details.open).toBe(false);
+    expect(input.type).toBe('password');
+    toggle.click();
+    expect(input.type).toBe('text');
+    expect(toggle.textContent).toBe('隐藏');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(saveButton.disabled).toBe(true);
+
+    toggle.click();
+    expect(input.type).toBe('password');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('测试连接时保存当前字段、更新摘要并就近显示成功', async () => {
+    await bootOptions(null);
+    const apiKey = document.getElementById('obsidian-api-key') as HTMLInputElement;
+    apiKey.value = 'secret-key';
+    apiKey.dispatchEvent(new Event('input', { bubbles: true }));
+
+    (document.getElementById('test-obsidian-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(runtimeSendMessageMock).toHaveBeenCalledWith(
+        { type: 'TEST_OBSIDIAN' },
+        expect.any(Function),
+      );
+      expect(mockStoredSettings['clip2md.settings']).toMatchObject({ obsidianApiKey: 'secret-key' });
+      expect(document.getElementById('obsidian-status')?.textContent)
+        .toContain('连接成功');
+      expect(document.getElementById('obsidian-summary-state')?.textContent).toBe('已配置');
+      expect((document.getElementById('save-btn') as HTMLButtonElement).disabled).toBe(true);
+    });
+  });
+
+  it('连接失败时给出可操作提示', async () => {
+    runtimeSendMessageMock.mockImplementation((_message, callback?: (response: unknown) => void) => {
+      callback?.({ success: false });
+    });
+    await bootOptions(null);
+
+    (document.getElementById('test-obsidian-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(document.getElementById('obsidian-status')?.textContent)
+        .toBe('连接失败，请检查地址或 API Key。');
+      expect(document.getElementById('obsidian-status')?.dataset.kind).toBe('error');
+    });
   });
 });

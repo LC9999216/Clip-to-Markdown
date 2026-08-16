@@ -17,10 +17,19 @@ const saveAsInput = document.getElementById('save-as') as HTMLInputElement;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 const saveStatus = document.getElementById('save-status') as HTMLSpanElement;
 
+const obsidianApiBaseUrlInput = document.getElementById('obsidian-api-base-url') as HTMLInputElement;
+const obsidianApiKeyInput = document.getElementById('obsidian-api-key') as HTMLInputElement;
+const noteFolderInput = document.getElementById('note-folder') as HTMLInputElement;
+const testObsidianBtn = document.getElementById('test-obsidian-btn') as HTMLButtonElement;
+const obsidianStatus = document.getElementById('obsidian-status') as HTMLSpanElement;
+
 const chooseFolderBtn = document.getElementById('choose-folder') as HTMLButtonElement;
 const clearFolderBtn = document.getElementById('clear-folder') as HTMLButtonElement;
-const folderNameEl = document.getElementById('folder-name') as HTMLSpanElement;
-const folderStatusEl = document.getElementById('folder-status') as HTMLParagraphElement;
+const folderNameEl = document.getElementById('folder-name') as HTMLElement;
+const folderStatusEl = document.getElementById('folder-status') as HTMLElement;
+const folderConnectionStateEl = document.getElementById('folder-connection-state') as HTMLSpanElement;
+const folderModeDescriptionEl = document.getElementById('folder-mode-description') as HTMLSpanElement;
+const fallbackDownloadDetails = document.getElementById('fallback-download-settings') as HTMLDetailsElement;
 
 const shortcutValueEl = document.getElementById('shortcut-value') as HTMLSpanElement;
 const shortcutBtn = document.getElementById('shortcut-btn') as HTMLButtonElement;
@@ -35,20 +44,27 @@ function setSaveStatus(text: string, kind: 'muted' | 'ok' | 'error' = 'muted'): 
   saveStatus.className = `save-status ${kind === 'muted' ? '' : kind}`;
 }
 
-/** 读取已存目录句柄并刷新「已选：xxx」显示。 */
-async function refreshFolderLabel(): Promise<void> {
+/** 根据目录句柄渲染保存位置卡片：文件夹名称、连接状态与备用下载区展开状态。 */
+function renderFolderState(handle: FileSystemDirectoryHandle | null): void {
+  const hasCustomFolder = handle !== null;
+  folderNameEl.textContent = hasCustomFolder ? handle.name : '浏览器下载目录';
+  folderModeDescriptionEl.textContent = hasCustomFolder
+    ? '自定义文件夹 · 绕过浏览器下载目录'
+    : '使用下方备用下载设置';
+  folderConnectionStateEl.textContent = hasCustomFolder ? '已连接' : '未选择';
+  folderConnectionStateEl.dataset.kind = hasCustomFolder ? 'ok' : 'muted';
+  chooseFolderBtn.textContent = hasCustomFolder ? '更改' : '选择文件夹';
+  clearFolderBtn.hidden = !hasCustomFolder;
+  fallbackDownloadDetails.open = !hasCustomFolder;
+}
+
+/** 读取已存目录句柄并刷新保存位置状态。 */
+async function refreshFolderState(): Promise<void> {
   try {
-    const handle = await loadDirectoryHandle();
-    if (handle) {
-      folderNameEl.textContent = `已选：${handle.name}`;
-      clearFolderBtn.hidden = false;
-    } else {
-      folderNameEl.textContent = '未选择';
-      clearFolderBtn.hidden = true;
-    }
-  } catch {
-    folderNameEl.textContent = '未选择';
-    clearFolderBtn.hidden = true;
+    renderFolderState(await loadDirectoryHandle());
+  } catch (error) {
+    renderFolderState(null);
+    setFolderStatus(`读取文件夹失败：${String(error)}`, 'error');
   }
 }
 
@@ -67,7 +83,7 @@ async function onChooseFolder(): Promise<void> {
       return;
     }
     await saveDirectoryHandle(handle);
-    await refreshFolderLabel();
+    await refreshFolderState();
     setFolderStatus(`已保存：文件将直接写入「${handle.name}」。`, 'ok');
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {
@@ -91,7 +107,7 @@ async function requestWritePermission(handle: FileSystemDirectoryHandle): Promis
 
 async function onClearFolder(): Promise<void> {
   await clearDirectoryHandle();
-  await refreshFolderLabel();
+  await refreshFolderState();
   setFolderStatus('已清除，改回保存到浏览器下载目录。', 'ok');
 }
 
@@ -131,7 +147,10 @@ async function init(): Promise<void> {
   const settings = await loadSettings();
   subfolderInput.value = settings.subfolder;
   saveAsInput.checked = settings.saveAs;
-  await refreshFolderLabel();
+  obsidianApiBaseUrlInput.value = settings.obsidianApiBaseUrl;
+  obsidianApiKeyInput.value = settings.obsidianApiKey;
+  noteFolderInput.value = settings.noteFolder;
+  await refreshFolderState();
   await refreshShortcut();
 }
 
@@ -147,7 +166,13 @@ async function onSubmit(): Promise<void> {
   saveBtn.disabled = true;
   setSaveStatus('保存中…');
   try {
-    await saveSettings({ subfolder, saveAs: saveAsInput.checked });
+    await saveSettings({
+      subfolder,
+      saveAs: saveAsInput.checked,
+      obsidianApiBaseUrl: obsidianApiBaseUrlInput.value,
+      obsidianApiKey: obsidianApiKeyInput.value,
+      noteFolder: noteFolderInput.value,
+    });
     setSaveStatus('已保存', 'ok');
   } catch (e) {
     setSaveStatus(`保存失败：${String(e)}`, 'error');
@@ -156,9 +181,49 @@ async function onSubmit(): Promise<void> {
   }
 }
 
+async function onTestObsidian(): Promise<void> {
+  testObsidianBtn.disabled = true;
+  obsidianStatus.textContent = '测试中…';
+  obsidianStatus.className = 'save-status';
+  try {
+    // 先保存当前输入，确保测试用的是最新配置
+    await saveSettings({
+      subfolder: sanitizeSubfolder(subfolderInput.value),
+      saveAs: saveAsInput.checked,
+      obsidianApiBaseUrl: obsidianApiBaseUrlInput.value,
+      obsidianApiKey: obsidianApiKeyInput.value,
+      noteFolder: noteFolderInput.value,
+    });
+    const resp = await runtimeSend<{ success: boolean; service?: string; error?: string }>({ type: 'TEST_OBSIDIAN' });
+    if (!resp.success) {
+      obsidianStatus.textContent = resp.error ?? '连接失败';
+      obsidianStatus.className = 'save-status error';
+      return;
+    }
+    obsidianStatus.textContent = `连接成功：${resp.service ?? 'Obsidian Local REST API'}`;
+    obsidianStatus.className = 'save-status ok';
+  } catch (e) {
+    obsidianStatus.textContent = `测试失败：${String(e)}`;
+    obsidianStatus.className = 'save-status error';
+  } finally {
+    testObsidianBtn.disabled = false;
+  }
+}
+
+function runtimeSend<T>(msg: unknown): Promise<T> {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(msg as object, (resp: T) => {
+      const err = chrome.runtime.lastError;
+      if (err) reject(new Error(err.message));
+      else resolve(resp);
+    });
+  });
+}
+
 chooseFolderBtn.addEventListener('click', () => void onChooseFolder());
 clearFolderBtn.addEventListener('click', () => void onClearFolder());
 shortcutBtn.addEventListener('click', onOpenShortcuts);
+testObsidianBtn.addEventListener('click', () => void onTestObsidian());
 
 document.addEventListener('DOMContentLoaded', () => {
   void init();

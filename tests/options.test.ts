@@ -8,6 +8,11 @@ const optionsHtml = readFileSync(
   'utf8',
 ).replace('<script src="options.js"></script>', '');
 
+const optionsCss = readFileSync(
+  join(process.cwd(), 'src', 'options', 'options.css'),
+  'utf8',
+);
+
 function mountOptionsHtml(): void {
   document.open();
   document.write(optionsHtml);
@@ -246,5 +251,17 @@ describe('Obsidian 高级设置', () => {
         .toBe('连接失败，请检查地址或 API Key。');
       expect(document.getElementById('obsidian-status')?.dataset.kind).toBe('error');
     });
+  });
+});
+
+describe('设置页视觉契约', () => {
+  it('包含已确认的设计令牌、密码框、键盘焦点和窄屏规则', () => {
+    expect(optionsCss).toContain('--page-bg: #f6f8fb');
+    expect(optionsCss).toContain('max-width: 680px');
+    expect(optionsCss).toMatch(/input\[type="text"\][\s\S]*input\[type="password"\]/);
+    expect(optionsCss).toContain(':focus-visible');
+    expect(optionsCss).toContain('@media (max-width: 540px)');
+    expect(optionsCss).toContain('.settings-card');
+    expect(optionsCss).toContain('.save-bar');
   });
 });

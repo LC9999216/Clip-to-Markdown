@@ -98,13 +98,12 @@ function extractArticle(doc: Document, url: URL): ContentDocument {
 // ---------- 共用 ----------
 
 function extractAuthor(item: Element, authorSelector: string): AuthorInfo {
-  const el = item.querySelector(authorSelector);
-  const link = el?.querySelector('a');
-  const name = (link?.textContent ?? el?.textContent ?? '').trim();
-  if (!name) {
-    throw new ExtractionError('NOT_FOUND_AUTHOR', ERROR_MESSAGES.NOT_FOUND_AUTHOR);
+  for (const el of Array.from(item.querySelectorAll(authorSelector))) {
+    const link = el.querySelector('a');
+    const name = (link?.textContent ?? el.textContent ?? '').trim();
+    if (name) return { name };
   }
-  return { name };
+  throw new ExtractionError('NOT_FOUND_AUTHOR', ERROR_MESSAGES.NOT_FOUND_AUTHOR);
 }
 
 /** 发布时间：meta 兜底，不可靠时返回 ''（不阻断流程） */

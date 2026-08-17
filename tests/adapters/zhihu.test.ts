@@ -70,6 +70,7 @@ describe('知乎 adapter 负向断言', () => {
     expect(checkJsonRoundTrip(doc)).toBeNull();
     expect(doc.metadata.contentType).toBe('zhihu-article');
     expect(doc.metadata.title).toBe('新版知乎文章标题');
+    expect(doc.metadata.author.name).toBe('示例作者');
 
     const md = renderDocument(doc);
     expect(md.trim()).toBe(readExpectedMd('zhihu', 'article-post-main'));

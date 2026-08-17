@@ -17,7 +17,7 @@ export function detectZhihuType(url: URL): PlatformContentType | null {
 export function extractZhihu(doc: Document, url: URL): ContentDocument {
   const type = detectZhihuType(url);
   if (!type) throw new ExtractionError('UNSUPPORTED_PAGE', ERROR_MESSAGES.UNSUPPORTED_PAGE);
-  if (isLoginWall(doc)) {
+  if (!hasReadableContent(doc, type, url) && isLoginWall(doc)) {
     throw new ExtractionError('LOGIN_REQUIRED', ERROR_MESSAGES.LOGIN_REQUIRED);
   }
   return type === 'zhihu-answer' ? extractAnswer(doc, url) : extractArticle(doc, url);
@@ -129,6 +129,21 @@ function extractBody(item: Element, bodySelector: string, removeSelectors: reado
     throw new ExtractionError('NOT_FOUND_BODY', ERROR_MESSAGES.NOT_FOUND_BODY);
   }
   return content;
+}
+
+function hasReadableContent(doc: Document, type: PlatformContentType, url: URL): boolean {
+  if (type === 'zhihu-article') {
+    const item = doc.querySelector(ZHIHU_SELECTORS.article.item);
+    return Boolean(item?.querySelector(ZHIHU_SELECTORS.article.body));
+  }
+
+  if (type === 'zhihu-answer') {
+    const aid = ANSWER_RE.exec(url.pathname)?.[2];
+    const item = aid ? findFocusedAnswer(doc, aid) : null;
+    return Boolean(item?.querySelector(ZHIHU_SELECTORS.answer.body));
+  }
+
+  return false;
 }
 
 function isLoginWall(doc: Document): boolean {

@@ -9,9 +9,11 @@ import {
   offscreenHasDocumentMock,
   runtimeSendMessageMock,
   setRuntimeLastError,
+  mockStoredSettings,
 } from './setup';
 import { mountFixture } from './helpers';
 import { loadDirectoryHandle } from '../src/core/custom-folder';
+import { runSave } from '../src/background/quick-save';
 
 vi.mock('../src/core/custom-folder', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/core/custom-folder')>();
@@ -122,5 +124,44 @@ describe('快捷键保存（save-clip）', () => {
     expect(chromeCalls.downloads.length).toBe(1);
     expect(chromeCalls.notifications.length).toBe(1);
     expect(chromeCalls.notifications[0]?.message).toContain('自定义文件夹写入失败，已保存到下载目录');
+  });
+
+  it('Obsidian target 复用同一 filename engine 且不回退为下载', async () => {
+    setLocation('https://x.com/alice/status/123456');
+    mountFixture('x', 'normal');
+    mockStoredSettings['clip2md.settings'] = {
+      settingsVersion: 2,
+      save: { subfolder: '', saveAs: false },
+      filename: { template: '{date}-{platform}-{title}' },
+      obsidian: {
+        enabled: true,
+        apiUrl: 'http://127.0.0.1:27123',
+        apiKey: 'key',
+        noteDirectory: 'Clippings/Inbox',
+        frontmatter: {
+          sourceUrl: true,
+          author: true,
+          published: true,
+          platform: true,
+          clippedAt: true,
+          tags: false,
+        },
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ status: 404, ok: false, text: async () => '' })
+      .mockResolvedValueOnce({ status: 204, ok: true, text: async () => '' }));
+
+    await runSave('obsidian');
+
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/vault/Clippings/Inbox/2026-'),
+      expect.objectContaining({ method: 'PUT' }),
+    );
+    expect(chromeCalls.downloads).toHaveLength(0);
+    expect(chromeCalls.notifications.some((n) => n.title === '已保存到 Obsidian')).toBe(true);
+    vi.unstubAllGlobals();
   });
 });

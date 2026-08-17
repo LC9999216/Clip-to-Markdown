@@ -1,7 +1,7 @@
 /** Background 与 Obsidian Core client 的适配层。 */
 
 import { createObsidianClient } from '../core/obsidian-client';
-import { loadSettings, sanitizeSubfolder } from '../core/settings';
+import { loadSettings, sanitizeSubfolder, type ClipSettings } from '../core/settings';
 
 interface ObsidianWriteArgs {
   markdown: string;
@@ -11,8 +11,8 @@ interface ObsidianWriteArgs {
 }
 
 /** 保存笔记到 Obsidian，返回 vault 相对路径。 */
-export async function saveToObsidian(args: ObsidianWriteArgs): Promise<string> {
-  const settings = await loadSettings();
+export async function saveToObsidian(args: ObsidianWriteArgs, existingSettings?: ClipSettings): Promise<string> {
+  const settings = existingSettings ?? await loadSettings();
   const folder = sanitizeSubfolder(settings.obsidian.noteDirectory);
   const filepath = folder ? `${folder}/${args.filename}` : args.filename;
   const client = createObsidianClient(settings.obsidian);

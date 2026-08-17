@@ -4,8 +4,7 @@
  *       →（已选自定义文件夹则直接写入）→ 否则 DOWNLOAD。
  */
 
-import { renderDocument } from '../core/markdown-renderer';
-import { buildFilename } from '../core/filename';
+import { prepareSave } from '../core/save-service';
 import { loadDirectoryHandle, writeMarkdownToDirectory } from '../core/custom-folder';
 import type {
   DownloadResponse,
@@ -134,8 +133,7 @@ async function onSave(tabId: number): Promise<void> {
     return;
   }
 
-  const markdown = renderDocument(extract.document);
-  const filename = buildFilename(extract.document);
+  const { markdown, filename } = await prepareSave(extract.document);
 
   // 优先：若用户在设置里选了自定义文件夹，直接写入该目录（绕过下载目录）。
   let fallbackNote = '';
@@ -199,8 +197,7 @@ async function onSaveToObsidian(tabId: number): Promise<void> {
     return;
   }
 
-  const markdown = renderDocument(extract.document);
-  const filename = buildFilename(extract.document);
+  const { markdown, filename } = await prepareSave(extract.document);
 
   obsidianBtn.textContent = '保存中…';
   let resp: SaveToObsidianResponse;

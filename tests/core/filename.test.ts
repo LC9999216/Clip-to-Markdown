@@ -3,6 +3,7 @@ import {
   buildFilename,
   buildFilenameContext,
   cleanupTemplateResult,
+  ensureMarkdownFilename,
   renderFilenameTemplate,
   sanitizeFilenamePart,
   slugify,
@@ -99,6 +100,12 @@ describe('buildFilename', () => {
 });
 
 describe('filename template helpers', () => {
+  it('保存文件名缺少扩展名时自动补全 .md', () => {
+    expect(ensureMarkdownFilename('note')).toBe('note.md');
+    expect(ensureMarkdownFilename('note.md')).toBe('note.md');
+    expect(ensureMarkdownFilename('note.MD')).toBe('note.MD');
+  });
+
   it('校验未知变量并去重', () => {
     expect(validateFilenameTemplate('{hello}-{title}-{hello}')).toEqual({
       valid: false,

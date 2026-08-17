@@ -100,7 +100,7 @@ describe('Clip2MD 设置页结构', () => {
     ]);
 
     expect(document.getElementById('fallback-download-settings')).toBeInstanceOf(HTMLDetailsElement);
-    expect((document.getElementById('obsidian-settings') as HTMLDetailsElement).open).toBe(false);
+    expect((document.getElementById('obsidian-settings') as HTMLDetailsElement).open).toBe(true);
     expect(document.querySelector('.save-bar')).not.toBeNull();
   });
 
@@ -150,12 +150,14 @@ describe('Clip2MD 设置页结构', () => {
   it('展示 V0.2 品牌、默认文件名模板、About 链接与运行时版本', async () => {
     await bootOptions(null);
     expect(document.querySelector('h1')?.textContent).toBe('Clip to Markdown 设置');
+    expect(document.querySelector('.brand-icon')?.getAttribute('src')).toBe('icons/icon-32.png');
     expect((document.getElementById('filename-template') as HTMLInputElement).value).toBe('{date}-{title}');
     expect((document.getElementById('frontmatter-source-url') as HTMLInputElement).checked).toBe(true);
     expect(document.getElementById('app-version')?.textContent).toBe('v0.2.0');
     expect(document.querySelector('a[href="https://github.com/LC9999216/clip2md"]')).not.toBeNull();
     expect(document.querySelector('a[href="https://github.com/LC9999216/clip2md/issues"]')).not.toBeNull();
-    expect(document.querySelector('a[href^="mailto:"]')).not.toBeNull();
+    expect(document.querySelector('a[href="mailto:luochengco_0707@qq.com"]')).not.toBeNull();
+    expect(document.querySelector('a[href="https://github.com/LC9999216/clip2md/blob/main/LICENSE"]')).not.toBeNull();
   });
 });
 
@@ -310,7 +312,7 @@ describe('Obsidian 高级设置', () => {
     const toggle = document.getElementById('toggle-api-key') as HTMLButtonElement;
     const saveButton = document.getElementById('save-btn') as HTMLButtonElement;
 
-    expect(details.open).toBe(false);
+    expect(details.open).toBe(true);
     expect(input.type).toBe('password');
     toggle.click();
     expect(input.type).toBe('text');
@@ -365,12 +367,14 @@ describe('Obsidian 高级设置', () => {
 
 describe('设置页视觉契约', () => {
   it('包含已确认的设计令牌、密码框、键盘焦点和窄屏规则', () => {
-    expect(optionsCss).toContain('--page-bg: #f6f8fb');
-    expect(optionsCss).toContain('max-width: 680px');
+    expect(optionsCss).toContain('--page-bg: #f7f9fc');
+    expect(optionsCss).toContain('max-width: 1024px');
     expect(optionsCss).toMatch(/input\[type="text"\][\s\S]*input\[type="password"\]/);
     expect(optionsCss).toContain(':focus-visible');
     expect(optionsCss).toContain('@media (max-width: 540px)');
     expect(optionsCss).toContain('.settings-card');
     expect(optionsCss).toContain('.save-bar');
+    expect(optionsCss).toContain('.about-list');
+    expect(optionsCss).toContain('.obsidian-grid');
   });
 });

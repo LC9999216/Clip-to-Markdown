@@ -9,8 +9,11 @@
 <body>
   <main id="app">
     <header class="app-header">
-      <h1>Clip to Markdown 设置</h1>
-      <p class="subtitle">将网页内容快速保存为干净 Markdown，并可一键发送到 Obsidian</p>
+      <img class="brand-icon" src="icons/icon-32.png" alt="" aria-hidden="true" />
+      <div>
+        <h1>Clip to Markdown 设置</h1>
+        <p class="subtitle">将网页内容快速保存为干净 Markdown，并可一键发送到 Obsidian</p>
+      </div>
     </header>
 
     <form id="settings-form" novalidate>
@@ -22,8 +25,8 @@
       >
         <div class="settings-card__header">
           <div>
-            <h2 id="save-location-title">保存位置</h2>
-            <p class="card-description">当前内容将保存到以下位置</p>
+            <h2 id="save-location-title">保存</h2>
+            <p class="card-description">配置默认保存位置、备用下载方式与全局命名规则</p>
           </div>
           <span id="folder-connection-state" class="status-badge" data-kind="muted">加载中</span>
         </div>
@@ -92,36 +95,40 @@
         data-settings-section
         aria-labelledby="shortcut-title"
       >
-        <div class="shortcut-layout">
+        <div class="settings-card__header">
           <div>
             <h2 id="shortcut-title">快捷键</h2>
-            <p class="card-description">可分别设置普通保存和 Obsidian 保存快捷键</p>
-          </div>
-          <div class="shortcut-list">
-            <div class="shortcut-item">
-              <div>
-                <strong>普通保存</strong>
-                <small>保存当前页面为 Markdown</small>
-              </div>
-              <kbd id="shortcut-value">加载中…</kbd>
-              <button id="shortcut-btn" type="button" class="text-button">修改</button>
-            </div>
-            <div class="shortcut-item">
-              <div>
-                <strong>保存到 Obsidian</strong>
-                <small>跳过下载，直接发送到 Obsidian</small>
-              </div>
-              <kbd id="obsidian-shortcut-value">加载中…</kbd>
-              <button id="obsidian-shortcut-btn" type="button" class="text-button">修改</button>
-            </div>
+            <p class="card-description">可分别为普通保存和 Obsidian 保存设置快捷键</p>
           </div>
         </div>
+        <div class="shortcut-list">
+          <div class="shortcut-item">
+            <span class="shortcut-icon" aria-hidden="true">⌨</span>
+            <div>
+              <strong>普通保存</strong>
+              <small>保存当前页面为 Markdown</small>
+            </div>
+            <kbd id="shortcut-value">加载中…</kbd>
+            <button id="shortcut-btn" type="button" class="text-button">修改</button>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-icon obsidian-shortcut-icon" aria-hidden="true">O</span>
+            <div>
+              <strong>保存到 Obsidian</strong>
+              <small>跳过下载，直接发送到 Obsidian</small>
+            </div>
+            <kbd id="obsidian-shortcut-value">加载中…</kbd>
+            <button id="obsidian-shortcut-btn" type="button" class="text-button">修改</button>
+          </div>
+        </div>
+        <p class="card-footnote">快捷键由 Chrome 统一管理，点击“修改”前往快捷键页面自定义。</p>
       </section>
 
       <details
         id="obsidian-settings"
         class="settings-card details-card"
         data-settings-section
+        open
       >
         <summary>
           <span class="obsidian-mark" aria-hidden="true">O</span>
@@ -140,48 +147,50 @@
             <strong>Enable Non-encrypted (HTTP) Server</strong> 并复制 API Key。
           </p>
 
-          <div class="field">
-            <label for="obsidian-api-base-url">Local REST API 地址</label>
-            <input
-              id="obsidian-api-base-url"
-              name="obsidian-api-base-url"
-              type="text"
-              placeholder="http://127.0.0.1:27123"
-              spellcheck="false"
-            />
-          </div>
-
-          <div class="field">
-            <label for="obsidian-api-key">API Key</label>
-            <div class="secret-input-row">
+          <div class="obsidian-grid">
+            <div class="field">
+              <label for="obsidian-api-base-url">Local REST API 地址</label>
               <input
-                id="obsidian-api-key"
-                name="obsidian-api-key"
-                type="password"
-                placeholder="粘贴 Local REST API 插件里的 API Key"
-                autocomplete="off"
+                id="obsidian-api-base-url"
+                name="obsidian-api-base-url"
+                type="text"
+                placeholder="http://127.0.0.1:27123"
                 spellcheck="false"
               />
-              <button
-                id="toggle-api-key"
-                type="button"
-                class="secondary-button compact-button"
-                aria-pressed="false"
-                aria-label="显示 API Key"
-              >显示</button>
             </div>
-          </div>
 
-          <div class="field">
-            <label for="note-folder">笔记目录</label>
-            <input
-              id="note-folder"
-              name="note-folder"
-              type="text"
-              placeholder="例如：Clippings/Bilibili"
-              spellcheck="false"
-            />
-            <p class="hint">相对 vault 根目录；目录不存在时会自动创建。</p>
+            <div class="field">
+              <label for="obsidian-api-key">API Key</label>
+              <div class="secret-input-row">
+                <input
+                  id="obsidian-api-key"
+                  name="obsidian-api-key"
+                  type="password"
+                  placeholder="粘贴 Local REST API 插件里的 API Key"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button
+                  id="toggle-api-key"
+                  type="button"
+                  class="secondary-button compact-button"
+                  aria-pressed="false"
+                  aria-label="显示 API Key"
+                >显示</button>
+              </div>
+            </div>
+
+            <div class="field note-directory-field">
+              <label for="note-folder">笔记目录</label>
+              <input
+                id="note-folder"
+                name="note-folder"
+                type="text"
+                placeholder="例如：Clippings/Bilibili"
+                spellcheck="false"
+              />
+              <p class="hint">相对 vault 根目录；目录不存在时会自动创建。</p>
+            </div>
           </div>
 
           <fieldset class="frontmatter-fields">
@@ -201,27 +210,27 @@
         </div>
       </details>
 
-      <footer class="save-bar">
-        <span id="save-status" class="inline-status" data-kind="muted" role="status" aria-live="polite"></span>
-        <button id="save-btn" type="submit" class="primary-button">保存更改</button>
-      </footer>
-    </form>
-
-    <section id="about-card" class="settings-card about-card" aria-labelledby="about-title">
+      <section id="about-card" class="settings-card about-card" aria-labelledby="about-title">
       <div class="settings-card__header">
         <div>
           <h2 id="about-title">关于</h2>
           <p class="card-description">Clip to Markdown（原 Clip2MD）</p>
         </div>
-        <span id="app-version" class="status-badge" data-kind="muted">版本读取中…</span>
       </div>
-      <div class="about-links">
-        <a href="https://github.com/LC9999216/clip2md" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
-        <a href="https://github.com/LC9999216/clip2md/issues" target="_blank" rel="noopener noreferrer">问题反馈（Issues）↗</a>
-        <a href="mailto:luochengco_0707@qq.com">luochengco_0707@qq.com ↗</a>
-        <a href="https://github.com/LC9999216/clip2md/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License ↗</a>
-      </div>
-    </section>
+      <dl class="about-list">
+        <div><dt>GitHub</dt><dd><a href="https://github.com/LC9999216/clip2md" target="_blank" rel="noopener noreferrer">github.com/LC9999216/clip2md ↗</a></dd></div>
+        <div><dt>问题反馈</dt><dd><a href="https://github.com/LC9999216/clip2md/issues" target="_blank" rel="noopener noreferrer">GitHub Issues ↗</a></dd></div>
+        <div><dt>联系邮箱</dt><dd><a href="mailto:luochengco_0707@qq.com">luochengco_0707@qq.com</a></dd></div>
+        <div><dt>版本</dt><dd id="app-version">版本读取中…</dd></div>
+        <div><dt>License</dt><dd><a href="https://github.com/LC9999216/clip2md/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT ↗</a></dd></div>
+      </dl>
+      </section>
+
+      <footer class="save-bar">
+        <span id="save-status" class="inline-status" data-kind="muted" role="status" aria-live="polite"></span>
+        <button id="save-btn" type="submit" class="primary-button">保存更改</button>
+      </footer>
+    </form>
   </main>
   <script src="options.js"></script>
 </body>

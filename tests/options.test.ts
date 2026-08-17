@@ -105,9 +105,17 @@ describe('Clip2MD 设置页结构', () => {
       'obsidian-shortcut-btn',
       'subfolder',
       'save-as',
+      'filename-template',
+      'filename-template-error',
       'obsidian-api-base-url',
       'obsidian-api-key',
       'note-folder',
+      'frontmatter-source-url',
+      'frontmatter-author',
+      'frontmatter-published',
+      'frontmatter-platform',
+      'frontmatter-clipped-at',
+      'frontmatter-tags',
       'test-obsidian-btn',
       'obsidian-status',
       'save-btn',
@@ -115,6 +123,8 @@ describe('Clip2MD 设置页结构', () => {
       'folder-connection-state',
       'obsidian-summary-state',
       'toggle-api-key',
+      'about-card',
+      'app-version',
     ];
 
     for (const id of requiredIds) {
@@ -123,6 +133,17 @@ describe('Clip2MD 设置页结构', () => {
 
     expect((document.getElementById('obsidian-api-key') as HTMLInputElement).type).toBe('password');
     expect(document.getElementById('save-status')?.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('展示 V0.2 品牌、默认文件名模板、About 链接与运行时版本', async () => {
+    await bootOptions(null);
+    expect(document.querySelector('h1')?.textContent).toBe('Clip to Markdown 设置');
+    expect((document.getElementById('filename-template') as HTMLInputElement).value).toBe('{date}-{title}');
+    expect((document.getElementById('frontmatter-source-url') as HTMLInputElement).checked).toBe(true);
+    expect(document.getElementById('app-version')?.textContent).toBe('v0.2.0');
+    expect(document.querySelector('a[href="https://github.com/LC9999216/clip2md"]')).not.toBeNull();
+    expect(document.querySelector('a[href="https://github.com/LC9999216/clip2md/issues"]')).not.toBeNull();
+    expect(document.querySelector('a[href^="mailto:"]')).not.toBeNull();
   });
 });
 
@@ -202,6 +223,20 @@ describe('表单保存状态', () => {
       expect(saveButton.disabled).toBe(false);
     });
     setRuntimeLastError(null);
+  });
+
+  it('未知文件名变量阻止保存并显示具体提示', async () => {
+    await bootOptions(null);
+    const input = document.getElementById('filename-template') as HTMLInputElement;
+    const saveButton = document.getElementById('save-btn') as HTMLButtonElement;
+
+    input.value = '{hello}-{title}';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    saveButton.click();
+
+    expect(document.getElementById('filename-template-error')?.textContent)
+      .toBe('不支持的变量：{hello}');
+    expect(saveButton.disabled).toBe(false);
   });
 });
 

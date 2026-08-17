@@ -125,8 +125,13 @@ input[type="text"]:focus,
 input[type="password"]:focus { border-color: var(--brand); outline: 3px solid var(--focus-ring); }
 .secret-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .hint { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.filename-field { margin-top: 18px; padding-top: 18px; border-top: 1px solid #edf0f4; }
+.template-vars { color: var(--brand); }
+.filename-field .inline-status { margin-top: 6px; }
 .checkbox { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
 .checkbox input { margin-top: 3px; }
+.frontmatter-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 20px 0; padding: 14px; border: 1px solid #edf0f4; border-radius: 10px; }
+.frontmatter-fields legend { padding: 0 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
 
 button {
   min-height: 36px;
@@ -154,6 +159,10 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
 .inline-status { min-height: 18px; color: var(--muted); font-size: 12px; }
 .inline-status[data-kind="ok"] { color: var(--success); }
 .inline-status[data-kind="error"] { color: var(--danger); }
+.about-card { margin-top: 14px; }
+.about-links { display: grid; gap: 10px; margin-top: 16px; }
+.about-links a { color: var(--brand); text-decoration: none; }
+.about-links a:hover { text-decoration: underline; }
 
 .save-bar {
   position: sticky;
@@ -182,6 +191,7 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
   .details-card > .details-body { margin: 0 16px 16px; }
   .advanced-badge { display: none; }
   .secret-input-row { grid-template-columns: 1fr; }
+  .frontmatter-fields { grid-template-columns: 1fr; }
   .inline-actions { align-items: flex-start; flex-direction: column; }
   .save-bar { align-items: stretch; flex-direction: column; }
   .save-bar .primary-button { width: 100%; }

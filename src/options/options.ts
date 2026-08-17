@@ -9,8 +9,10 @@ import {
   loadSettings,
   saveSettings,
   sanitizeSubfolder,
+  type ObsidianFrontmatterSettings,
   type ClipSettings,
 } from '../core/settings';
+import { validateFilenameTemplate } from '../core/filename';
 import {
   clearDirectoryHandle,
   loadDirectoryHandle,
@@ -22,6 +24,9 @@ const subfolderInput = document.getElementById('subfolder') as HTMLInputElement;
 const saveAsInput = document.getElementById('save-as') as HTMLInputElement;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 const saveStatus = document.getElementById('save-status') as HTMLSpanElement;
+const filenameTemplateInput = document.getElementById('filename-template') as HTMLInputElement;
+const filenameTemplateError = document.getElementById('filename-template-error') as HTMLParagraphElement;
+const appVersionEl = document.getElementById('app-version') as HTMLSpanElement;
 
 const obsidianApiBaseUrlInput = document.getElementById('obsidian-api-base-url') as HTMLInputElement;
 const obsidianApiKeyInput = document.getElementById('obsidian-api-key') as HTMLInputElement;
@@ -30,6 +35,14 @@ const testObsidianBtn = document.getElementById('test-obsidian-btn') as HTMLButt
 const obsidianStatus = document.getElementById('obsidian-status') as HTMLElement;
 const toggleApiKeyBtn = document.getElementById('toggle-api-key') as HTMLButtonElement;
 const obsidianSummaryStateEl = document.getElementById('obsidian-summary-state') as HTMLSpanElement;
+const frontmatterInputs: Record<keyof ObsidianFrontmatterSettings, HTMLInputElement> = {
+  sourceUrl: document.getElementById('frontmatter-source-url') as HTMLInputElement,
+  author: document.getElementById('frontmatter-author') as HTMLInputElement,
+  published: document.getElementById('frontmatter-published') as HTMLInputElement,
+  platform: document.getElementById('frontmatter-platform') as HTMLInputElement,
+  clippedAt: document.getElementById('frontmatter-clipped-at') as HTMLInputElement,
+  tags: document.getElementById('frontmatter-tags') as HTMLInputElement,
+};
 
 const chooseFolderBtn = document.getElementById('choose-folder') as HTMLButtonElement;
 const clearFolderBtn = document.getElementById('clear-folder') as HTMLButtonElement;
@@ -78,6 +91,19 @@ function readFormSettings() {
       apiUrl: obsidianApiBaseUrlInput.value,
       apiKey: obsidianApiKeyInput.value,
       noteDirectory: noteFolderInput.value,
+      frontmatter: {
+        ...currentSettings.obsidian.frontmatter,
+        sourceUrl: frontmatterInputs.sourceUrl.checked,
+        author: frontmatterInputs.author.checked,
+        published: frontmatterInputs.published.checked,
+        platform: frontmatterInputs.platform.checked,
+        clippedAt: frontmatterInputs.clippedAt.checked,
+        tags: frontmatterInputs.tags.checked,
+      },
+    },
+    filename: {
+      ...currentSettings.filename,
+      template: filenameTemplateInput.value.trim(),
     },
   };
 }
@@ -92,7 +118,18 @@ function setDirty(dirty: boolean): void {
 function markDirty(): void {
   if (!initialized) return;
   setSaveStatus('');
+  filenameTemplateError.textContent = '';
   setDirty(true);
+}
+
+function validateFilenameTemplateForSave(template: string): boolean {
+  const validation = validateFilenameTemplate(template);
+  if (validation.valid) {
+    filenameTemplateError.textContent = '';
+    return true;
+  }
+  filenameTemplateError.textContent = `不支持的变量：${validation.unsupportedVariables.join('、')}`;
+  return false;
 }
 
 /** 根据目录句柄渲染保存位置卡片：文件夹名称、连接状态与备用下载区展开状态。 */
@@ -219,9 +256,14 @@ async function init(): Promise<void> {
   currentSettings = await loadSettings();
   subfolderInput.value = currentSettings.save.subfolder;
   saveAsInput.checked = currentSettings.save.saveAs;
+  filenameTemplateInput.value = currentSettings.filename.template;
   obsidianApiBaseUrlInput.value = currentSettings.obsidian.apiUrl;
   obsidianApiKeyInput.value = currentSettings.obsidian.apiKey;
   noteFolderInput.value = currentSettings.obsidian.noteDirectory;
+  for (const [name, input] of Object.entries(frontmatterInputs) as Array<[keyof ObsidianFrontmatterSettings, HTMLInputElement]>) {
+    input.checked = currentSettings.obsidian.frontmatter[name];
+  }
+  appVersionEl.textContent = `v${chrome.runtime.getManifest().version}`;
   refreshObsidianSummary();
   await refreshFolderState();
   await refreshShortcut();
@@ -241,6 +283,10 @@ async function onSubmit(): Promise<void> {
   if (!initialized || form.dataset.saving === 'true' || saveBtn.disabled) return;
 
   const settings = readFormSettings();
+  if (!validateFilenameTemplateForSave(settings.filename.template)) {
+    setDirty(true);
+    return;
+  }
   subfolderInput.value = settings.save.subfolder;
   form.dataset.saving = 'true';
   saveBtn.disabled = true;
@@ -269,6 +315,7 @@ async function onTestObsidian(): Promise<void> {
 
   try {
     const settings = readFormSettings();
+    if (!validateFilenameTemplateForSave(settings.filename.template)) return;
     await saveSettings(settings);
     currentSettings = settings;
     setDirty(false);

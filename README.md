@@ -1,8 +1,8 @@
-# Clip2MD
+# Clip to Markdown
 
-一键把当前帖子 / 文章保存为干净 Markdown 的 Chrome 扩展（Manifest V3）。
+Clip to Markdown（原 Clip2MD）是一款一键把当前帖子 / 文章 / 对话保存为干净 Markdown 的 Chrome 扩展（Manifest V3）。
 
-支持的平台（V0.1）：
+支持的平台（V0.2）：
 
 | 平台 | 内容类型 | URL 形态 |
 |------|----------|----------|
@@ -31,9 +31,10 @@ npm run build
 ## 使用
 
 1. 打开一条 X 推文、知乎回答/文章、小黑盒文章，或一段 ChatGPT 对话
-2. 点击工具栏的 Clip2MD 图标
+2. 点击工具栏的 Clip to Markdown 图标
 3. Popup 显示当前平台与识别到的标题
 4. 点击「保存为 Markdown」，文件自动下载到默认下载目录（或写入你选定的自定义文件夹）
+5. 使用 `Ctrl + Shift + S` 普通保存，或使用 `Alt + Shift + S` 直接发送到 Obsidian；快捷键可在设置页跳转 Chrome 快捷键管理修改
 
 ## 开发
 
@@ -110,7 +111,7 @@ npx vitest run tests/adapters/x.test.ts   # 单平台
 ## 已知限制（V0.1）
 
 - 图片以**远程 URL** 形式保留在 Markdown 中（不下载本地）；X 的 `pbs.twimg.com` 图片会统一附加 `&name=large`。
-- **Obsidian 中查看图片**：Obsidian 默认在**阅读模式**（Ctrl/Cmd+E）就会加载远程 https 图片。若图片不显示，先确认不在源码模式；其次排查 Obsidian 里会自动"美化/转义"Markdown 的格式化插件——这类插件会把 `![Image](url)` 转成 `!\[Image](url)`（转义方括号），图片语法就被破坏了。被破坏的文件重新用 Clip2MD 保存一次即可恢复。
+- **Obsidian 中查看图片**：Obsidian 默认在**阅读模式**（Ctrl/Cmd+E）就会加载远程 https 图片。若图片不显示，先确认不在源码模式；其次排查 Obsidian 里会自动"美化/转义"Markdown 的格式化插件——这类插件会把 `![Image](url)` 转成 `!\[Image](url)`（转义方括号），图片语法就被破坏了。被破坏的文件重新用 Clip to Markdown 保存一次即可恢复。
 - 知乎长回答若未展开，只保存已展开部分（`.RichContent-collapsedText` 会被移除）。
 - X 引用推文为尽力识别；识别失败时引用内容不写入。
 - 知乎/小黑盒的发布时间取自页面 meta，取不到时留空。

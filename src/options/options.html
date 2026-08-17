@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="options.css" />
-  <title>Clip2MD 设置</title>
+  <title>Clip to Markdown 设置</title>
 </head>
 <body>
   <main id="app">
     <header class="app-header">
-      <h1>Clip2MD 设置</h1>
-      <p class="subtitle">配置 Markdown 文件的保存方式</p>
+      <h1>Clip to Markdown 设置</h1>
+      <p class="subtitle">将网页内容快速保存为干净 Markdown，并可一键发送到 Obsidian</p>
     </header>
 
     <form id="settings-form" novalidate>
@@ -54,7 +54,7 @@
                 id="subfolder"
                 name="subfolder"
                 type="text"
-                placeholder="例如：Clip2MD/知乎"
+                placeholder="例如：Clippings/知乎"
                 spellcheck="false"
               />
               <p class="hint">相对浏览器下载目录；留空则直接保存到下载目录。</p>
@@ -65,6 +65,20 @@
             </label>
           </div>
         </details>
+
+        <div class="field filename-field">
+          <label for="filename-template">文件命名模板</label>
+          <input
+            id="filename-template"
+            name="filename-template"
+            type="text"
+            placeholder="{date}-{title}"
+            spellcheck="false"
+          />
+          <p class="hint">适用于普通下载、自定义文件夹和 Obsidian 保存。</p>
+          <p class="hint template-vars">可用变量：{title} {date} {author} {platform} {id}</p>
+          <p id="filename-template-error" class="inline-status" data-kind="error" role="alert"></p>
+        </div>
       </section>
 
       <section
@@ -165,6 +179,16 @@
             <p class="hint">相对 vault 根目录；目录不存在时会自动创建。</p>
           </div>
 
+          <fieldset class="frontmatter-fields">
+            <legend>Frontmatter</legend>
+            <label class="checkbox"><input id="frontmatter-source-url" type="checkbox" /><span>原文链接</span></label>
+            <label class="checkbox"><input id="frontmatter-author" type="checkbox" /><span>作者</span></label>
+            <label class="checkbox"><input id="frontmatter-published" type="checkbox" /><span>发布时间</span></label>
+            <label class="checkbox"><input id="frontmatter-platform" type="checkbox" /><span>平台</span></label>
+            <label class="checkbox"><input id="frontmatter-clipped-at" type="checkbox" /><span>剪藏时间</span></label>
+            <label class="checkbox"><input id="frontmatter-tags" type="checkbox" /><span>标签</span></label>
+          </fieldset>
+
           <div class="inline-actions">
             <button id="test-obsidian-btn" type="button" class="secondary-button">测试连接</button>
             <span id="obsidian-status" class="inline-status" data-kind="muted" role="status" aria-live="polite"></span>
@@ -177,6 +201,22 @@
         <button id="save-btn" type="submit" class="primary-button">保存更改</button>
       </footer>
     </form>
+
+    <section id="about-card" class="settings-card about-card" aria-labelledby="about-title">
+      <div class="settings-card__header">
+        <div>
+          <h2 id="about-title">关于</h2>
+          <p class="card-description">Clip to Markdown（原 Clip2MD）</p>
+        </div>
+        <span id="app-version" class="status-badge" data-kind="muted">版本读取中…</span>
+      </div>
+      <div class="about-links">
+        <a href="https://github.com/LC9999216/clip2md" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        <a href="https://github.com/LC9999216/clip2md/issues" target="_blank" rel="noopener noreferrer">问题反馈（Issues）↗</a>
+        <a href="mailto:luochengco_0707@qq.com">luochengco_0707@qq.com ↗</a>
+        <a href="https://github.com/LC9999216/clip2md/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License ↗</a>
+      </div>
+    </section>
   </main>
   <script src="options.js"></script>
 </body>

@@ -1,9 +1,9 @@
 {
   "name": "clip2md",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "一键把当前帖子/文章/对话保存为干净 Markdown 的 Chrome 扩展（X / 知乎 / 小黑盒 / ChatGPT）",
+  "description": "一键将 X、知乎、小黑盒和 ChatGPT 内容保存为干净 Markdown，并支持发送到 Obsidian",
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",

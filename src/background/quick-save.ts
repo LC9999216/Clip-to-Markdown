@@ -87,7 +87,7 @@ async function runQuickSave(): Promise<void> {
 async function downloadFallback(markdown: string, filename: string, note: string): Promise<void> {
   try {
     const settings = await loadSettings();
-    const { filename: path, saveAs } = resolveDownloadPath(filename, settings);
+    const { filename: path, saveAs } = resolveDownloadPath(filename, settings.save);
     const r = await downloadMarkdown({ markdown, filename: path, saveAs });
     notify('已保存', `${note}${r.filename}`);
   } catch (e) {

@@ -72,7 +72,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // background 独立入口：sanitize 后可能为空，兜底避免下载失败
     const safe = sanitizeFilenamePart(filename) || `clip2md-${Date.now()}.md`;
     loadSettings()
-      .then((settings) => resolveDownloadPath(safe, settings))
+      .then((settings) => resolveDownloadPath(safe, settings.save))
       .then(({ filename: path, saveAs }) => downloadMarkdown({ markdown, filename: path, saveAs }))
       .then((r) => sendResponse({ success: true, filename: r.filename }))
       .catch((e) => sendResponse({ success: false, error: String(e) }));

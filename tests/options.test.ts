@@ -173,7 +173,10 @@ describe('表单保存状态', () => {
       expect(document.getElementById('save-status')?.textContent).toBe('设置已保存');
       expect(saveButton.disabled).toBe(true);
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        subfolder: 'Clip2MD/知乎',
+        settingsVersion: 2,
+        save: {
+          subfolder: 'Clip2MD/知乎',
+        },
       });
     });
   });
@@ -230,7 +233,10 @@ describe('Obsidian 高级设置', () => {
         { type: 'TEST_OBSIDIAN' },
         expect.any(Function),
       );
-      expect(mockStoredSettings['clip2md.settings']).toMatchObject({ obsidianApiKey: 'secret-key' });
+      expect(mockStoredSettings['clip2md.settings']).toMatchObject({
+        settingsVersion: 2,
+        obsidian: { apiKey: 'secret-key' },
+      });
       expect(document.getElementById('obsidian-status')?.textContent)
         .toContain('连接成功');
       expect(document.getElementById('obsidian-summary-state')?.textContent).toBe('已配置');

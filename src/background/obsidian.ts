@@ -33,8 +33,8 @@ async function readErrorDetail(resp: Response): Promise<string> {
 /** 保存笔记到 Obsidian。返回最终写入的 vault 相对路径。已存在且未 overwrite 时抛带 exists 标记的错。 */
 export async function saveToObsidian(args: ObsidianWriteArgs): Promise<string> {
   const settings = await loadSettings();
-  const baseUrl = settings.obsidianApiBaseUrl;
-  const apiKey = settings.obsidianApiKey;
+  const baseUrl = settings.obsidian.apiUrl;
+  const apiKey = settings.obsidian.apiKey;
   if (!baseUrl) {
     throw new Error('请先在设置中填写 Obsidian Local REST API 地址。');
   }
@@ -42,7 +42,7 @@ export async function saveToObsidian(args: ObsidianWriteArgs): Promise<string> {
     throw new Error('请先在设置中填写 Obsidian Local REST API 的 API Key。');
   }
 
-  const folder = sanitizeSubfolder(settings.noteFolder);
+  const folder = sanitizeSubfolder(settings.obsidian.noteDirectory);
   const segments = [...(folder ? folder.split('/') : []), args.filename];
   const filepath = segments.join('/');
   const endpoint = `${baseUrl}/vault/${encodeVaultPath(segments)}`;
@@ -95,8 +95,8 @@ async function noteExists(endpoint: string, apiKey: string): Promise<boolean> {
 /** 测试连接：GET baseUrl/，验证 API Key 有效性。 */
 export async function testObsidian(): Promise<string> {
   const settings = await loadSettings();
-  const baseUrl = settings.obsidianApiBaseUrl;
-  const apiKey = settings.obsidianApiKey;
+  const baseUrl = settings.obsidian.apiUrl;
+  const apiKey = settings.obsidian.apiKey;
   if (!baseUrl) {
     throw new Error('请先填写 Local REST API 地址。');
   }

@@ -4,7 +4,13 @@
  * - 下载目录设置存 chrome.storage.local。
  */
 
-import { loadSettings, saveSettings, sanitizeSubfolder } from '../core/settings';
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  saveSettings,
+  sanitizeSubfolder,
+  type ClipSettings,
+} from '../core/settings';
 import {
   clearDirectoryHandle,
   loadDirectoryHandle,
@@ -33,6 +39,8 @@ const folderConnectionStateEl = document.getElementById('folder-connection-state
 const folderModeDescriptionEl = document.getElementById('folder-mode-description') as HTMLSpanElement;
 const fallbackDownloadDetails = document.getElementById('fallback-download-settings') as HTMLDetailsElement;
 
+let currentSettings: ClipSettings = DEFAULT_SETTINGS;
+
 const shortcutValueEl = document.getElementById('shortcut-value') as HTMLSpanElement;
 const shortcutBtn = document.getElementById('shortcut-btn') as HTMLButtonElement;
 
@@ -57,11 +65,18 @@ function setSaveStatus(text: string, kind: StatusKind = 'muted'): void {
 
 function readFormSettings() {
   return {
-    subfolder: sanitizeSubfolder(subfolderInput.value),
-    saveAs: saveAsInput.checked,
-    obsidianApiBaseUrl: obsidianApiBaseUrlInput.value,
-    obsidianApiKey: obsidianApiKeyInput.value,
-    noteFolder: noteFolderInput.value,
+    ...currentSettings,
+    save: {
+      ...currentSettings.save,
+      subfolder: sanitizeSubfolder(subfolderInput.value),
+      saveAs: saveAsInput.checked,
+    },
+    obsidian: {
+      ...currentSettings.obsidian,
+      apiUrl: obsidianApiBaseUrlInput.value,
+      apiKey: obsidianApiKeyInput.value,
+      noteDirectory: noteFolderInput.value,
+    },
   };
 }
 
@@ -194,12 +209,12 @@ function onToggleApiKey(): void {
 }
 
 async function init(): Promise<void> {
-  const settings = await loadSettings();
-  subfolderInput.value = settings.subfolder;
-  saveAsInput.checked = settings.saveAs;
-  obsidianApiBaseUrlInput.value = settings.obsidianApiBaseUrl;
-  obsidianApiKeyInput.value = settings.obsidianApiKey;
-  noteFolderInput.value = settings.noteFolder;
+  currentSettings = await loadSettings();
+  subfolderInput.value = currentSettings.save.subfolder;
+  saveAsInput.checked = currentSettings.save.saveAs;
+  obsidianApiBaseUrlInput.value = currentSettings.obsidian.apiUrl;
+  obsidianApiKeyInput.value = currentSettings.obsidian.apiKey;
+  noteFolderInput.value = currentSettings.obsidian.noteDirectory;
   refreshObsidianSummary();
   await refreshFolderState();
   await refreshShortcut();
@@ -219,7 +234,7 @@ async function onSubmit(): Promise<void> {
   if (!initialized || form.dataset.saving === 'true' || saveBtn.disabled) return;
 
   const settings = readFormSettings();
-  subfolderInput.value = settings.subfolder;
+  subfolderInput.value = settings.save.subfolder;
   form.dataset.saving = 'true';
   saveBtn.disabled = true;
   saveBtn.textContent = '保存中…';
@@ -227,6 +242,7 @@ async function onSubmit(): Promise<void> {
 
   try {
     await saveSettings(settings);
+    currentSettings = settings;
     refreshObsidianSummary();
     setDirty(false);
     setSaveStatus('设置已保存', 'ok');
@@ -245,7 +261,9 @@ async function onTestObsidian(): Promise<void> {
   setInlineStatus(obsidianStatus, '正在连接…');
 
   try {
-    await saveSettings(readFormSettings());
+    const settings = readFormSettings();
+    await saveSettings(settings);
+    currentSettings = settings;
     setDirty(false);
     refreshObsidianSummary();
 

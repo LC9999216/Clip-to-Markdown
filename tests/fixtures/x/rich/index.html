@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"></head>
+<body>
+<div id="react-root">
+  <article role="article">
+    <div data-testid="User-Name">
+      <div class="user"><a href="/alice"><span><span>Alice</span></span></a><span>@alice</span></div>
+    </div>
+    <div data-testid="twitter-article-title"><h1>富文本格式一览</h1></div>
+    <a href="/alice/status/3333"><time datetime="2024-06-01T00:00:00.000Z">Jun 1, 2024</time></a>
+    <div data-testid="twitterArticleRichTextView">
+      <div data-testid="longformRichTextComponent">
+        <div data-contents="true">
+          <p>无序列表：</p>
+          <ul>
+            <li>第一项</li>
+            <li>第二项</li>
+          </ul>
+          <p>有序列表：</p>
+          <ol>
+            <li>步骤一</li>
+            <li>步骤二</li>
+          </ol>
+          <p>表格：</p>
+          <table>
+            <thead><tr><th>名称</th><th>数量</th></tr></thead>
+            <tbody>
+              <tr><td>苹果</td><td>3</td></tr>
+              <tr><td>香蕉</td><td>5</td></tr>
+            </tbody>
+          </table>
+          <hr>
+          <p>图片说明：</p>
+          <figure>
+            <img src="https://pbs.twimg.com/media/fig1.jpg?name=small" alt="示意图">
+            <figcaption>这是示意图的说明文字</figcaption>
+          </figure>
+          <p>危险链接只保留文字：<a href="javascript:alert(1)">点我</a>，正常链接：<a href="/alice/status/3333">回原文</a>。</p>
+          <figure><img src="https://pbs.twimg.com/media/fig1.jpg?name=small" alt="重复图"></figure>
+        </div>
+      </div>
+    </div>
+  </article>
+</div>
+</body>
+</html>

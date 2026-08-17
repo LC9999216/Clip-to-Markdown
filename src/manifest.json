@@ -20,7 +20,14 @@
     "*://www.xiaoheihe.cn/*",
     "*://xiaoheihe.cn/*",
     "*://chatgpt.com/*",
-    "*://chat.openai.com/*"
+    "*://chat.openai.com/*",
+    "*://www.bilibili.com/*",
+    "*://api.bilibili.com/*",
+    "*://*.hdslb.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "https://127.0.0.1/*",
+    "https://localhost/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -54,7 +61,8 @@
         "*://www.xiaoheihe.cn/*",
         "*://xiaoheihe.cn/*",
         "*://chatgpt.com/*",
-        "*://chat.openai.com/*"
+        "*://chat.openai.com/*",
+        "*://www.bilibili.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

@@ -63,6 +63,24 @@ describe('buildFilename', () => {
   it('知乎回答无标题无 id：{type} 兜底', () => {
     expect(buildFilename(articleDoc())).toBe('zhihu-answer.md');
   });
+
+  it('X 长文章：用标题 slug 命名', () => {
+    const doc = articleDoc({
+      platform: 'x',
+      contentType: 'x-article',
+      title: '从0到1带你速通DeepSeek-Harness',
+    });
+    expect(buildFilename(doc)).toBe('从0到1带你速通DeepSeek-Harness.md');
+  });
+
+  it('X 长文章无标题：x-article-{statusId} 回退', () => {
+    const doc = articleDoc({ platform: 'x', contentType: 'x-article', id: '8888' });
+    expect(buildFilename(doc)).toBe('x-article-8888.md');
+  });
+
+  it('普通推文命名不受长文章影响：@handle-tweetId', () => {
+    expect(buildFilename(tweetDoc({ id: '123456', handle: 'alice' }))).toBe('@alice-123456.md');
+  });
 });
 
 describe('slugify', () => {

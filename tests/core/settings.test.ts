@@ -45,12 +45,12 @@ describe('resolveDownloadPath', () => {
   });
 
   it('非空子目录：前缀拼装', () => {
-    const r = resolveDownloadPath('tweet.md', { subfolder: 'Clip2MD/知乎', saveAs: false });
+    const r = resolveDownloadPath('tweet.md', { ...DEFAULT_SETTINGS, subfolder: 'Clip2MD/知乎', saveAs: false });
     expect(r).toEqual({ filename: 'Clip2MD/知乎/tweet.md', saveAs: false });
   });
 
   it('子目录被清洗后再拼装', () => {
-    const r = resolveDownloadPath('tweet.md', { subfolder: '../../Clip2MD', saveAs: false });
+    const r = resolveDownloadPath('tweet.md', { ...DEFAULT_SETTINGS, subfolder: '../../Clip2MD', saveAs: false });
     expect(r.filename).toBe('Clip2MD/tweet.md');
   });
 });

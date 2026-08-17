@@ -17,11 +17,20 @@ export interface ClipSettings {
   subfolder: string;
   /** 每次下载弹出「另存为」对话框，由用户手动选位置 */
   saveAs: boolean;
+  /** Obsidian Local REST API 地址（如 http://127.0.0.1:27123） */
+  obsidianApiBaseUrl: string;
+  /** Obsidian Local REST API 的 API Key（敏感，仅存 local，不同步） */
+  obsidianApiKey: string;
+  /** Obsidian 笔记目录（相对 vault 根，用 / 分隔，可含子目录） */
+  noteFolder: string;
 }
 
 export const DEFAULT_SETTINGS: ClipSettings = {
   subfolder: '',
   saveAs: false,
+  obsidianApiBaseUrl: 'http://127.0.0.1:27123',
+  obsidianApiKey: '',
+  noteFolder: 'Clippings',
 };
 
 /**
@@ -73,6 +82,9 @@ export function loadSettings(): Promise<ClipSettings> {
           resolve({
             subfolder: typeof r.subfolder === 'string' ? r.subfolder : DEFAULT_SETTINGS.subfolder,
             saveAs: typeof r.saveAs === 'boolean' ? r.saveAs : DEFAULT_SETTINGS.saveAs,
+            obsidianApiBaseUrl: normalizeBaseUrl(r.obsidianApiBaseUrl),
+            obsidianApiKey: typeof r.obsidianApiKey === 'string' ? r.obsidianApiKey : '',
+            noteFolder: typeof r.noteFolder === 'string' ? sanitizeSubfolder(r.noteFolder) : DEFAULT_SETTINGS.noteFolder,
           });
         } else {
           resolve({ ...DEFAULT_SETTINGS });
@@ -90,6 +102,9 @@ export function saveSettings(settings: ClipSettings): Promise<void> {
     const normalized: ClipSettings = {
       subfolder: sanitizeSubfolder(settings.subfolder),
       saveAs: settings.saveAs === true,
+      obsidianApiBaseUrl: normalizeBaseUrl(settings.obsidianApiBaseUrl),
+      obsidianApiKey: typeof settings.obsidianApiKey === 'string' ? settings.obsidianApiKey.trim() : '',
+      noteFolder: sanitizeSubfolder(settings.noteFolder),
     };
     try {
       chrome.storage.local.set({ [STORAGE_KEY]: normalized }, () => {
@@ -100,4 +115,11 @@ export function saveSettings(settings: ClipSettings): Promise<void> {
       reject(e instanceof Error ? e : new Error(String(e)));
     }
   });
+}
+
+/** 清洗 Obsidian 地址：去掉末尾 /，空串兜底默认值 */
+function normalizeBaseUrl(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  const base = value.replace(/\/+$/, '');
+  return base || DEFAULT_SETTINGS.obsidianApiBaseUrl;
 }

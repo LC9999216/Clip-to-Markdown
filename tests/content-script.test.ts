@@ -33,6 +33,28 @@ describe('content script 消息路由', () => {
     expect(resp.contentType).toBe('zhihu-article');
   });
 
+  it('GET_STATUS：X 长文章返回 x-article 类型与正式标题', async () => {
+    setLocation('https://x.com/deepseek_ai/status/8888');
+    mountFixture('x', 'article');
+    const resp = (await dispatchRuntimeMessage({ type: 'GET_STATUS' })) as StatusResponse;
+    expect(resp.supported).toBe(true);
+    expect(resp.platform).toBe('x');
+    expect(resp.contentType).toBe('x-article');
+    expect(resp.title).toBe('从0到1带你速通DeepSeek-Harness');
+  });
+
+  it('EXTRACT：X 长文章返回 ArticleNode 文档', async () => {
+    setLocation('https://x.com/deepseek_ai/status/8888');
+    mountFixture('x', 'article');
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT' })) as ExtractResponse;
+    expect(resp.success).toBe(true);
+    if (resp.success) {
+      expect(resp.document.metadata.platform).toBe('x');
+      expect(resp.document.metadata.contentType).toBe('x-article');
+      expect(resp.document.body.type).toBe('article');
+    }
+  });
+
   it('GET_STATUS：不支持的页面', async () => {
     setLocation('https://example.com/page');
     const resp = (await dispatchRuntimeMessage({ type: 'GET_STATUS' })) as StatusResponse;

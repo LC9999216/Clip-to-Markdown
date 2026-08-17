@@ -9,5 +9,6 @@ import './x';
 import './zhihu';
 import './heybox';
 import './chatgpt';
+import './bilibili';
 
 export { registry } from '../core/platform-registry';

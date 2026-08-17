@@ -41,6 +41,29 @@ export const X_SELECTORS = {
     'script',
     'style',
   ],
+
+  // ---------- X 长文章（X Articles） ----------
+
+  /** 长文章标记：标题 */
+  articleTitle: '[data-testid="twitter-article-title"]',
+  /** 长文章标记：富文本正文视图（外层） */
+  articleRichView: '[data-testid="twitterArticleRichTextView"]',
+  /** 长文章标记：富文本组件（中层） */
+  articleLongform: '[data-testid="longformRichTextComponent"]',
+  /** 长文章正文内容（内层，直接子块即正文块） */
+  articleContents: '[data-contents="true"]',
+  /** 长文章封面 */
+  articleCover: '[data-testid="twitterArticleCover"]',
+  /** 长文章内嵌推文容器 */
+  articleInlineTweet: '[data-testid="twitterArticleInlineTweet"], [data-testid="inlineTweet"]',
+  /** 长文章内嵌文章卡片容器 */
+  articleCard: '[data-testid="articleCard"], [data-testid="twitterArticleCard"]',
+  /** 文章卡片标题 */
+  articleCardTitle: '[data-testid="cardTitle"], [data-testid="twitterArticleCardTitle"], .card-title',
+  /** 文章卡片描述 */
+  articleCardDesc: '[data-testid="cardDescription"], [data-testid="twitterArticleCardDescription"], .card-desc',
+  /** 长文章内嵌视频容器 */
+  articleVideo: '[data-testid="videoComponent"], [data-testid="twitterArticleVideo"]',
 } as const;
 
 export const STATUS_ID_RE = /\/status\/(\d+)/;

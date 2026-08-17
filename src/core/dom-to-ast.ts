@@ -98,7 +98,10 @@ export function elementToBlocks(root: Element, ctx: DomToAstContext): BlockNode[
     }
     if (node.nodeType !== Node.ELEMENT_NODE) continue;
     const el = node as Element;
-    if (BLOCK_TAGS.has(el.tagName) && !isImageEmbeddingTextContainer(el)) {
+    if (el.tagName === 'FIGURE') {
+      // figure 可能同时产出图片与说明段，单独处理
+      blocks.push(...figureToBlocks(el, ctx));
+    } else if (BLOCK_TAGS.has(el.tagName) && !isImageEmbeddingTextContainer(el)) {
       const block = elementToBlock(el, ctx);
       if (block) blocks.push(block);
     } else if (hasBlockDescendant(el)) {
@@ -109,6 +112,22 @@ export function elementToBlocks(root: Element, ctx: DomToAstContext): BlockNode[
     }
   }
   return blocks;
+}
+
+/** figure → 图片块 + （可选的）figcaption 说明段；无有效图片时返回空数组 */
+function figureToBlocks(el: Element, ctx: DomToAstContext): BlockNode[] {
+  const out: BlockNode[] = [];
+  const img = el.querySelector('img');
+  if (img) {
+    const url = imgUrl(img, ctx);
+    if (url) out.push({ type: 'image', url, alt: img.getAttribute('alt') ?? undefined });
+  }
+  const caption = el.querySelector('figcaption');
+  if (caption && caption.textContent?.trim()) {
+    const inline = elementToInline(caption, ctx);
+    if (inline.length) out.push(paragraphFromInline(inline));
+  }
+  return out;
 }
 
 /** 段落/div 内嵌块级图片（如 <p>文字<img></p>）：提升为块级 image，避免图片丢失 */
@@ -152,13 +171,6 @@ function elementToBlock(el: Element, ctx: DomToAstContext): BlockNode | null {
       const url = imgUrl(el, ctx);
       if (!url) return null;
       return { type: 'image', url, alt: el.getAttribute('alt') ?? undefined };
-    }
-    case 'FIGURE': {
-      const img = el.querySelector('img');
-      if (!img) return null;
-      const url = imgUrl(img, ctx);
-      if (!url) return null;
-      return { type: 'image', url, alt: img.getAttribute('alt') ?? undefined };
     }
     case 'HR':
       return { type: 'thematicBreak' };

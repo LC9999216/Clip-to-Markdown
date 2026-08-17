@@ -11,17 +11,47 @@
  */
 
 import { sanitizeFilenamePart } from './filename';
+import {
+  DEFAULT_OBSIDIAN_SETTINGS,
+  type ObsidianFrontmatterSettings,
+  type ObsidianSettings,
+} from './obsidian-settings';
 
-export interface ClipSettings {
+export { DEFAULT_OBSIDIAN_SETTINGS } from './obsidian-settings';
+export type { ObsidianFrontmatterSettings, ObsidianSettings } from './obsidian-settings';
+
+export const SETTINGS_VERSION = 2 as const;
+export const DEFAULT_FILENAME_TEMPLATE = '{date}-{title}';
+
+export interface SaveSettings {
   /** 相对浏览器下载目录的子目录（用 / 分隔）；空串 = 直接存入下载目录 */
   subfolder: string;
   /** 每次下载弹出「另存为」对话框，由用户手动选位置 */
   saveAs: boolean;
 }
 
+export interface FilenameSettings {
+  /** 全部保存目标共用的文件名模板；模板变量由 Phase 2 解析。 */
+  template: string;
+}
+
+export interface ClipSettings {
+  settingsVersion: typeof SETTINGS_VERSION;
+  save: SaveSettings;
+  filename: FilenameSettings;
+  obsidian: ObsidianSettings;
+}
+
 export const DEFAULT_SETTINGS: ClipSettings = {
-  subfolder: '',
-  saveAs: false,
+  settingsVersion: SETTINGS_VERSION,
+  save: {
+    subfolder: '',
+    saveAs: false,
+  },
+  filename: {
+    template: DEFAULT_FILENAME_TEMPLATE,
+  },
+  obsidian: DEFAULT_OBSIDIAN_SETTINGS,
 };
 
 /**
@@ -51,7 +81,7 @@ export function sanitizeSubfolder(raw: string): string {
 /** 依据设置拼出最终下载 filename 与是否 saveAs。 */
 export function resolveDownloadPath(
   filename: string,
-  settings: ClipSettings,
+  settings: SaveSettings,
 ): { filename: string; saveAs: boolean } {
   const sub = sanitizeSubfolder(settings.subfolder);
   return {
@@ -62,24 +92,100 @@ export function resolveDownloadPath(
 
 const STORAGE_KEY = 'clip2md.settings';
 
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return Boolean(value) && typeof value === 'object';
+}
+
+function readString(...values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === 'string');
+}
+
+function cloneDefaultSettings(): ClipSettings {
+  return {
+    settingsVersion: SETTINGS_VERSION,
+    save: { ...DEFAULT_SETTINGS.save },
+    filename: { ...DEFAULT_SETTINGS.filename },
+    obsidian: {
+      ...DEFAULT_OBSIDIAN_SETTINGS,
+      frontmatter: { ...DEFAULT_OBSIDIAN_SETTINGS.frontmatter },
+    },
+  };
+}
+
+function normalizeFrontmatter(raw: unknown): ObsidianFrontmatterSettings {
+  const value = isRecord(raw) ? raw : {};
+  return {
+    sourceUrl: typeof value.sourceUrl === 'boolean'
+      ? value.sourceUrl
+      : DEFAULT_OBSIDIAN_SETTINGS.frontmatter.sourceUrl,
+    author: typeof value.author === 'boolean'
+      ? value.author
+      : DEFAULT_OBSIDIAN_SETTINGS.frontmatter.author,
+    published: typeof value.published === 'boolean'
+      ? value.published
+      : DEFAULT_OBSIDIAN_SETTINGS.frontmatter.published,
+    platform: typeof value.platform === 'boolean'
+      ? value.platform
+      : DEFAULT_OBSIDIAN_SETTINGS.frontmatter.platform,
+    clippedAt: typeof value.clippedAt === 'boolean'
+      ? value.clippedAt
+      : DEFAULT_OBSIDIAN_SETTINGS.frontmatter.clippedAt,
+    tags: typeof value.tags === 'boolean'
+      ? value.tags
+      : DEFAULT_OBSIDIAN_SETTINGS.frontmatter.tags,
+  };
+}
+
+/** 把 V0.1 扁平设置或不完整的 V2 设置转换为完整的 V2 模型。 */
+export function migrateSettings(raw: unknown): ClipSettings {
+  if (!isRecord(raw)) return cloneDefaultSettings();
+
+  const save = isRecord(raw.save) ? raw.save : raw;
+  const filename = isRecord(raw.filename) ? raw.filename : {};
+  const obsidian = isRecord(raw.obsidian) ? raw.obsidian : {};
+
+  const rawNoteDirectory = readString(obsidian.noteDirectory, raw.noteFolder);
+  const noteDirectory = rawNoteDirectory === undefined
+    ? DEFAULT_OBSIDIAN_SETTINGS.noteDirectory
+    : sanitizeSubfolder(rawNoteDirectory) || DEFAULT_OBSIDIAN_SETTINGS.noteDirectory;
+
+  const rawTemplate = readString(filename.template, raw.filenameTemplate);
+
+  return {
+    settingsVersion: SETTINGS_VERSION,
+    save: {
+      subfolder: typeof save.subfolder === 'string'
+        ? save.subfolder
+        : DEFAULT_SETTINGS.save.subfolder,
+      saveAs: typeof save.saveAs === 'boolean'
+        ? save.saveAs
+        : DEFAULT_SETTINGS.save.saveAs,
+    },
+    filename: {
+      template: rawTemplate?.trim() || DEFAULT_FILENAME_TEMPLATE,
+    },
+    obsidian: {
+      enabled: typeof obsidian.enabled === 'boolean' ? obsidian.enabled : false,
+      apiUrl: normalizeBaseUrl(readString(obsidian.apiUrl, raw.obsidianApiBaseUrl)),
+      apiKey: readString(obsidian.apiKey, raw.obsidianApiKey)?.trim() ?? '',
+      noteDirectory,
+      frontmatter: normalizeFrontmatter(obsidian.frontmatter),
+    },
+  };
+}
+
 /** 读设置：合并默认值；读取异常时回退默认值，绝不中断下载链路。 */
 export function loadSettings(): Promise<ClipSettings> {
   return new Promise((resolve) => {
     try {
       chrome.storage.local.get(STORAGE_KEY, (items) => {
         const raw = items?.[STORAGE_KEY];
-        if (raw && typeof raw === 'object') {
-          const r = raw as Partial<ClipSettings>;
-          resolve({
-            subfolder: typeof r.subfolder === 'string' ? r.subfolder : DEFAULT_SETTINGS.subfolder,
-            saveAs: typeof r.saveAs === 'boolean' ? r.saveAs : DEFAULT_SETTINGS.saveAs,
-          });
-        } else {
-          resolve({ ...DEFAULT_SETTINGS });
-        }
+        resolve(migrateSettings(raw));
       });
     } catch {
-      resolve({ ...DEFAULT_SETTINGS });
+      resolve(cloneDefaultSettings());
     }
   });
 }
@@ -87,9 +193,19 @@ export function loadSettings(): Promise<ClipSettings> {
 /** 写设置：normalize 后持久化。 */
 export function saveSettings(settings: ClipSettings): Promise<void> {
   return new Promise((resolve, reject) => {
+    const migrated = migrateSettings(settings);
     const normalized: ClipSettings = {
-      subfolder: sanitizeSubfolder(settings.subfolder),
-      saveAs: settings.saveAs === true,
+      ...migrated,
+      save: {
+        ...migrated.save,
+        subfolder: sanitizeSubfolder(migrated.save.subfolder),
+        saveAs: migrated.save.saveAs === true,
+      },
+      obsidian: {
+        ...migrated.obsidian,
+        apiKey: migrated.obsidian.apiKey.trim(),
+        frontmatter: { ...migrated.obsidian.frontmatter },
+      },
     };
     try {
       chrome.storage.local.set({ [STORAGE_KEY]: normalized }, () => {
@@ -100,4 +216,11 @@ export function saveSettings(settings: ClipSettings): Promise<void> {
       reject(e instanceof Error ? e : new Error(String(e)));
     }
   });
+}
+
+/** 清洗 Obsidian 地址：去掉末尾 /，空串兜底默认值 */
+function normalizeBaseUrl(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  const base = value.replace(/\/+$/, '');
+  return base || DEFAULT_OBSIDIAN_SETTINGS.apiUrl;
 }

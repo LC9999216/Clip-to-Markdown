@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"></head>
+<body>
+<div id="react-root">
+  <article role="article">
+    <div data-testid="User-Name">
+      <div class="user"><a href="/alice"><span><span>Alice</span></span></a><span>@alice</span></div>
+    </div>
+    <div data-testid="twitter-article-title"><h1>嵌入内容示例</h1></div>
+    <a href="/alice/status/4444"><time datetime="2024-06-02T00:00:00.000Z">Jun 2, 2024</time></a>
+    <div data-testid="twitterArticleRichTextView">
+      <div data-testid="longformRichTextComponent">
+        <div data-contents="true">
+          <p>下面是一条嵌入推文：</p>
+          <div data-testid="twitterArticleInlineTweet">
+            <article role="article">
+              <div data-testid="User-Name">
+                <div class="user"><a href="/carol"><span><span>Carol</span></span></a><span>@carol</span></div>
+              </div>
+              <div data-testid="tweetText"><span>嵌入推文的内容</span></div>
+              <div data-testid="tweetPhoto"><img src="https://pbs.twimg.com/media/embed1.jpg?name=small" alt="嵌入图"></div>
+              <div role="group"><span>❤️ 50</span></div>
+              <a href="/carol/status/555"><time datetime="2024-04-01T00:00:00.000Z">Apr 1, 2024</time></a>
+            </article>
+          </div>
+          <p>下面是一张文章卡片：</p>
+          <div data-testid="articleCard">
+            <a href="/deepseek_ai/status/9999">
+              <div class="card-img"><img src="https://pbs.twimg.com/media/card1.jpg?name=small" alt="卡片封面"></div>
+              <div class="card-title">卡片标题</div>
+              <div class="card-desc">卡片描述文字</div>
+            </a>
+          </div>
+          <p>下面是一个视频：</p>
+          <div data-testid="videoComponent">
+            <video poster="https://pbs.twimg.com/ext_tw_video_thumb/123/poster.jpg?name=small">
+              <source src="https://video.twimg.com/ext_tw_video/123/pu/vid/avc1/720x720.mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+</div>
+</body>
+</html>

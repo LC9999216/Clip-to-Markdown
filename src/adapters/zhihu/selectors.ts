@@ -35,7 +35,7 @@ export const ZHIHU_SELECTORS = {
   /** 文章类型 */
   article: {
     /** 文章容器 */
-    item: '.Post',
+    item: '.Post-Main, .Post',
     /** 文章标题 */
     title: '.Post-Title',
     /** 作者 */

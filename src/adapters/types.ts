@@ -20,6 +20,12 @@ export interface PlatformAdapter {
   /** 提取为统一 ContentDocument。失败抛 ExtractionError（中文 message）。 */
   extract(doc: Document, url: URL): ContentDocument;
 
+  /**
+   * 可选：异步提取（用于需要网络请求的平台，如 B 站字幕需调用其 API）。
+   * 存在时 content-script 优先走异步路径；extract 仍需实现（可抛 UNSUPPORTED_PAGE 占位）。
+   */
+  extractAsync?(doc: Document, url: URL): Promise<ContentDocument>;
+
   /** 可选：轻量探测标题（popup 在提取前展示用）。失败应返回 undefined 而非抛出。 */
   detectTitle?(url: URL, doc: Document, contentType: PlatformContentType): string | undefined;
 }

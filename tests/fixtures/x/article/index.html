@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"></head>
+<body>
+<div id="react-root">
+  <!-- 回复：不同作者，绝不能被保存 -->
+  <article role="article">
+    <div data-testid="User-Name">
+      <div class="user"><a href="/bob"><span><span>Bob</span></span></a><span>@bob</span></div>
+    </div>
+    <div data-testid="tweetText"><span>这是一条回复评论，绝对不能出现在输出里。</span></div>
+    <div role="group"><span>👍 1</span></div>
+    <a href="/bob/status/999"><time datetime="2024-05-01T12:01:00.000Z">May 1</time></a>
+  </article>
+
+  <!-- 推广内容：绝不能被保存 -->
+  <article role="article">
+    <div data-testid="promotedIndicator"></div>
+    <div data-testid="User-Name">
+      <div class="user"><a href="/adsponsor"><span><span>广告主</span></span></a><span>@adsponsor</span></div>
+    </div>
+    <div data-testid="tweetText"><span>推广内容，绝对不能出现在输出里。</span></div>
+    <a href="/adsponsor/status/666"><time datetime="2024-05-01T10:00:00.000Z">May 1</time></a>
+  </article>
+
+  <!-- 焦点长文章 -->
+  <article role="article">
+    <!-- 作者区（含头像：应剔除） -->
+    <div data-testid="User-Name">
+      <div class="user">
+        <a href="/deepseek"><span><span>DeepSeek</span></span></a>
+        <span>@deepseek_ai</span>
+        <img src="https://pbs.twimg.com/profile_images/123/avatar.png?name=small" alt="DeepSeek 头像">
+      </div>
+    </div>
+    <!-- 封面 -->
+    <div data-testid="twitterArticleCover">
+      <img src="https://pbs.twimg.com/media/cover1.jpg?name=small" alt="封面图">
+    </div>
+    <!-- 正式标题 -->
+    <div data-testid="twitter-article-title"><h1>从0到1带你速通DeepSeek-Harness</h1></div>
+    <!-- 发布时间 -->
+    <a href="/deepseek_ai/status/8888"><time datetime="2025-01-15T03:00:00.000Z">Jan 15, 2025</time></a>
+    <!-- 互动统计：应剔除 -->
+    <div role="group"><span>❤️ 1234</span><span>🔁 56</span></div>
+    <!-- 富文本正文 -->
+    <div data-testid="twitterArticleRichTextView">
+      <div data-testid="longformRichTextComponent">
+        <div data-contents="true">
+          <p>这是一篇介绍 <strong>DeepSeek-Harness</strong> 的长文章，作者在 <a href="/deepseek_ai/status/8888">这里</a> 首发。</p>
+          <h2>快速上手</h2>
+          <p>安装依赖：</p>
+          <pre><code>npm install deepseek-harness</code></pre>
+          <figure>
+            <img src="https://pbs.twimg.com/media/body1.jpg?name=small" alt="架构图">
+            <figcaption>图1：整体架构</figcaption>
+          </figure>
+          <p>更多细节请看下图。</p>
+          <figure><img src="https://pbs.twimg.com/media/body2.jpg?name=small" alt="流程图"></figure>
+          <img src="https://abs.twimg.com/emoji/v2/72x72/1f600.png" alt="😀">
+          <img src="https://pbs.twimg.com/hashflag/xxx.png" alt="#DeepSeek">
+          <img src="https://abs.twimg.com/icons/svg/icon.svg" alt="icon">
+        </div>
+      </div>
+    </div>
+    <!-- 嵌套的重复文章容器：不应造成正文重复 -->
+    <article role="article">
+      <div data-testid="User-Name">
+        <div class="user"><a href="/deepseek"><span><span>DeepSeek</span></span></a><span>@deepseek_ai</span></div>
+      </div>
+      <div data-testid="twitterArticleRichTextView">
+        <div data-testid="longformRichTextComponent">
+          <div data-contents="true"><p>嵌套重复正文，绝对不能出现在输出里。</p></div>
+        </div>
+      </div>
+    </article>
+  </article>
+
+  <!-- 侧栏：绝不能被保存 -->
+  <aside>
+    <section><h3>推荐阅读</h3><p>侧栏推荐内容，绝对不能出现在输出里。</p></section>
+  </aside>
+</div>
+</body>
+</html>

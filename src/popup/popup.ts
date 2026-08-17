@@ -4,15 +4,21 @@
  *       →（已选自定义文件夹则直接写入）→ 否则 DOWNLOAD。
  */
 
-import { renderDocument } from '../core/markdown-renderer';
-import { buildFilename } from '../core/filename';
+import { prepareSave } from '../core/save-service';
 import { loadDirectoryHandle, writeMarkdownToDirectory } from '../core/custom-folder';
-import type { DownloadResponse, ExtractResponse, StatusResponse } from '../types/messages';
+import { InitialSetupRequiredError } from '../core/setup-state';
+import type {
+  DownloadResponse,
+  ExtractResponse,
+  SaveToObsidianResponse,
+  StatusResponse,
+} from '../types/messages';
 
 const statusText = document.getElementById('status-text') as HTMLParagraphElement;
 const actionPanel = document.getElementById('action-panel') as HTMLElement;
 const docTitle = document.getElementById('doc-title') as HTMLParagraphElement;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
+const obsidianBtn = document.getElementById('obsidian-btn') as HTMLButtonElement;
 const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
 
 settingsBtn.addEventListener('click', () => {
@@ -24,6 +30,7 @@ function setStatus(text: string, kind: 'muted' | 'ok' | 'error' = 'muted'): void
   statusText.className = `status-text ${kind === 'muted' ? '' : kind}`;
   actionPanel.classList.add('hidden');
   saveBtn.disabled = true;
+  obsidianBtn.disabled = true;
 }
 
 function setReady(title: string): void {
@@ -33,6 +40,8 @@ function setReady(title: string): void {
   actionPanel.classList.remove('hidden');
   saveBtn.disabled = false;
   saveBtn.textContent = '保存为 Markdown';
+  obsidianBtn.disabled = false;
+  obsidianBtn.textContent = '保存到 Obsidian';
 }
 
 function queryActiveTab(): Promise<chrome.tabs.Tab | undefined> {
@@ -99,8 +108,11 @@ async function init(): Promise<void> {
   actionPanel.classList.remove('hidden');
   saveBtn.disabled = false;
   saveBtn.textContent = '保存为 Markdown';
+  obsidianBtn.disabled = false;
+  obsidianBtn.textContent = '保存到 Obsidian';
 
   saveBtn.addEventListener('click', () => void onSave(tabId));
+  obsidianBtn.addEventListener('click', () => void onSaveToObsidian(tabId));
 }
 
 async function onSave(tabId: number): Promise<void> {
@@ -122,8 +134,20 @@ async function onSave(tabId: number): Promise<void> {
     return;
   }
 
-  const markdown = renderDocument(extract.document);
-  const filename = buildFilename(extract.document);
+  let prepared: Awaited<ReturnType<typeof prepareSave>>;
+  try {
+    prepared = await prepareSave(extract.document, new Date(), 'default');
+  } catch (error) {
+    saveBtn.textContent = '保存为 Markdown';
+    setStatus(
+      error instanceof InitialSetupRequiredError
+        ? '首次使用请先点击右上角设置，选择自定义保存文件夹。'
+        : `保存失败：${String(error)}`,
+      'error',
+    );
+    return;
+  }
+  const { markdown, filename } = prepared;
 
   // 优先：若用户在设置里选了自定义文件夹，直接写入该目录（绕过下载目录）。
   let fallbackNote = '';
@@ -167,17 +191,101 @@ async function onSave(tabId: number): Promise<void> {
   setStatus(`${fallbackNote}已保存：${dl.filename}`, 'ok');
 }
 
+async function onSaveToObsidian(tabId: number): Promise<void> {
+  obsidianBtn.disabled = true;
+  saveBtn.disabled = true;
+  obsidianBtn.textContent = '提取中…';
+
+  let extract: ExtractResponse;
+  try {
+    extract = await tabSend<ExtractResponse>(tabId, { type: 'EXTRACT' });
+  } catch (e) {
+    resetButtons();
+    setStatus(`提取失败：${String(e)}`, 'error');
+    return;
+  }
+
+  if (!extract.success) {
+    resetButtons();
+    setStatus(extract.error.message, 'error');
+    return;
+  }
+
+  let prepared: Awaited<ReturnType<typeof prepareSave>>;
+  try {
+    prepared = await prepareSave(extract.document, new Date(), 'obsidian');
+  } catch (error) {
+    resetButtons();
+    setStatus(`保存失败：${String(error)}`, 'error');
+    return;
+  }
+  const { markdown, filename } = prepared;
+
+  obsidianBtn.textContent = '保存中…';
+  let resp: SaveToObsidianResponse;
+  try {
+    resp = await runtimeSend<SaveToObsidianResponse>({
+      type: 'SAVE_TO_OBSIDIAN',
+      payload: { markdown, filename },
+    });
+  } catch (e) {
+    resetButtons();
+    setStatus(`保存失败：${String(e)}`, 'error');
+    return;
+  }
+
+  if (resp.success) {
+    resetButtons();
+    setStatus(`已保存到 Obsidian：${resp.filename}`, 'ok');
+    return;
+  }
+
+  // 笔记已存在：询问是否覆盖
+  if (resp.exists && window.confirm('该笔记已存在，是否覆盖？')) {
+    obsidianBtn.textContent = '覆盖中…';
+    try {
+      const overwrite = await runtimeSend<SaveToObsidianResponse>({
+        type: 'SAVE_TO_OBSIDIAN',
+        payload: { markdown, filename, overwrite: true },
+      });
+      if (overwrite.success) {
+        resetButtons();
+        setStatus(`已覆盖：${overwrite.filename}`, 'ok');
+        return;
+      }
+      resp = overwrite;
+    } catch (e) {
+      resetButtons();
+      setStatus(`覆盖失败：${String(e)}`, 'error');
+      return;
+    }
+  }
+
+  resetButtons();
+  setStatus(resp.error, 'error');
+}
+
+function resetButtons(): void {
+  saveBtn.disabled = false;
+  saveBtn.textContent = '保存为 Markdown';
+  obsidianBtn.disabled = false;
+  obsidianBtn.textContent = '保存到 Obsidian';
+}
+
 const PLATFORM_LABELS: Record<string, string> = {
   x: 'X / Twitter',
   zhihu: '知乎',
   heybox: '小黑盒',
   chatgpt: 'ChatGPT',
+  bilibili: 'B 站',
 };
 
 const TYPE_LABELS: Record<string, string> = {
   tweet: '推文',
+  'x-article': '文章',
   'zhihu-answer': '回答',
   'zhihu-article': '文章',
   'heybox-post': '帖子',
   'chatgpt-chat': '对话',
+  'bilibili-video': '视频字幕',
 };

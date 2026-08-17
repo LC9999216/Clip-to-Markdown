@@ -7,10 +7,15 @@ import { mountFixture, readExpectedMd } from '../helpers';
 const URLS: Record<string, string> = {
   answer: 'https://www.zhihu.com/question/1/answer/456',
   article: 'https://zhuanlan.zhihu.com/p/889',
+  articlePostMain: 'https://zhuanlan.zhihu.com/p/990001',
+};
+
+const FIXTURE_NAMES: Record<string, string> = {
+  articlePostMain: 'article-post-main',
 };
 
 function extract(name: string): ContentDocument {
-  mountFixture('zhihu', name);
+  mountFixture('zhihu', FIXTURE_NAMES[name] ?? name);
   return zhihuAdapter.extract(document, new URL(URLS[name]!));
 }
 
@@ -58,6 +63,20 @@ describe('知乎 adapter 负向断言', () => {
     expect(doc.metadata.published).toBe('2024-06-01T10:00:00+08:00');
     expect(doc.metadata.id).toBe('889');
   });
+
+  it('新版 .Post-Main 文章即使存在登录表单也能提取', () => {
+    const doc = extract('articlePostMain');
+    expect(validateDocument(doc)).toEqual([]);
+    expect(checkJsonRoundTrip(doc)).toBeNull();
+    expect(doc.metadata.contentType).toBe('zhihu-article');
+    expect(doc.metadata.title).toBe('新版知乎文章标题');
+    expect(doc.metadata.author.name).toBe('示例作者');
+
+    const md = renderDocument(doc);
+    expect(md.trim()).toBe(readExpectedMd('zhihu', 'article-post-main'));
+    expect(md).not.toContain('这段评论文本应该被排除。');
+    expect(md).not.toContain('这段推荐文本应该被排除。');
+  });
 });
 
 describe('知乎 adapter 路由与错误', () => {
@@ -83,6 +102,20 @@ describe('知乎 adapter 路由与错误', () => {
   it('登录墙抛 LOGIN_REQUIRED', () => {
     document.body.innerHTML = '<div class="SignFlow"><input type="password"></div>';
     expect(() => zhihuAdapter.extract(document, new URL('https://www.zhihu.com/question/1/answer/2'))).toThrow('登录');
+  });
+
+  it('没有正文且存在登录表单时仍提示需要登录', () => {
+    document.body.innerHTML = '<form class="SignFlow Login-content"><input type="text"></form>';
+    expect(() => zhihuAdapter.extract(document, new URL('https://zhuanlan.zhihu.com/p/990002'))).toThrow('需要登录');
+  });
+
+  it('回答目标无正文但其他回答有正文时仍提示需要登录', () => {
+    document.body.innerHTML = `
+      <form class="SignFlow Login-content"><input type="text"></form>
+      <div class="AnswerItem" data-zop='{"itemId":"456"}'></div>
+      <div class="AnswerItem"><div class="RichContent-inner">另一个回答正文</div></div>
+    `;
+    expect(() => zhihuAdapter.extract(document, new URL('https://www.zhihu.com/question/1/answer/456'))).toThrow('需要登录');
   });
 
   it('detectTitle 返回问题标题 / 文章标题', () => {

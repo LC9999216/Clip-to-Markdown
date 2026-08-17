@@ -17,7 +17,7 @@ export function detectZhihuType(url: URL): PlatformContentType | null {
 export function extractZhihu(doc: Document, url: URL): ContentDocument {
   const type = detectZhihuType(url);
   if (!type) throw new ExtractionError('UNSUPPORTED_PAGE', ERROR_MESSAGES.UNSUPPORTED_PAGE);
-  if (isLoginWall(doc)) {
+  if (!hasReadableContent(doc, type, url) && isLoginWall(doc)) {
     throw new ExtractionError('LOGIN_REQUIRED', ERROR_MESSAGES.LOGIN_REQUIRED);
   }
   return type === 'zhihu-answer' ? extractAnswer(doc, url) : extractArticle(doc, url);
@@ -98,13 +98,12 @@ function extractArticle(doc: Document, url: URL): ContentDocument {
 // ---------- 共用 ----------
 
 function extractAuthor(item: Element, authorSelector: string): AuthorInfo {
-  const el = item.querySelector(authorSelector);
-  const link = el?.querySelector('a');
-  const name = (link?.textContent ?? el?.textContent ?? '').trim();
-  if (!name) {
-    throw new ExtractionError('NOT_FOUND_AUTHOR', ERROR_MESSAGES.NOT_FOUND_AUTHOR);
+  for (const el of Array.from(item.querySelectorAll(authorSelector))) {
+    const link = el.querySelector('a');
+    const name = (link?.textContent ?? el.textContent ?? '').trim();
+    if (name) return { name };
   }
-  return { name };
+  throw new ExtractionError('NOT_FOUND_AUTHOR', ERROR_MESSAGES.NOT_FOUND_AUTHOR);
 }
 
 /** 发布时间：meta 兜底，不可靠时返回 ''（不阻断流程） */
@@ -129,6 +128,21 @@ function extractBody(item: Element, bodySelector: string, removeSelectors: reado
     throw new ExtractionError('NOT_FOUND_BODY', ERROR_MESSAGES.NOT_FOUND_BODY);
   }
   return content;
+}
+
+function hasReadableContent(doc: Document, type: PlatformContentType, url: URL): boolean {
+  if (type === 'zhihu-article') {
+    const item = doc.querySelector(ZHIHU_SELECTORS.article.item);
+    return Boolean(item?.querySelector(ZHIHU_SELECTORS.article.body));
+  }
+
+  if (type === 'zhihu-answer') {
+    const aid = ANSWER_RE.exec(url.pathname)?.[2];
+    const item = aid ? findFocusedAnswer(doc, aid) : null;
+    return Boolean(item?.querySelector(ZHIHU_SELECTORS.answer.body));
+  }
+
+  return false;
 }
 
 function isLoginWall(doc: Document): boolean {

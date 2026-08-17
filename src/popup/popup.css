@@ -96,6 +96,25 @@ body {
   cursor: not-allowed;
 }
 
+#obsidian-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 0;
+  border: 1px solid var(--brand);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#obsidian-btn:disabled {
+  border-color: #c6d4f0;
+  color: #c6d4f0;
+  cursor: not-allowed;
+}
+
 .hidden {
   display: none;
 }

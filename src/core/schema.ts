@@ -8,14 +8,16 @@
  * - 字段命名与 mdast 对齐（children/value/depth/ordered），降低认知负担。
  */
 
-export type PlatformId = 'x' | 'zhihu' | 'heybox' | 'chatgpt';
+export type PlatformId = 'x' | 'zhihu' | 'heybox' | 'chatgpt' | 'bilibili';
 
 export type PlatformContentType =
   | 'tweet'
+  | 'x-article'
   | 'zhihu-answer'
   | 'zhihu-article'
   | 'heybox-post'
-  | 'chatgpt-chat';
+  | 'chatgpt-chat'
+  | 'bilibili-video';
 
 export interface ContentDocument {
   version: 1;

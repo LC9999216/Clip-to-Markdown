@@ -8,14 +8,16 @@
  * 缺失则重建。只缓存「正在创建」的 Promise 以合并并发请求。
  */
 
-import { renderDocument } from '../core/markdown-renderer';
-import { buildFilename } from '../core/filename';
-import { loadSettings, resolveDownloadPath } from '../core/settings';
+import { prepareSave, type SaveTarget } from '../core/save-service';
+import { resolveDownloadPath } from '../core/settings';
 import { loadDirectoryHandle } from '../core/custom-folder';
 import { downloadMarkdown } from '../core/downloader';
+import { InitialSetupRequiredError } from '../core/setup-state';
+import { saveToObsidian } from './obsidian';
 import type { ExtractResponse, WriteCustomResponse } from '../types/messages';
 
 const COMMAND = 'save-clip';
+const OBSIDIAN_COMMAND = 'save-to-obsidian';
 
 /** offscreen 就绪信号超时时间（毫秒） */
 export const OFFSCREEN_READY_TIMEOUT_MS = 2000;
@@ -33,11 +35,18 @@ const OFFSCREEN_READY_TIMEOUT_CODE = 'OFFSCREEN_READY_TIMEOUT';
 // 防御：commands API 不可用时跳过注册，避免整个 SW 启动崩溃
 if (chrome.commands?.onCommand) {
   chrome.commands.onCommand.addListener((command) => {
-    if (command === COMMAND) void runQuickSave();
+    switch (command) {
+      case COMMAND:
+        void runSave('default');
+        break;
+      case OBSIDIAN_COMMAND:
+        void runSave('obsidian');
+        break;
+    }
   });
 }
 
-async function runQuickSave(): Promise<void> {
+export async function runSave(target: SaveTarget): Promise<void> {
   const tab = await getActiveTab();
   if (tab?.id == null) {
     notify('保存失败', '无法获取当前标签页。');
@@ -57,8 +66,27 @@ async function runQuickSave(): Promise<void> {
     return;
   }
 
-  const markdown = renderDocument(extract.document);
-  const filename = buildFilename(extract.document);
+  let prepared: Awaited<ReturnType<typeof prepareSave>>;
+  try {
+    prepared = await prepareSave(extract.document, new Date(), target);
+  } catch (error) {
+    if (error instanceof InitialSetupRequiredError) {
+      notify('需要完成首次设置', '请先打开设置页选择自定义保存文件夹。');
+      return;
+    }
+    throw error;
+  }
+  const { markdown, filename, settings } = prepared;
+
+  if (target === 'obsidian') {
+    try {
+      const filepath = await saveToObsidian({ markdown, filename }, settings);
+      notify('已保存到 Obsidian', filepath);
+    } catch {
+      notify('Obsidian 保存失败', '请检查连接设置。');
+    }
+    return;
+  }
 
   // 自定义文件夹优先（IndexedDB 在 SW 可用，异常视为未配置）
   let hasCustom = false;
@@ -76,18 +104,22 @@ async function runQuickSave(): Promise<void> {
     } catch (e) {
       // 错误详情只写开发日志，用户通知不拼接冗长的 Error
       console.error('自定义文件夹写入失败：', e);
-      await downloadFallback(markdown, filename, '自定义文件夹写入失败，已保存到下载目录：');
+      await downloadFallback(markdown, filename, '自定义文件夹写入失败，已保存到下载目录：', settings);
       return;
     }
   }
 
-  await downloadFallback(markdown, filename, '');
+  await downloadFallback(markdown, filename, '', settings);
 }
 
-async function downloadFallback(markdown: string, filename: string, note: string): Promise<void> {
+async function downloadFallback(
+  markdown: string,
+  filename: string,
+  note: string,
+  settings: Awaited<ReturnType<typeof prepareSave>>['settings'],
+): Promise<void> {
   try {
-    const settings = await loadSettings();
-    const { filename: path, saveAs } = resolveDownloadPath(filename, settings);
+    const { filename: path, saveAs } = resolveDownloadPath(filename, settings.save);
     const r = await downloadMarkdown({ markdown, filename: path, saveAs });
     notify('已保存', `${note}${r.filename}`);
   } catch (e) {
@@ -245,7 +277,7 @@ function runtimeSend<T>(msg: unknown): Promise<T> {
 
 function notify(title: string, message: string): void {
   // 角标兜底：不依赖系统通知权限，工具栏图标上一定可见
-  setBadge(title === '已保存');
+  setBadge(title.includes('已保存'));
   try {
     chrome.notifications.create(
       { type: 'basic', iconUrl: chrome.runtime.getURL('icons/icon-128.png'), title, message },

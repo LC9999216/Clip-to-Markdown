@@ -4,68 +4,232 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="options.css" />
-  <title>Clip2MD 设置</title>
+  <title>Clip to Markdown 设置</title>
 </head>
 <body>
   <main id="app">
     <header class="app-header">
-      <h1>Clip2MD 设置</h1>
-      <p class="subtitle">配置保存 Markdown 文件的位置</p>
+      <img class="brand-icon" src="icons/icon-32.png" alt="" aria-hidden="true" />
+      <div>
+        <h1>Clip to Markdown 设置</h1>
+        <p class="subtitle">将网页内容快速保存为干净 Markdown，并可一键发送到 Obsidian</p>
+      </div>
     </header>
 
-    <section class="block">
-      <h2>自定义文件夹（写入任意位置）</h2>
-      <p class="hint">
-        选择一个文件夹后，文件会直接写入该文件夹，绕过浏览器下载目录。
-      </p>
-      <div class="folder-row">
-        <button id="choose-folder" type="button">选择文件夹…</button>
-        <span id="folder-name" class="folder-name">未选择</span>
-        <button id="clear-folder" type="button" class="link-btn" hidden>清除</button>
-      </div>
-      <p id="folder-status" class="hint status" role="status"></p>
-    </section>
-
-    <section class="block">
-      <h2>快捷键</h2>
-      <p class="hint">按下快捷键即可快速保存当前页面，无需打开扩展弹窗。</p>
-      <div class="folder-row">
-        <span id="shortcut-value" class="folder-name">加载中…</span>
-        <button id="shortcut-btn" type="button">调整快捷键…</button>
-      </div>
-      <p class="hint">快捷键由 Chrome 统一管理，点击按钮到官方页面改键。</p>
-    </section>
-
-    <hr />
-
     <form id="settings-form" novalidate>
-      <section class="block">
-        <h2>浏览器下载目录（未选择自定义文件夹时生效）</h2>
+      <section
+        id="save-location-card"
+        class="settings-card"
+        data-settings-section
+        aria-labelledby="save-location-title"
+      >
+        <div class="settings-card__header">
+          <div>
+            <h2 id="save-location-title">保存</h2>
+            <p class="card-description">配置默认保存位置、备用下载方式与全局命名规则</p>
+          </div>
+          <span id="folder-connection-state" class="status-badge" data-kind="muted">加载中</span>
+        </div>
 
-        <div class="field">
-          <label for="subfolder">子目录（相对浏览器下载目录）</label>
+        <div class="folder-summary">
+          <span class="folder-icon" aria-hidden="true">📁</span>
+          <div class="folder-meta">
+            <strong id="folder-name">正在读取…</strong>
+            <span id="folder-mode-description">检查自定义文件夹状态</span>
+          </div>
+          <button id="choose-folder" type="button" class="secondary-button">选择文件夹</button>
+          <button id="clear-folder" type="button" class="text-button danger-action" hidden>清除</button>
+        </div>
+        <p id="folder-status" class="inline-status" data-kind="muted" role="status" aria-live="polite"></p>
+
+        <div id="initial-setup-guide" class="initial-setup-guide" role="status" hidden>
+          <strong>首次使用，请先选择保存文件夹</strong>
+          <p>选择后，普通 Markdown 会直接保存到该文件夹；Obsidian 保存不受影响。</p>
+        </div>
+
+        <details id="fallback-download-settings" class="nested-details">
+          <summary>
+            <span>
+              <strong>备用下载设置</strong>
+              <small>仅未选择自定义文件夹时生效</small>
+            </span>
+            <span class="chevron" aria-hidden="true"></span>
+          </summary>
+          <div class="details-body">
+            <div class="field">
+              <label for="subfolder">子目录</label>
+              <input
+                id="subfolder"
+                name="subfolder"
+                type="text"
+                placeholder="例如：Clippings/知乎"
+                spellcheck="false"
+              />
+              <p class="hint">相对浏览器下载目录；留空则直接保存到下载目录。</p>
+            </div>
+            <label class="checkbox">
+              <input id="save-as" name="save-as" type="checkbox" />
+              <span>每次保存时询问位置</span>
+            </label>
+          </div>
+        </details>
+
+        <div class="field filename-field">
+          <label for="filename-template">文件命名模板</label>
           <input
-            id="subfolder"
-            name="subfolder"
+            id="filename-template"
+            name="filename-template"
             type="text"
-            placeholder="例如：Clip2MD/知乎"
+            placeholder="{date}-{title}"
             spellcheck="false"
           />
-          <p class="hint">留空则直接保存到浏览器下载目录。子目录不存在时 Chrome 会自动创建。</p>
-        </div>
-
-        <div class="field">
-          <label class="checkbox">
-            <input id="save-as" name="save-as" type="checkbox" />
-            <span>每次下载都弹出「另存为」，让我手动选择位置</span>
-          </label>
-        </div>
-
-        <div class="actions">
-          <button id="save-btn" type="submit">保存设置</button>
-          <span id="save-status" class="save-status" role="status"></span>
+          <p class="hint">适用于普通下载、自定义文件夹和 Obsidian 保存。</p>
+          <p class="hint template-vars">可用变量：{title} {date} {author} {platform} {id}</p>
+          <p id="filename-template-error" class="inline-status" data-kind="error" role="alert"></p>
         </div>
       </section>
+
+      <section
+        id="shortcut-card"
+        class="settings-card"
+        data-settings-section
+        aria-labelledby="shortcut-title"
+      >
+        <div class="settings-card__header">
+          <div>
+            <h2 id="shortcut-title">快捷键</h2>
+            <p class="card-description">可分别为普通保存和 Obsidian 保存设置快捷键</p>
+          </div>
+        </div>
+        <div class="shortcut-list">
+          <div class="shortcut-item">
+            <span class="shortcut-icon" aria-hidden="true">⌨</span>
+            <div>
+              <strong>普通保存</strong>
+              <small>保存当前页面为 Markdown</small>
+            </div>
+            <kbd id="shortcut-value">加载中…</kbd>
+            <button id="shortcut-btn" type="button" class="text-button">修改</button>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-icon obsidian-shortcut-icon" aria-hidden="true">O</span>
+            <div>
+              <strong>保存到 Obsidian</strong>
+              <small>跳过下载，直接发送到 Obsidian</small>
+            </div>
+            <kbd id="obsidian-shortcut-value">加载中…</kbd>
+            <button id="obsidian-shortcut-btn" type="button" class="text-button">修改</button>
+          </div>
+        </div>
+        <p class="card-footnote">快捷键由 Chrome 统一管理，点击“修改”前往快捷键页面自定义。</p>
+      </section>
+
+      <details
+        id="obsidian-settings"
+        class="settings-card details-card"
+        data-settings-section
+        open
+      >
+        <summary>
+          <span class="obsidian-mark" aria-hidden="true">O</span>
+          <span class="summary-copy">
+            <strong>Obsidian</strong>
+            <small>通过 Local REST API 保存到笔记库</small>
+          </span>
+          <span id="obsidian-summary-state" class="status-badge" data-kind="muted">未配置</span>
+          <span class="advanced-badge">高级设置</span>
+          <span class="chevron" aria-hidden="true"></span>
+        </summary>
+
+        <div class="details-body obsidian-fields">
+          <p class="hint intro-hint">
+            需在 Local REST API with MCP 插件中启用
+            <strong>Enable Non-encrypted (HTTP) Server</strong> 并复制 API Key。
+          </p>
+
+          <div class="obsidian-grid">
+            <div class="field">
+              <label for="obsidian-api-base-url">Local REST API 地址</label>
+              <input
+                id="obsidian-api-base-url"
+                name="obsidian-api-base-url"
+                type="text"
+                placeholder="http://127.0.0.1:27123"
+                spellcheck="false"
+              />
+            </div>
+
+            <div class="field">
+              <label for="obsidian-api-key">API Key</label>
+              <div class="secret-input-row">
+                <input
+                  id="obsidian-api-key"
+                  name="obsidian-api-key"
+                  type="password"
+                  placeholder="粘贴 Local REST API 插件里的 API Key"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button
+                  id="toggle-api-key"
+                  type="button"
+                  class="secondary-button compact-button"
+                  aria-pressed="false"
+                  aria-label="显示 API Key"
+                >显示</button>
+              </div>
+            </div>
+
+            <div class="field note-directory-field">
+              <label for="note-folder">笔记目录</label>
+              <input
+                id="note-folder"
+                name="note-folder"
+                type="text"
+                placeholder="例如：Clippings/Bilibili"
+                spellcheck="false"
+              />
+              <p class="hint">相对 vault 根目录；目录不存在时会自动创建。</p>
+            </div>
+          </div>
+
+          <fieldset class="frontmatter-fields">
+            <legend>Frontmatter</legend>
+            <label class="checkbox"><input id="frontmatter-source-url" type="checkbox" /><span>原文链接</span></label>
+            <label class="checkbox"><input id="frontmatter-author" type="checkbox" /><span>作者</span></label>
+            <label class="checkbox"><input id="frontmatter-published" type="checkbox" /><span>发布时间</span></label>
+            <label class="checkbox"><input id="frontmatter-platform" type="checkbox" /><span>平台</span></label>
+            <label class="checkbox"><input id="frontmatter-clipped-at" type="checkbox" /><span>剪藏时间</span></label>
+            <label class="checkbox"><input id="frontmatter-tags" type="checkbox" /><span>标签</span></label>
+          </fieldset>
+
+          <div class="inline-actions">
+            <button id="test-obsidian-btn" type="button" class="secondary-button">测试连接</button>
+            <span id="obsidian-status" class="inline-status" data-kind="muted" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+      </details>
+
+      <section id="about-card" class="settings-card about-card" aria-labelledby="about-title">
+      <div class="settings-card__header">
+        <div>
+          <h2 id="about-title">关于</h2>
+          <p class="card-description">Clip to Markdown（原 Clip2MD）</p>
+        </div>
+      </div>
+      <dl class="about-list">
+        <div><dt>GitHub</dt><dd><a href="https://github.com/LC9999216/clip2md" target="_blank" rel="noopener noreferrer">github.com/LC9999216/clip2md ↗</a></dd></div>
+        <div><dt>问题反馈</dt><dd><a href="https://github.com/LC9999216/clip2md/issues" target="_blank" rel="noopener noreferrer">GitHub Issues ↗</a></dd></div>
+        <div><dt>联系邮箱</dt><dd><a href="mailto:luochengco_0707@qq.com">luochengco_0707@qq.com</a></dd></div>
+        <div><dt>版本</dt><dd id="app-version">版本读取中…</dd></div>
+        <div><dt>License</dt><dd><a href="https://github.com/LC9999216/clip2md/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT ↗</a></dd></div>
+      </dl>
+      </section>
+
+      <footer class="save-bar">
+        <span id="save-status" class="inline-status" data-kind="muted" role="status" aria-live="polite"></span>
+        <button id="save-btn" type="submit" class="primary-button">保存更改</button>
+      </footer>
     </form>
   </main>
   <script src="options.js"></script>

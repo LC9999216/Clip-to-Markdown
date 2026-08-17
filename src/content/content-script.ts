@@ -39,20 +39,29 @@ function handleGetStatus(): StatusResponse {
   };
 }
 
-function handleExtract(): ExtractResponse {
+function toExtractError(e: unknown): ExtractResponse {
+  if (e instanceof ExtractionError) {
+    return { success: false, error: { code: e.code, message: e.message } };
+  }
+  return { success: false, error: { code: 'UNKNOWN', message: `发生未知错误：${String(e)}` } };
+}
+
+function handleExtract(): ExtractResponse | Promise<ExtractResponse> {
   try {
     const url = currentUrl();
     const adapter = registry.match(url);
     if (!adapter) {
       throw new ExtractionError('UNSUPPORTED_PAGE', '当前页面不是受支持的帖子/文章页面。');
     }
-    const contentDoc = adapter.extract(document, url);
-    return { success: true, document: contentDoc };
-  } catch (e) {
-    if (e instanceof ExtractionError) {
-      return { success: false, error: { code: e.code, message: e.message } };
+    if (adapter.extractAsync) {
+      return adapter
+        .extractAsync(document, url)
+        .then((contentDoc): ExtractResponse => ({ success: true, document: contentDoc }))
+        .catch(toExtractError);
     }
-    return { success: false, error: { code: 'UNKNOWN', message: `发生未知错误：${String(e)}` } };
+    return { success: true, document: adapter.extract(document, url) };
+  } catch (e) {
+    return toExtractError(e);
   }
 }
 
@@ -64,7 +73,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       return false;
     }
     if (type === 'EXTRACT') {
-      sendResponse(handleExtract());
+      const result = handleExtract();
+      if (result instanceof Promise) {
+        result.then((resp) => sendResponse(resp));
+        return true; // 保持异步响应通道（B 站等需网络请求的平台）
+      }
+      sendResponse(result);
       return false;
     }
   }

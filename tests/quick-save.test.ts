@@ -9,6 +9,7 @@ import {
   offscreenHasDocumentMock,
   runtimeSendMessageMock,
   setRuntimeLastError,
+  mockStoredSettings,
 } from './setup';
 import { mountFixture } from './helpers';
 import { loadDirectoryHandle } from '../src/core/custom-folder';
@@ -32,6 +33,8 @@ function setLocation(url: string): void {
 
 describe('快捷键保存（save-clip）', () => {
   beforeEach(() => {
+    // 普通快捷键测试模拟已完成初始化的旧用户；新用户另行覆盖。
+    mockStoredSettings['clip2md.settings'] = {};
     vi.mocked(loadDirectoryHandle).mockReset();
     vi.mocked(loadDirectoryHandle).mockResolvedValue(null);
     runtimeSendMessageMock.mockReset();
@@ -61,6 +64,20 @@ describe('快捷键保存（save-clip）', () => {
     expect(chromeCalls.downloads.length).toBe(0);
     expect(chromeCalls.notifications[0]?.title).toBe('保存失败');
     expect(chromeCalls.badgeText).toContain('!');
+  });
+
+  it('新用户未完成初始化：普通保存不下载并提示先选文件夹', async () => {
+    delete mockStoredSettings['clip2md.settings'];
+    setLocation('https://x.com/alice/status/123456');
+    mountFixture('x', 'normal');
+    dispatchCommand('save-clip');
+
+    await vi.waitFor(() => expect(chromeCalls.notifications.length).toBeGreaterThan(0));
+    expect(chromeCalls.downloads).toHaveLength(0);
+    expect(chromeCalls.notifications[0]).toEqual({
+      title: '需要完成首次设置',
+      message: '请先打开设置页选择自定义保存文件夹。',
+    });
   });
 
   it('配置自定义文件夹：走 offscreen 写入而非下载', async () => {
@@ -122,5 +139,46 @@ describe('快捷键保存（save-clip）', () => {
     expect(chromeCalls.downloads.length).toBe(1);
     expect(chromeCalls.notifications.length).toBe(1);
     expect(chromeCalls.notifications[0]?.message).toContain('自定义文件夹写入失败，已保存到下载目录');
+  });
+
+  it('Obsidian target 复用同一 filename engine 且不回退为下载', async () => {
+    setLocation('https://x.com/alice/status/123456');
+    mountFixture('x', 'normal');
+    mockStoredSettings['clip2md.settings'] = {
+      settingsVersion: 2,
+      save: { subfolder: '', saveAs: false },
+      filename: { template: '{date}-{platform}-{title}' },
+      obsidian: {
+        enabled: true,
+        apiUrl: 'http://127.0.0.1:27123',
+        apiKey: 'key',
+        noteDirectory: 'Clippings/Inbox',
+        frontmatter: {
+          sourceUrl: true,
+          author: true,
+          published: true,
+          platform: true,
+          clippedAt: true,
+          tags: false,
+        },
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ status: 404, ok: false, text: async () => '' })
+      .mockResolvedValueOnce({ status: 204, ok: true, text: async () => '' }));
+
+    dispatchCommand('save-to-obsidian');
+
+    await vi.waitFor(() => expect(chromeCalls.notifications.length).toBeGreaterThan(0));
+
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/vault/Clippings/Inbox/2026-'),
+      expect.objectContaining({ method: 'PUT' }),
+    );
+    expect(chromeCalls.downloads).toHaveLength(0);
+    expect(chromeCalls.notifications.some((n) => n.title === '已保存到 Obsidian')).toBe(true);
+    vi.unstubAllGlobals();
   });
 });

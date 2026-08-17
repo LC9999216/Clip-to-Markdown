@@ -136,6 +136,7 @@ const chromeMock = {
       return currentLastError;
     },
     getURL: (path: string) => `chrome-extension://test-extension-id/${path}`,
+    getManifest: () => ({ version: '0.2.0' }),
     onMessage: {
       addListener: (l: MessageListener) => runtimeListeners.push(l),
       removeListener: (l: MessageListener) => {

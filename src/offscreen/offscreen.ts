@@ -5,7 +5,7 @@
  */
 
 import { loadDirectoryHandle, writeMarkdownToDirectory } from '../core/custom-folder';
-import { sanitizeFilenamePart } from '../core/filename';
+import { ensureMarkdownFilename, sanitizeFilenamePart } from '../core/filename';
 import {
   isWriteCustomRequest,
   type OffscreenReadyMessage,
@@ -30,7 +30,10 @@ async function handleWrite(payload: { filename: string; markdown: string }): Pro
     const dir = await loadDirectoryHandle();
     if (!dir) return { success: false, error: '未配置自定义文件夹。' };
     // 防御性 sanitize（正常情况 quick-save 已传入合法文件名）
-    const safeName = sanitizeFilenamePart(payload.filename) || `clip2md-${Date.now()}.md`;
+    const safeBase = sanitizeFilenamePart(payload.filename.replace(/\.md$/i, ''));
+    const safeName = safeBase
+      ? ensureMarkdownFilename(safeBase)
+      : `clip2md-${Date.now()}.md`;
     const written = await writeMarkdownToDirectory(dir, safeName, payload.markdown);
     return { success: true, filename: `${dir.name}/${written}` };
   } catch (e) {

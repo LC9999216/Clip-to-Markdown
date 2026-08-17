@@ -3,7 +3,7 @@
  * 具体保存目标由调用方处理，避免普通下载与 Obsidian 复制内容处理逻辑。
  */
 
-import { buildFilename } from './filename';
+import { buildFilename, ensureMarkdownFilename } from './filename';
 import { renderDocument } from './markdown-renderer';
 import { InitialSetupRequiredError, isInitialSetupComplete } from './setup-state';
 import { loadSettings, type ClipSettings } from './settings';
@@ -28,10 +28,10 @@ export async function prepareSave(
   }
   return {
     markdown: renderDocument(document),
-    filename: buildFilename(document, {
+    filename: ensureMarkdownFilename(buildFilename(document, {
       template: settings.filename.template,
       now,
-    }),
+    })),
     settings,
   };
 }

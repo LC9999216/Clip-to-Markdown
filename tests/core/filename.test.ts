@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { buildFilename, sanitizeFilenamePart, slugify } from '../../src/core/filename';
+import {
+  buildFilename,
+  buildFilenameContext,
+  cleanupTemplateResult,
+  renderFilenameTemplate,
+  sanitizeFilenamePart,
+  slugify,
+  validateFilenameTemplate,
+} from '../../src/core/filename';
 import type { ContentDocument } from '../../src/core/schema';
 
 function tweetDoc(partial: { id?: string; handle?: string; body?: string }): ContentDocument {
@@ -11,6 +19,7 @@ function tweetDoc(partial: { id?: string; handle?: string; body?: string }): Con
       sourceUrl: 'https://x.com/a/status/1',
       author: { name: 'A', handle: partial.handle ?? 'a' },
       published: '',
+      id: partial.id,
     },
     body: {
       type: 'tweet',
@@ -41,45 +50,70 @@ function articleDoc(over: Partial<ContentDocument['metadata']> = {}): ContentDoc
 }
 
 describe('buildFilename', () => {
-  it('X tweet 带 id：@handle-tweetId', () => {
-    expect(buildFilename(tweetDoc({ id: '123456', handle: 'alice' }))).toBe('@alice-123456.md');
-  });
+  const now = new Date(2026, 7, 17, 12, 34, 56);
 
-  it('X tweet 无 id：用正文 slug 兜底', () => {
-    expect(buildFilename(tweetDoc({ handle: 'alice', body: '这是一个很长的推文内容用来测试文件名' }))).toBe(
-      '@alice-这是一个很长的推文内容用来测试文件名.md',
+  it('默认使用剪藏日期和标题', () => {
+    expect(buildFilename(articleDoc({ title: '如何使用 DeepSeek？' }), { now })).toBe(
+      '2026-08-17-如何使用-DeepSeek.md',
     );
   });
 
-  it('知乎回答：用标题 slug', () => {
-    const doc = articleDoc({ title: '《沙丘》到底好看吗？' });
-    expect(buildFilename(doc)).toBe('沙丘-到底好看吗.md');
-  });
-
-  it('知乎回答无标题但带 id：{type}-{id}', () => {
-    expect(buildFilename(articleDoc({ id: '2' }))).toBe('zhihu-answer-2.md');
-  });
-
-  it('知乎回答无标题无 id：{type} 兜底', () => {
-    expect(buildFilename(articleDoc())).toBe('zhihu-answer.md');
-  });
-
-  it('X 长文章：用标题 slug 命名', () => {
+  it('支持全部 V0.2 模板变量', () => {
     const doc = articleDoc({
-      platform: 'x',
-      contentType: 'x-article',
-      title: '从0到1带你速通DeepSeek-Harness',
+      title: '如何使用 DeepSeek？',
+      id: 'answer-2',
+      author: { name: '作者' },
     });
-    expect(buildFilename(doc)).toBe('从0到1带你速通DeepSeek-Harness.md');
+    expect(buildFilename(doc, {
+      template: '{date}-{platform}-{author}-{id}-{title}',
+      now,
+    })).toBe('2026-08-17-知乎-作者-answer-2-如何使用-DeepSeek.md');
   });
 
-  it('X 长文章无标题：x-article-{statusId} 回退', () => {
-    const doc = articleDoc({ platform: 'x', contentType: 'x-article', id: '8888' });
-    expect(buildFilename(doc)).toBe('x-article-8888.md');
+  it('X 无标题时使用正文作为 title，author 使用 metadata.author.name', () => {
+    const doc = tweetDoc({ id: '123456', handle: 'alice', body: '这是一个推文标题' });
+    expect(buildFilename(doc, { template: '{author}-{id}-{title}', now })).toBe(
+      'A-123456-这是一个推文标题.md',
+    );
   });
 
-  it('普通推文命名不受长文章影响：@handle-tweetId', () => {
-    expect(buildFilename(tweetDoc({ id: '123456', handle: 'alice' }))).toBe('@alice-123456.md');
+  it('缺少 author 时清理多余分隔符', () => {
+    const doc = articleDoc({ title: '标题', author: { name: '' } });
+    expect(buildFilename(doc, { template: '{author}-{title}', now })).toBe('标题.md');
+  });
+
+  it('缺少标题时回退到内容类型', () => {
+    expect(buildFilename(articleDoc({ id: '2' }), { template: '{title}', now })).toBe('zhihu-answer.md');
+  });
+
+  it('未知变量回退默认模板，不保存未知变量文本', () => {
+    expect(buildFilename(articleDoc({ title: '标题' }), { template: '{hello}-{title}', now })).toBe(
+      '2026-08-17-标题.md',
+    );
+  });
+
+  it('模板结果为空时使用稳定的 title 兜底', () => {
+    const doc = articleDoc({ title: '' });
+    expect(buildFilename(doc, { template: '{author}-{id}', now })).toBe('张三.md');
+  });
+});
+
+describe('filename template helpers', () => {
+  it('校验未知变量并去重', () => {
+    expect(validateFilenameTemplate('{hello}-{title}-{hello}')).toEqual({
+      valid: false,
+      unsupportedVariables: ['{hello}'],
+    });
+    expect(validateFilenameTemplate('{date}-{title}')).toEqual({
+      valid: true,
+      unsupportedVariables: [],
+    });
+  });
+
+  it('渲染模板并清理连续分隔符', () => {
+    const context = buildFilenameContext(articleDoc({ title: '标题' }));
+    expect(renderFilenameTemplate('{author}-{title}-{id}', context)).toBe('张三-标题-');
+    expect(cleanupTemplateResult('---标题__')).toBe('标题');
   });
 });
 

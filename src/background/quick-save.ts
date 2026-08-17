@@ -16,6 +16,7 @@ import { saveToObsidian } from './obsidian';
 import type { ExtractResponse, WriteCustomResponse } from '../types/messages';
 
 const COMMAND = 'save-clip';
+const OBSIDIAN_COMMAND = 'save-to-obsidian';
 
 /** offscreen 就绪信号超时时间（毫秒） */
 export const OFFSCREEN_READY_TIMEOUT_MS = 2000;
@@ -33,7 +34,14 @@ const OFFSCREEN_READY_TIMEOUT_CODE = 'OFFSCREEN_READY_TIMEOUT';
 // 防御：commands API 不可用时跳过注册，避免整个 SW 启动崩溃
 if (chrome.commands?.onCommand) {
   chrome.commands.onCommand.addListener((command) => {
-    if (command === COMMAND) void runSave('default');
+    switch (command) {
+      case COMMAND:
+        void runSave('default');
+        break;
+      case OBSIDIAN_COMMAND:
+        void runSave('obsidian');
+        break;
+    }
   });
 }
 

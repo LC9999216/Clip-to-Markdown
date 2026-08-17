@@ -37,7 +37,10 @@ async function bootOptions(handle: FileSystemDirectoryHandle | null = null): Pro
   folderMocks.clearDirectoryHandle.mockResolvedValue(undefined);
 
   commandsGetAllMock.mockImplementation((callback?: (commands: chrome.commands.Command[]) => void) => {
-    const commands = [{ name: 'save-clip', shortcut: 'Ctrl+Shift+S' } as chrome.commands.Command];
+    const commands = [
+      { name: 'save-clip', shortcut: 'Ctrl+Shift+S' },
+      { name: 'save-to-obsidian', shortcut: 'Alt+Shift+S' },
+    ] as chrome.commands.Command[];
     callback?.(commands);
     return Promise.resolve(commands) as never;
   });
@@ -51,6 +54,7 @@ async function bootOptions(handle: FileSystemDirectoryHandle | null = null): Pro
   document.dispatchEvent(new Event('DOMContentLoaded'));
   await vi.waitFor(() => {
     expect(document.getElementById('shortcut-value')?.textContent).toContain('Ctrl+Shift+S');
+    expect(document.getElementById('obsidian-shortcut-value')?.textContent).toContain('Alt+Shift+S');
   });
 }
 
@@ -97,6 +101,8 @@ describe('Clip2MD 设置页结构', () => {
       'folder-status',
       'shortcut-value',
       'shortcut-btn',
+      'obsidian-shortcut-value',
+      'obsidian-shortcut-btn',
       'subfolder',
       'save-as',
       'obsidian-api-base-url',

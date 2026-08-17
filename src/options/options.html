@@ -75,11 +75,27 @@
       >
         <div class="shortcut-layout">
           <div>
-            <h2 id="shortcut-title">快速保存</h2>
-            <p class="card-description">无需打开扩展窗口即可保存当前页面</p>
+            <h2 id="shortcut-title">快捷键</h2>
+            <p class="card-description">可分别设置普通保存和 Obsidian 保存快捷键</p>
           </div>
-          <kbd id="shortcut-value">加载中…</kbd>
-          <button id="shortcut-btn" type="button" class="text-button">修改</button>
+          <div class="shortcut-list">
+            <div class="shortcut-item">
+              <div>
+                <strong>普通保存</strong>
+                <small>保存当前页面为 Markdown</small>
+              </div>
+              <kbd id="shortcut-value">加载中…</kbd>
+              <button id="shortcut-btn" type="button" class="text-button">修改</button>
+            </div>
+            <div class="shortcut-item">
+              <div>
+                <strong>保存到 Obsidian</strong>
+                <small>跳过下载，直接发送到 Obsidian</small>
+              </div>
+              <kbd id="obsidian-shortcut-value">加载中…</kbd>
+              <button id="obsidian-shortcut-btn" type="button" class="text-button">修改</button>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -13,7 +13,6 @@ import {
 } from './setup';
 import { mountFixture } from './helpers';
 import { loadDirectoryHandle } from '../src/core/custom-folder';
-import { runSave } from '../src/background/quick-save';
 
 vi.mock('../src/core/custom-folder', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/core/custom-folder')>();
@@ -152,7 +151,9 @@ describe('快捷键保存（save-clip）', () => {
       .mockResolvedValueOnce({ status: 404, ok: false, text: async () => '' })
       .mockResolvedValueOnce({ status: 204, ok: true, text: async () => '' }));
 
-    await runSave('obsidian');
+    dispatchCommand('save-to-obsidian');
+
+    await vi.waitFor(() => expect(chromeCalls.notifications.length).toBeGreaterThan(0));
 
     const fetchMock = vi.mocked(fetch);
     expect(fetchMock).toHaveBeenNthCalledWith(

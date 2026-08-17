@@ -43,6 +43,8 @@ let currentSettings: ClipSettings = DEFAULT_SETTINGS;
 
 const shortcutValueEl = document.getElementById('shortcut-value') as HTMLSpanElement;
 const shortcutBtn = document.getElementById('shortcut-btn') as HTMLButtonElement;
+const obsidianShortcutValueEl = document.getElementById('obsidian-shortcut-value') as HTMLSpanElement;
+const obsidianShortcutBtn = document.getElementById('obsidian-shortcut-btn') as HTMLButtonElement;
 
 type StatusKind = 'muted' | 'ok' | 'error';
 
@@ -164,12 +166,17 @@ async function onClearFolder(): Promise<void> {
 async function refreshShortcut(): Promise<void> {
   try {
     const commands = await getAllCommands();
-    const cmd = commands.find((c) => c.name === 'save-clip');
-    shortcutValueEl.textContent = cmd?.shortcut
-      ? `当前：${cmd.shortcut}`
-      : '当前：未绑定（点击右侧按钮绑定）';
+    const renderShortcut = (element: HTMLElement, name: string): void => {
+      const cmd = commands.find((command) => command.name === name);
+      element.textContent = cmd?.shortcut
+        ? `当前：${cmd.shortcut}`
+        : '当前：未绑定（点击右侧按钮绑定）';
+    };
+    renderShortcut(shortcutValueEl, 'save-clip');
+    renderShortcut(obsidianShortcutValueEl, 'save-to-obsidian');
   } catch (e) {
     shortcutValueEl.textContent = `读取失败：${String(e)}`;
+    obsidianShortcutValueEl.textContent = `读取失败：${String(e)}`;
   }
 }
 
@@ -305,6 +312,7 @@ function runtimeSend<T>(msg: unknown): Promise<T> {
 chooseFolderBtn.addEventListener('click', () => void onChooseFolder());
 clearFolderBtn.addEventListener('click', () => void onClearFolder());
 shortcutBtn.addEventListener('click', onOpenShortcuts);
+obsidianShortcutBtn.addEventListener('click', onOpenShortcuts);
 testObsidianBtn.addEventListener('click', () => void onTestObsidian());
 toggleApiKeyBtn.addEventListener('click', onToggleApiKey);
 

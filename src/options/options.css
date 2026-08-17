@@ -95,6 +95,10 @@ details[open] > summary .chevron { transform: rotate(225deg); }
 .details-body { margin-top: 14px; padding-top: 16px; border-top: 1px solid #edf0f4; }
 
 .shortcut-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 16px; }
+.shortcut-list { display: grid; gap: 14px; }
+.shortcut-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 16px; }
+.shortcut-item > div { display: grid; gap: 3px; }
+.shortcut-item small { color: var(--muted); }
 kbd { padding: 7px 10px; border: 1px solid #dfe5ed; border-bottom-width: 2px; border-radius: 7px; background: #f7f9fc; color: #344054; font: inherit; font-size: 12px; }
 
 .details-card { padding: 0; }
@@ -172,6 +176,8 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
   .folder-summary .secondary-button { grid-column: 1 / 2; }
   .shortcut-layout { grid-template-columns: minmax(0, 1fr) auto; }
   .shortcut-layout > div { grid-column: 1 / -1; }
+  .shortcut-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .shortcut-item .text-button { grid-column: 2; }
   .details-card > summary { padding: 16px; flex-wrap: wrap; }
   .details-card > .details-body { margin: 0 16px 16px; }
   .advanced-badge { display: none; }

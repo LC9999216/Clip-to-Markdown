@@ -11,6 +11,13 @@
         "mac": "Command+Shift+S"
       },
       "description": "保存当前帖子/文章/对话为 Markdown"
+    },
+    "save-to-obsidian": {
+      "suggested_key": {
+        "default": "Alt+Shift+S",
+        "mac": "Alt+Shift+S"
+      },
+      "description": "保存当前内容到 Obsidian"
     }
   },
   "host_permissions": [

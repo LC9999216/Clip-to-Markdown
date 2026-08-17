@@ -33,6 +33,8 @@ function setLocation(url: string): void {
 
 describe('快捷键保存（save-clip）', () => {
   beforeEach(() => {
+    // 普通快捷键测试模拟已完成初始化的旧用户；新用户另行覆盖。
+    mockStoredSettings['clip2md.settings'] = {};
     vi.mocked(loadDirectoryHandle).mockReset();
     vi.mocked(loadDirectoryHandle).mockResolvedValue(null);
     runtimeSendMessageMock.mockReset();
@@ -62,6 +64,20 @@ describe('快捷键保存（save-clip）', () => {
     expect(chromeCalls.downloads.length).toBe(0);
     expect(chromeCalls.notifications[0]?.title).toBe('保存失败');
     expect(chromeCalls.badgeText).toContain('!');
+  });
+
+  it('新用户未完成初始化：普通保存不下载并提示先选文件夹', async () => {
+    delete mockStoredSettings['clip2md.settings'];
+    setLocation('https://x.com/alice/status/123456');
+    mountFixture('x', 'normal');
+    dispatchCommand('save-clip');
+
+    await vi.waitFor(() => expect(chromeCalls.notifications.length).toBeGreaterThan(0));
+    expect(chromeCalls.downloads).toHaveLength(0);
+    expect(chromeCalls.notifications[0]).toEqual({
+      title: '需要完成首次设置',
+      message: '请先打开设置页选择自定义保存文件夹。',
+    });
   });
 
   it('配置自定义文件夹：走 offscreen 写入而非下载', async () => {

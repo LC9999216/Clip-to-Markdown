@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { prepareSave } from '../../src/core/save-service';
+import { INITIAL_SETUP_KEY } from '../../src/core/setup-state';
 import { mockStoredSettings } from '../setup';
 import type { ContentDocument } from '../../src/core/schema';
 
@@ -48,5 +49,17 @@ describe('save service', () => {
     expect(prepared.markdown).toContain('正文');
     expect(prepared.settings.save.subfolder).toBe('Notes');
     expect(prepared.settings.obsidian.noteDirectory).toBe('Clippings/Inbox');
+  });
+
+  it('新用户普通保存前要求完成自定义文件夹初始化', async () => {
+    await expect(prepareSave(document)).rejects.toMatchObject({
+      code: 'INITIAL_SETUP_REQUIRED',
+    });
+    expect(mockStoredSettings[INITIAL_SETUP_KEY]).toBe(false);
+  });
+
+  it('初始化未完成时仍允许 Obsidian 保存准备', async () => {
+    const prepared = await prepareSave(document, new Date(2026, 7, 17, 12, 0, 0), 'obsidian');
+    expect(prepared.filename).toBe('2026-08-17-测试标题.md');
   });
 });

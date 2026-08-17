@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { commandsGetAllMock, mockStoredSettings, runtimeSendMessageMock, setRuntimeLastError } from './setup';
+import {
+  commandsGetAllMock,
+  mockStoredSettings,
+  runtimeSendMessageMock,
+  setRuntimeLastError,
+} from './setup';
+import { INITIAL_SETUP_KEY } from '../src/core/setup-state';
 
 const optionsHtml = readFileSync(
   join(process.cwd(), 'src', 'options', 'options.html'),
@@ -60,6 +66,11 @@ async function bootOptions(handle: FileSystemDirectoryHandle | null = null): Pro
 
 beforeEach(() => {
   vi.resetModules();
+  delete mockStoredSettings[INITIAL_SETUP_KEY];
+  Object.defineProperty(window, 'showDirectoryPicker', {
+    configurable: true,
+    value: undefined,
+  });
   folderMocks.loadDirectoryHandle.mockReset();
   folderMocks.saveDirectoryHandle.mockReset();
   folderMocks.clearDirectoryHandle.mockReset();
@@ -121,10 +132,11 @@ describe('Clip2MD 设置页结构', () => {
       'save-btn',
       'save-status',
       'folder-connection-state',
-      'obsidian-summary-state',
-      'toggle-api-key',
-      'about-card',
-      'app-version',
+  'obsidian-summary-state',
+  'toggle-api-key',
+  'about-card',
+  'app-version',
+  'initial-setup-guide',
     ];
 
     for (const id of requiredIds) {
@@ -168,6 +180,56 @@ describe('保存位置状态', () => {
     expect((document.getElementById('fallback-download-settings') as HTMLDetailsElement).open).toBe(true);
     expect(document.getElementById('clear-folder')?.hidden).toBe(true);
     expect(document.getElementById('choose-folder')?.textContent).toBe('选择文件夹');
+  });
+
+  it('新用户显示首次初始化引导，选择文件夹后解除普通保存门禁', async () => {
+    delete mockStoredSettings['clip2md.settings'];
+    delete mockStoredSettings[INITIAL_SETUP_KEY];
+    await bootOptions(null);
+
+    const picker = vi.fn(async () => fakeDirectoryHandle('Clippings'));
+    Object.defineProperty(window, 'showDirectoryPicker', {
+      configurable: true,
+      value: picker,
+    });
+
+    expect(document.getElementById('initial-setup-guide')?.hidden).toBe(false);
+    expect(document.getElementById('settings-form')?.dataset.initialSetupComplete).toBe('false');
+    expect((document.getElementById('save-btn') as HTMLButtonElement).disabled).toBe(true);
+
+    (document.getElementById('choose-folder') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(picker).toHaveBeenCalledOnce();
+      expect(folderMocks.saveDirectoryHandle).toHaveBeenCalledOnce();
+      expect(mockStoredSettings[INITIAL_SETUP_KEY]).toBe(true);
+      expect(document.getElementById('initial-setup-guide')?.hidden).toBe(true);
+      expect(document.getElementById('settings-form')?.dataset.initialSetupComplete).toBe('true');
+    });
+  });
+
+  it('新用户拒绝文件夹权限时保持初始化未完成', async () => {
+    delete mockStoredSettings['clip2md.settings'];
+    delete mockStoredSettings[INITIAL_SETUP_KEY];
+    await bootOptions(null);
+
+    Object.defineProperty(window, 'showDirectoryPicker', {
+      configurable: true,
+      value: vi.fn(async () => ({
+        name: 'Clippings',
+        queryPermission: vi.fn(async () => 'denied'),
+      } as unknown as FileSystemDirectoryHandle)),
+    });
+
+    (document.getElementById('choose-folder') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(folderMocks.saveDirectoryHandle).not.toHaveBeenCalled();
+      expect(mockStoredSettings[INITIAL_SETUP_KEY]).toBe(false);
+      expect(document.getElementById('folder-status')?.textContent)
+        .toBe('未获得该文件夹的写入权限。');
+      expect(document.getElementById('initial-setup-guide')?.hidden).toBe(false);
+    });
   });
 
   it('清除自定义目录后立即切回备用下载状态', async () => {

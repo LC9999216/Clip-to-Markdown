@@ -12,6 +12,7 @@ import { prepareSave, type SaveTarget } from '../core/save-service';
 import { resolveDownloadPath } from '../core/settings';
 import { loadDirectoryHandle } from '../core/custom-folder';
 import { downloadMarkdown } from '../core/downloader';
+import { InitialSetupRequiredError } from '../core/setup-state';
 import { saveToObsidian } from './obsidian';
 import type { ExtractResponse, WriteCustomResponse } from '../types/messages';
 
@@ -65,7 +66,16 @@ export async function runSave(target: SaveTarget): Promise<void> {
     return;
   }
 
-  const prepared = await prepareSave(extract.document);
+  let prepared: Awaited<ReturnType<typeof prepareSave>>;
+  try {
+    prepared = await prepareSave(extract.document, new Date(), target);
+  } catch (error) {
+    if (error instanceof InitialSetupRequiredError) {
+      notify('需要完成首次设置', '请先打开设置页选择自定义保存文件夹。');
+      return;
+    }
+    throw error;
+  }
   const { markdown, filename, settings } = prepared;
 
   if (target === 'obsidian') {

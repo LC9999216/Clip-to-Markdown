@@ -5,6 +5,7 @@
 
 import { buildFilename } from './filename';
 import { renderDocument } from './markdown-renderer';
+import { InitialSetupRequiredError, isInitialSetupComplete } from './setup-state';
 import { loadSettings, type ClipSettings } from './settings';
 import type { ContentDocument } from './schema';
 
@@ -16,8 +17,15 @@ export interface PreparedSave {
   settings: ClipSettings;
 }
 
-export async function prepareSave(document: ContentDocument, now = new Date()): Promise<PreparedSave> {
+export async function prepareSave(
+  document: ContentDocument,
+  now = new Date(),
+  target: SaveTarget = 'default',
+): Promise<PreparedSave> {
   const settings = await loadSettings();
+  if (target === 'default' && !(await isInitialSetupComplete())) {
+    throw new InitialSetupRequiredError();
+  }
   return {
     markdown: renderDocument(document),
     filename: buildFilename(document, {

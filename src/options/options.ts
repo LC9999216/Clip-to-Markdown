@@ -18,6 +18,7 @@ import {
   loadDirectoryHandle,
   saveDirectoryHandle,
 } from '../core/custom-folder';
+import { isInitialSetupComplete, markInitialSetupComplete } from '../core/setup-state';
 
 const form = document.getElementById('settings-form') as HTMLFormElement;
 const subfolderInput = document.getElementById('subfolder') as HTMLInputElement;
@@ -51,8 +52,10 @@ const folderStatusEl = document.getElementById('folder-status') as HTMLElement;
 const folderConnectionStateEl = document.getElementById('folder-connection-state') as HTMLSpanElement;
 const folderModeDescriptionEl = document.getElementById('folder-mode-description') as HTMLSpanElement;
 const fallbackDownloadDetails = document.getElementById('fallback-download-settings') as HTMLDetailsElement;
+const initialSetupGuideEl = document.getElementById('initial-setup-guide') as HTMLElement;
 
 let currentSettings: ClipSettings = DEFAULT_SETTINGS;
+let initialSetupComplete = false;
 
 const shortcutValueEl = document.getElementById('shortcut-value') as HTMLSpanElement;
 const shortcutBtn = document.getElementById('shortcut-btn') as HTMLButtonElement;
@@ -112,7 +115,7 @@ let initialized = false;
 
 function setDirty(dirty: boolean): void {
   form.dataset.dirty = String(dirty);
-  saveBtn.disabled = !dirty;
+  saveBtn.disabled = !dirty || !initialSetupComplete;
 }
 
 function markDirty(): void {
@@ -132,6 +135,12 @@ function validateFilenameTemplateForSave(template: string): boolean {
   return false;
 }
 
+function renderInitialSetupState(): void {
+  initialSetupGuideEl.hidden = initialSetupComplete;
+  form.dataset.initialSetupComplete = String(initialSetupComplete);
+  setDirty(form.dataset.dirty === 'true');
+}
+
 /** 根据目录句柄渲染保存位置卡片：文件夹名称、连接状态与备用下载区展开状态。 */
 function renderFolderState(handle: FileSystemDirectoryHandle | null): void {
   const hasCustomFolder = handle !== null;
@@ -144,15 +153,19 @@ function renderFolderState(handle: FileSystemDirectoryHandle | null): void {
   chooseFolderBtn.textContent = hasCustomFolder ? '更改' : '选择文件夹';
   clearFolderBtn.hidden = !hasCustomFolder;
   fallbackDownloadDetails.open = !hasCustomFolder;
+  renderInitialSetupState();
 }
 
 /** 读取已存目录句柄并刷新保存位置状态。 */
-async function refreshFolderState(): Promise<void> {
+async function refreshFolderState(): Promise<FileSystemDirectoryHandle | null> {
   try {
-    renderFolderState(await loadDirectoryHandle());
+    const handle = await loadDirectoryHandle();
+    renderFolderState(handle);
+    return handle;
   } catch (error) {
     renderFolderState(null);
     setFolderStatus(`读取文件夹失败：${String(error)}`, 'error');
+    return null;
   }
 }
 
@@ -171,6 +184,8 @@ async function onChooseFolder(): Promise<void> {
       return;
     }
     await saveDirectoryHandle(handle);
+    await markInitialSetupComplete();
+    initialSetupComplete = true;
     await refreshFolderState();
     setFolderStatus(`已保存：文件将直接写入「${handle.name}」。`, 'ok');
   } catch (e) {
@@ -254,6 +269,7 @@ function onToggleApiKey(): void {
 
 async function init(): Promise<void> {
   currentSettings = await loadSettings();
+  initialSetupComplete = await isInitialSetupComplete();
   subfolderInput.value = currentSettings.save.subfolder;
   saveAsInput.checked = currentSettings.save.saveAs;
   filenameTemplateInput.value = currentSettings.filename.template;
@@ -265,7 +281,12 @@ async function init(): Promise<void> {
   }
   appVersionEl.textContent = `v${chrome.runtime.getManifest().version}`;
   refreshObsidianSummary();
-  await refreshFolderState();
+  const handle = await refreshFolderState();
+  if (!initialSetupComplete && handle) {
+    await markInitialSetupComplete();
+    initialSetupComplete = true;
+    renderInitialSetupState();
+  }
   await refreshShortcut();
   initialized = true;
   setDirty(false);
@@ -280,7 +301,7 @@ form.addEventListener('submit', (e) => {
 });
 
 async function onSubmit(): Promise<void> {
-  if (!initialized || form.dataset.saving === 'true' || saveBtn.disabled) return;
+  if (!initialized || !initialSetupComplete || form.dataset.saving === 'true' || saveBtn.disabled) return;
 
   const settings = readFormSettings();
   if (!validateFilenameTemplateForSave(settings.filename.template)) {

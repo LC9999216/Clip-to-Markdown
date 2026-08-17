@@ -159,6 +159,15 @@ input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px;
 .inline-status { min-height: 18px; color: var(--muted); font-size: 12px; }
 .inline-status[data-kind="ok"] { color: var(--success); }
 .inline-status[data-kind="error"] { color: var(--danger); }
+.initial-setup-guide {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #c7d7fe;
+  border-radius: 10px;
+  background: #eff4ff;
+  color: #1d4ed8;
+}
+.initial-setup-guide p { margin: 4px 0 0; color: #475467; font-size: 12px; }
 .about-card { margin-top: 14px; }
 .about-links { display: grid; gap: 10px; margin-top: 16px; }
 .about-links a { color: var(--brand); text-decoration: none; }

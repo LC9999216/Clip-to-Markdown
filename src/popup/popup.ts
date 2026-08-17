@@ -6,6 +6,7 @@
 
 import { prepareSave } from '../core/save-service';
 import { loadDirectoryHandle, writeMarkdownToDirectory } from '../core/custom-folder';
+import { InitialSetupRequiredError } from '../core/setup-state';
 import type {
   DownloadResponse,
   ExtractResponse,
@@ -133,7 +134,20 @@ async function onSave(tabId: number): Promise<void> {
     return;
   }
 
-  const { markdown, filename } = await prepareSave(extract.document);
+  let prepared: Awaited<ReturnType<typeof prepareSave>>;
+  try {
+    prepared = await prepareSave(extract.document, new Date(), 'default');
+  } catch (error) {
+    saveBtn.textContent = '保存为 Markdown';
+    setStatus(
+      error instanceof InitialSetupRequiredError
+        ? '首次使用请先点击右上角设置，选择自定义保存文件夹。'
+        : `保存失败：${String(error)}`,
+      'error',
+    );
+    return;
+  }
+  const { markdown, filename } = prepared;
 
   // 优先：若用户在设置里选了自定义文件夹，直接写入该目录（绕过下载目录）。
   let fallbackNote = '';
@@ -197,7 +211,15 @@ async function onSaveToObsidian(tabId: number): Promise<void> {
     return;
   }
 
-  const { markdown, filename } = await prepareSave(extract.document);
+  let prepared: Awaited<ReturnType<typeof prepareSave>>;
+  try {
+    prepared = await prepareSave(extract.document, new Date(), 'obsidian');
+  } catch (error) {
+    resetButtons();
+    setStatus(`保存失败：${String(error)}`, 'error');
+    return;
+  }
+  const { markdown, filename } = prepared;
 
   obsidianBtn.textContent = '保存中…';
   let resp: SaveToObsidianResponse;

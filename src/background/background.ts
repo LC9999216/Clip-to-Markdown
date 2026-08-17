@@ -100,7 +100,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     saveToObsidian(msg.payload)
       .then((filename) => sendResponse({ success: true, filename }))
       .catch((e) => {
-        const exists = (e as { exists?: boolean } | null)?.exists === true;
+        const exists = (e as { code?: string; exists?: boolean } | null)?.code === 'note-exists'
+          || (e as { exists?: boolean } | null)?.exists === true;
         sendResponse({ success: false, error: String(e), ...(exists ? { exists: true } : {}) });
       });
     return true;

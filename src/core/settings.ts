@@ -11,6 +11,14 @@
  */
 
 import { sanitizeFilenamePart } from './filename';
+import {
+  DEFAULT_OBSIDIAN_SETTINGS,
+  type ObsidianFrontmatterSettings,
+  type ObsidianSettings,
+} from './obsidian-settings';
+
+export { DEFAULT_OBSIDIAN_SETTINGS } from './obsidian-settings';
+export type { ObsidianFrontmatterSettings, ObsidianSettings } from './obsidian-settings';
 
 export const SETTINGS_VERSION = 2 as const;
 export const DEFAULT_FILENAME_TEMPLATE = '{date}-{title}';
@@ -27,47 +35,12 @@ export interface FilenameSettings {
   template: string;
 }
 
-export interface ObsidianFrontmatterSettings {
-  sourceUrl: boolean;
-  author: boolean;
-  published: boolean;
-  platform: boolean;
-  clippedAt: boolean;
-  tags: boolean;
-}
-
-export interface ObsidianSettings {
-  enabled: boolean;
-  /** Obsidian Local REST API 地址（如 http://127.0.0.1:27123） */
-  apiUrl: string;
-  /** Obsidian Local REST API 的 API Key（敏感，仅存 local，不同步） */
-  apiKey: string;
-  /** Obsidian 笔记目录（相对 vault 根，用 / 分隔，可含子目录） */
-  noteDirectory: string;
-  frontmatter: ObsidianFrontmatterSettings;
-}
-
 export interface ClipSettings {
   settingsVersion: typeof SETTINGS_VERSION;
   save: SaveSettings;
   filename: FilenameSettings;
   obsidian: ObsidianSettings;
 }
-
-export const DEFAULT_OBSIDIAN_SETTINGS: ObsidianSettings = {
-  enabled: false,
-  apiUrl: 'http://127.0.0.1:27123',
-  apiKey: '',
-  noteDirectory: 'Clippings/Inbox',
-  frontmatter: {
-    sourceUrl: true,
-    author: true,
-    published: true,
-    platform: true,
-    clippedAt: true,
-    tags: false,
-  },
-};
 
 export const DEFAULT_SETTINGS: ClipSettings = {
   settingsVersion: SETTINGS_VERSION,

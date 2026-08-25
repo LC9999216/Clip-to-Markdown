@@ -6,9 +6,12 @@ import { openVisualSummaryPanel } from '../src/background/visual-summary-command
 import {
   chromeCalls,
   dispatchCommand,
+  mockSessionStorage,
   setRuntimeLastError,
+  tabsSendMessageMock,
   tabsQueryMock,
 } from './setup';
+import type { ContentDocument } from '../src/core/schema';
 
 const root = resolve(import.meta.dirname, '..');
 
@@ -141,5 +144,129 @@ describe('visual summary phase 1 shell', () => {
     await vi.waitFor(() => expect(chromeCalls.notifications).toHaveLength(2));
     expect(chromeCalls.notifications[1]?.title).toBe('保存失败');
     expect(chromeCalls.sidePanelOpens).toHaveLength(0);
+  });
+});
+
+function extractedDocument(text: string, contentType: 'tweet' | 'x-article' = 'tweet'): ContentDocument {
+  return {
+    version: 1,
+    metadata: {
+      platform: 'x',
+      contentType,
+      sourceUrl: 'https://x.com/alice/status/123',
+      author: { name: 'Alice', handle: 'alice' },
+      published: '',
+      ...(contentType === 'x-article' ? { title: 'Article title' } : {}),
+    },
+    body: contentType === 'tweet'
+      ? {
+          type: 'tweet',
+          author: { name: 'Alice', handle: 'alice' },
+          published: '',
+          id: '123',
+          content: [{ type: 'paragraph', children: [{ type: 'text', value: text }] }],
+          media: [],
+        }
+      : {
+          type: 'article',
+          children: [{ type: 'paragraph', children: [{ type: 'text', value: text }] }],
+        },
+  };
+}
+
+describe('visual summary phase 2 preview extraction', () => {
+  it('opens the panel, extracts the command tab, and persists a 300-character preview', async () => {
+    tabsSendMessageMock.mockImplementation((_tabId, message, callback) => {
+      expect(message).toEqual({ type: 'EXTRACT' });
+      callback?.({ success: true, document: extractedDocument('甲'.repeat(340), 'x-article') });
+    });
+
+    dispatchCommand('visual-summary', { id: 42 } as chrome.tabs.Tab);
+
+    await vi.waitFor(() => {
+      expect(mockSessionStorage['clip2md.visualSummary.state.42']).toMatchObject({
+        status: 'done',
+        preview: {
+          title: 'Article title',
+          author: 'Alice (@alice)',
+          body: '甲'.repeat(300),
+          contentType: 'x-article',
+          sourceUrl: 'https://x.com/alice/status/123',
+        },
+      });
+    });
+    expect(chromeCalls.sidePanelOpens).toEqual([{ tabId: 42 }]);
+    expect(tabsSendMessageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs a fresh EXTRACT on every shortcut trigger for an X SPA', async () => {
+    tabsSendMessageMock
+      .mockImplementationOnce((_tabId, _message, callback) => {
+        callback?.({ success: true, document: extractedDocument('first route') });
+      })
+      .mockImplementationOnce((_tabId, _message, callback) => {
+        callback?.({ success: true, document: extractedDocument('second route') });
+      });
+
+    dispatchCommand('visual-summary', { id: 9 } as chrome.tabs.Tab);
+    await vi.waitFor(() => {
+      expect(mockSessionStorage['clip2md.visualSummary.state.9']).toMatchObject({
+        preview: { body: 'first route' },
+      });
+    });
+
+    dispatchCommand('visual-summary', { id: 9 } as chrome.tabs.Tab);
+    await vi.waitFor(() => {
+      expect(mockSessionStorage['clip2md.visualSummary.state.9']).toMatchObject({
+        preview: { body: 'second route' },
+      });
+    });
+    expect(tabsSendMessageMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('persists an actionable error when extraction cannot reach the page', async () => {
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      setRuntimeLastError('Receiving end does not exist');
+      callback?.(undefined);
+    });
+
+    dispatchCommand('visual-summary', { id: 5 } as chrome.tabs.Tab);
+
+    await vi.waitFor(() => {
+      expect(mockSessionStorage['clip2md.visualSummary.state.5']).toMatchObject({
+        status: 'error',
+        error: expect.stringMatching(/仅支持 X.*刷新|刷新.*仅支持 X/),
+      });
+    });
+  });
+
+  it('persists an actionable error for extracted non-X content', async () => {
+    const nonXDocument: ContentDocument = {
+      version: 1,
+      metadata: {
+        platform: 'zhihu',
+        contentType: 'zhihu-article',
+        sourceUrl: 'https://zhuanlan.zhihu.com/p/1',
+        author: { name: '作者' },
+        published: '',
+        title: '知乎文章',
+      },
+      body: {
+        type: 'article',
+        children: [{ type: 'paragraph', children: [{ type: 'text', value: '正文' }] }],
+      },
+    };
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      callback?.({ success: true, document: nonXDocument });
+    });
+
+    dispatchCommand('visual-summary', { id: 6 } as chrome.tabs.Tab);
+
+    await vi.waitFor(() => {
+      expect(mockSessionStorage['clip2md.visualSummary.state.6']).toMatchObject({
+        status: 'error',
+        error: expect.stringMatching(/仅支持 X 推文和 X Article/),
+      });
+    });
   });
 });

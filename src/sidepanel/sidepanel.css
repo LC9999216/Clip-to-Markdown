@@ -112,6 +112,66 @@ h1 {
   backdrop-filter: blur(18px);
 }
 
+.preview-card {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.preview-card[hidden] {
+  display: none;
+}
+
+.preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preview-type {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.preview-meta a {
+  color: var(--accent);
+  font-size: 11px;
+  text-underline-offset: 3px;
+}
+
+.preview-card h2 {
+  margin: 14px 0 8px;
+  font-family: "Songti SC", SimSun, serif;
+  font-size: 21px;
+  line-height: 1.35;
+}
+
+.preview-author {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preview-body {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 10;
+}
+
 .status-label {
   margin-bottom: 6px;
   letter-spacing: 0.08em;

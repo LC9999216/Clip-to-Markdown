@@ -1,3 +1,5 @@
+import { startVisualSummaryPreview } from './visual-summary';
+
 const VISUAL_SUMMARY_COMMAND = 'visual-summary';
 
 function isValidTabId(tabId: unknown): tabId is number {
@@ -23,22 +25,32 @@ function queryActiveTab(): Promise<chrome.tabs.Tab | undefined> {
   });
 }
 
+async function resolveTabId(commandTab?: chrome.tabs.Tab): Promise<number | undefined> {
+  const commandTabId = commandTab?.id;
+  if (isValidTabId(commandTabId)) return commandTabId;
+  const activeTabId = (await queryActiveTab())?.id;
+  return isValidTabId(activeTabId) ? activeTabId : undefined;
+}
+
 export async function openVisualSummaryPanel(commandTab?: chrome.tabs.Tab): Promise<boolean> {
-  let tabId = commandTab?.id;
-
-  if (!isValidTabId(tabId)) {
-    tabId = (await queryActiveTab())?.id;
-  }
-
-  if (!isValidTabId(tabId)) return false;
+  const tabId = await resolveTabId(commandTab);
+  if (tabId === undefined) return false;
 
   await chrome.sidePanel.open({ tabId });
   return true;
 }
 
+async function handleVisualSummaryCommand(commandTab?: chrome.tabs.Tab): Promise<void> {
+  const tabId = await resolveTabId(commandTab);
+  if (tabId === undefined) return;
+
+  await chrome.sidePanel.open({ tabId });
+  await startVisualSummaryPreview(tabId);
+}
+
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command !== VISUAL_SUMMARY_COMMAND) return;
-  void openVisualSummaryPanel(tab).catch((error) => {
+  void handleVisualSummaryCommand(tab).catch((error) => {
     console.error('打开视觉概览失败：', error);
   });
 });

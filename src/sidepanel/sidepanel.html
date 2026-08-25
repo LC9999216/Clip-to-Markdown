@@ -29,10 +29,20 @@
         <span></span><span></span><span></span>
       </div>
       <div>
-        <p class="status-label">等待开始</p>
-        <p class="status-copy">使用快捷键打开后，视觉概览将在此生成。</p>
+        <p class="status-label" id="status-label">等待开始</p>
+        <p class="status-copy" id="status-copy">使用快捷键打开后，当前 X 内容将在此显示。</p>
       </div>
     </section>
+
+    <article class="preview-card" id="preview" hidden>
+      <div class="preview-meta">
+        <span class="preview-type" id="preview-type"></span>
+        <a id="preview-link" target="_blank" rel="noreferrer">查看原文</a>
+      </div>
+      <h2 id="preview-title"></h2>
+      <p class="preview-author" id="preview-author"></p>
+      <p class="preview-body" id="preview-body"></p>
+    </article>
 
     <footer>
       <span>快捷键</span>

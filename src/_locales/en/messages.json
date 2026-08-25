@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "Clip to Markdown"
+  },
+  "extensionDescription": {
+    "message": "Save content from X, Zhihu, Xiaoheihe, Bilibili and ChatGPT as clean Markdown, with optional Obsidian integration."
+  },
+  "saveClipCommandDescription": {
+    "message": "Save the current post, article, video transcript, or conversation as Markdown"
+  },
+  "saveToObsidianCommandDescription": {
+    "message": "Save the current content to Obsidian"
+  }
+}

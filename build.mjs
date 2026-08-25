@@ -59,6 +59,7 @@ for (const [from, to] of [
   copyFileSync(join(root, from), join(root, to));
 }
 copyDir(join(root, 'src/icons'), join(dist, 'icons'));
+copyDir(join(root, 'src/_locales'), join(dist, '_locales'));
 
 async function main() {
   if (watch) {

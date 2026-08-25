@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Clip to Markdown",
+  "name": "__MSG_extensionName__",
   "version": "0.2.0",
-  "description": "一键将 X、知乎、小黑盒和 ChatGPT 内容保存为干净 Markdown，并支持发送到 Obsidian",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "zh_CN",
   "permissions": ["activeTab", "downloads", "storage", "notifications", "offscreen"],
   "commands": {
     "save-clip": {
@@ -10,14 +11,14 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "保存当前帖子/文章/对话为 Markdown"
+      "description": "__MSG_saveClipCommandDescription__"
     },
     "save-to-obsidian": {
       "suggested_key": {
         "default": "Alt+Shift+S",
         "mac": "Alt+Shift+S"
       },
-      "description": "保存当前内容到 Obsidian"
+      "description": "__MSG_saveToObsidianCommandDescription__"
     }
   },
   "host_permissions": [

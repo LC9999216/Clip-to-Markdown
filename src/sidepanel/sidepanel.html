@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="sidepanel.css" />
+  <title>视觉概览 - Clip to Markdown</title>
+</head>
+<body>
+  <main class="shell" aria-labelledby="page-title">
+    <header class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" role="img">
+          <path d="M4 6.5 12 3l8 3.5v11L12 21l-8-3.5z" />
+          <path d="m4 6.5 8 4 8-4M12 10.5V21" />
+        </svg>
+      </span>
+      <span>Clip to Markdown</span>
+    </header>
+
+    <section class="intro">
+      <p class="eyebrow">视觉概览</p>
+      <h1 id="page-title">把当前页面<br />变成一张清晰地图</h1>
+      <p class="summary">这里将展示页面要点、信息关系与内容脉络。</p>
+    </section>
+
+    <section class="idle-card" aria-live="polite">
+      <div class="orbit" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+      <div>
+        <p class="status-label">等待开始</p>
+        <p class="status-copy">使用快捷键打开后，视觉概览将在此生成。</p>
+      </div>
+    </section>
+
+    <footer>
+      <span>快捷键</span>
+      <kbd>Ctrl / ⌘</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>V</kbd>
+    </footer>
+  </main>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

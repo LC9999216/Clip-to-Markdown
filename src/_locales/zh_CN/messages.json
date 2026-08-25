@@ -10,5 +10,8 @@
   },
   "saveToObsidianCommandDescription": {
     "message": "保存当前内容到 Obsidian"
+  },
+  "visualSummaryCommandDescription": {
+    "message": "打开当前页面的视觉概览"
   }
 }

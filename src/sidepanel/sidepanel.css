@@ -1,0 +1,209 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f1e9;
+  --surface: rgba(255, 255, 255, 0.72);
+  --ink: #1e2c27;
+  --muted: #66736d;
+  --accent: #17745b;
+  --accent-soft: #d8ebe2;
+  --line: rgba(30, 44, 39, 0.13);
+  --shadow: 0 18px 42px rgba(38, 53, 47, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 280px;
+  min-height: 100%;
+  background: var(--bg);
+}
+
+body {
+  min-width: 280px;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 88% 9%, rgba(23, 116, 91, 0.13), transparent 33%),
+    linear-gradient(155deg, rgba(255, 255, 255, 0.42), transparent 48%);
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  gap: 32px;
+  padding: 22px clamp(18px, 6vw, 28px) 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brand-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.brand-mark svg {
+  width: 16px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.intro {
+  margin-top: auto;
+}
+
+.eyebrow,
+.status-label {
+  margin: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+}
+
+h1 {
+  margin: 12px 0 14px;
+  font-family: "Songti SC", SimSun, serif;
+  font-size: clamp(26px, 9vw, 36px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.18;
+}
+
+.summary,
+.status-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.idle-card {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.status-label {
+  margin-bottom: 6px;
+  letter-spacing: 0.08em;
+}
+
+.orbit {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+
+.orbit::before,
+.orbit::after {
+  position: absolute;
+  content: "";
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  inset: 9px;
+}
+
+.orbit::after {
+  border-color: var(--accent);
+  inset: 22px;
+  background: var(--accent-soft);
+}
+
+.orbit span {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.orbit span:nth-child(1) { left: 5px; top: 25px; }
+.orbit span:nth-child(2) { right: 8px; top: 9px; }
+.orbit span:nth-child(3) { right: 10px; bottom: 8px; }
+
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+footer > span:first-child {
+  margin-right: 6px;
+}
+
+kbd {
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+}
+
+@media (max-width: 310px) {
+  .shell { gap: 24px; }
+  .idle-card { grid-template-columns: 1fr; }
+  .orbit { width: 48px; height: 48px; }
+  footer { flex-wrap: wrap; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121916;
+    --surface: rgba(31, 43, 38, 0.78);
+    --ink: #edf5f1;
+    --muted: #9cacA5;
+    --accent: #62c6a6;
+    --accent-soft: #21483b;
+    --line: rgba(225, 241, 234, 0.14);
+    --shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

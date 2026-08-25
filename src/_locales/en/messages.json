@@ -10,5 +10,8 @@
   },
   "saveToObsidianCommandDescription": {
     "message": "Save the current content to Obsidian"
+  },
+  "visualSummaryCommandDescription": {
+    "message": "Open a visual summary of the current page"
   }
 }

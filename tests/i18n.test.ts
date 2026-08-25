@@ -14,6 +14,7 @@ const manifest = JSON.parse(manifestText) as {
   commands: {
     'save-clip': { description: string };
     'save-to-obsidian': { description: string };
+    'visual-summary': { description: string };
   };
 };
 
@@ -24,6 +25,7 @@ const expectedMessages = {
       '一键将 X、知乎、小黑盒、B站和 ChatGPT 内容保存为干净 Markdown，并支持发送到 Obsidian',
     saveClipCommandDescription: '保存当前帖子、文章、视频字幕或对话为 Markdown',
     saveToObsidianCommandDescription: '保存当前内容到 Obsidian',
+    visualSummaryCommandDescription: '打开当前页面的视觉概览',
   },
   en: {
     extensionName: 'Clip to Markdown',
@@ -32,6 +34,7 @@ const expectedMessages = {
     saveClipCommandDescription:
       'Save the current post, article, video transcript, or conversation as Markdown',
     saveToObsidianCommandDescription: 'Save the current content to Obsidian',
+    visualSummaryCommandDescription: 'Open a visual summary of the current page',
   },
 } as const;
 
@@ -42,12 +45,19 @@ describe('Manifest V3 国际化', () => {
     expect(manifest.default_locale).toBe('zh_CN');
     expect(manifest.name).toBe('__MSG_extensionName__');
     expect(manifest.description).toBe('__MSG_extensionDescription__');
-    expect(Object.keys(manifest.commands)).toEqual(['save-clip', 'save-to-obsidian']);
+    expect(Object.keys(manifest.commands)).toEqual([
+      'save-clip',
+      'save-to-obsidian',
+      'visual-summary',
+    ]);
     expect(manifest.commands['save-clip'].description).toBe(
       '__MSG_saveClipCommandDescription__',
     );
     expect(manifest.commands['save-to-obsidian'].description).toBe(
       '__MSG_saveToObsidianCommandDescription__',
+    );
+    expect(manifest.commands['visual-summary'].description).toBe(
+      '__MSG_visualSummaryCommandDescription__',
     );
   });
 

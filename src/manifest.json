@@ -2,9 +2,15 @@
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
   "version": "0.2.0",
+  "minimum_chrome_version": "116",
   "description": "__MSG_extensionDescription__",
   "default_locale": "zh_CN",
-  "permissions": ["activeTab", "downloads", "storage", "notifications", "offscreen"],
+  "permissions": ["activeTab", "downloads", "storage", "notifications", "offscreen", "sidePanel"],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
   "commands": {
     "save-clip": {
       "suggested_key": {
@@ -19,6 +25,13 @@
         "mac": "Alt+Shift+S"
       },
       "description": "__MSG_saveToObsidianCommandDescription__"
+    },
+    "visual-summary": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+V",
+        "mac": "Command+Shift+V"
+      },
+      "description": "__MSG_visualSummaryCommandDescription__"
     }
   },
   "host_permissions": [
@@ -45,6 +58,9 @@
       "48": "icons/icon-48.png",
       "128": "icons/icon-128.png"
     }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "options_ui": {
     "page": "options.html",

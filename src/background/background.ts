@@ -14,6 +14,7 @@ import {
   isTestObsidianRequest,
 } from '../types/messages';
 import './quick-save';
+import './visual-summary-command';
 
 /** 与 manifest host_permissions 保持一致 */
 const ALLOWED_HOSTS = [

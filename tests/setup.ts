@@ -19,6 +19,7 @@ export const chromeCalls = {
   tabsCreated: [] as Array<{ url: string }>,
   badgeText: [] as string[],
   badgeColor: [] as string[],
+  sidePanelOpens: [] as Array<{ tabId: number }>,
 };
 
 /** 测试可读写的 mock 存储：storage.local 的 get/set 都反映到这个对象 */
@@ -75,14 +76,15 @@ export const notificationsCreateMock = vi.fn(
   },
 );
 
-export const tabsQueryMock = vi.fn(
-  (opts: unknown, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
-    chromeCalls.tabsQueried.push(opts as { active: boolean; currentWindow: boolean });
-    const tabs = [{ id: 1, active: true }] as chrome.tabs.Tab[];
-    if (cb) cb(tabs);
-    return tabs as unknown;
-  },
-);
+function defaultTabsQuery(opts: unknown, cb?: (tabs: chrome.tabs.Tab[]) => void): unknown {
+  currentLastError = null;
+  chromeCalls.tabsQueried.push(opts as { active: boolean; currentWindow: boolean });
+  const tabs = [{ id: 1, active: true }] as chrome.tabs.Tab[];
+  if (cb) cb(tabs);
+  return tabs as unknown;
+}
+
+export const tabsQueryMock = vi.fn(defaultTabsQuery);
 
 // 把 tabs.sendMessage 路由到 runtime.onMessage 监听（让 EXTRACT 能回读 fixture）
 export const tabsSendMessageMock = vi.fn(
@@ -113,6 +115,10 @@ export const tabsCreateMock = vi.fn((opts: { url?: string }, cb?: () => void) =>
   if (cb) cb();
 });
 
+export const sidePanelOpenMock = vi.fn(async (opts: { tabId: number }) => {
+  chromeCalls.sidePanelOpens.push(opts);
+});
+
 export const setBadgeTextMock = vi.fn((details: { text?: string }) => {
   chromeCalls.badgeText.push(details.text ?? '');
   return Promise.resolve();
@@ -125,8 +131,8 @@ export const setBadgeBackgroundColorMock = vi.fn((details: { color?: string }) =
 const commandListeners: Array<(command: string, tab?: chrome.tabs.Tab) => void> = [];
 
 /** 供测试触发 chrome.commands.onCommand 监听 */
-export function dispatchCommand(command: string): void {
-  for (const l of [...commandListeners]) l(command);
+export function dispatchCommand(command: string, tab?: chrome.tabs.Tab): void {
+  for (const l of [...commandListeners]) l(command, tab);
 }
 
 const chromeMock = {
@@ -204,6 +210,9 @@ const chromeMock = {
     },
     getAll: commandsGetAllMock,
   },
+  sidePanel: {
+    open: sidePanelOpenMock,
+  },
   offscreen: {
     hasDocument: offscreenHasDocumentMock,
     createDocument: offscreenCreateDocumentMock,
@@ -219,7 +228,14 @@ beforeEach(() => {
   chromeCalls.tabsCreated.length = 0;
   chromeCalls.badgeText.length = 0;
   chromeCalls.badgeColor.length = 0;
+  chromeCalls.sidePanelOpens.length = 0;
   currentLastError = null;
+  tabsQueryMock.mockReset();
+  tabsQueryMock.mockImplementation(defaultTabsQuery);
+  sidePanelOpenMock.mockReset();
+  sidePanelOpenMock.mockImplementation(async (opts: { tabId: number }) => {
+    chromeCalls.sidePanelOpens.push(opts);
+  });
   for (const k of Object.keys(mockStoredSettings)) delete mockStoredSettings[k];
 });
 

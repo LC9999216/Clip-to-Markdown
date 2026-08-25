@@ -39,28 +39,13 @@ const common = {
   logLevel: 'info',
 };
 
-const backgroundEntry = {
-  stdin: {
-    contents: `
-      import './src/background/background.ts';
-      import { installVisualSummaryCommandHandler } from './src/sidepanel/sidepanel.ts';
-      installVisualSummaryCommandHandler();
-    `,
-    resolveDir: root,
-    sourcefile: 'background-entry.ts',
-    loader: 'ts',
-  },
-  outfile: 'dist/background.js',
-  format: 'esm',
-};
-
 const entryPoints = [
   { entryPoints: ['src/content/content-script.ts'], outfile: 'dist/content.js', format: 'iife' },
   { entryPoints: ['src/popup/popup.ts'], outfile: 'dist/popup.js', format: 'iife' },
   { entryPoints: ['src/options/options.ts'], outfile: 'dist/options.js', format: 'iife' },
   { entryPoints: ['src/offscreen/offscreen.ts'], outfile: 'dist/offscreen.js', format: 'iife' },
   { entryPoints: ['src/sidepanel/sidepanel.ts'], outfile: 'dist/sidepanel.js', format: 'iife' },
-  backgroundEntry,
+  { entryPoints: ['src/background/background.ts'], outfile: 'dist/background.js', format: 'esm' },
 ];
 
 // 静态资源拷贝

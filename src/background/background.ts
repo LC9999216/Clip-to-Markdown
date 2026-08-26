@@ -9,10 +9,12 @@ import { loadSettings, resolveDownloadPath } from '../core/settings';
 import { saveToObsidian, testObsidian } from './obsidian';
 import { testAiConnection } from '../analysis/client';
 import { getVisualAnalysisState, startVisualAnalysis } from './visual-summary';
+import { runSave } from './quick-save';
 import {
   isDownloadRequest,
   isFetchJsonRequest,
   isGetVisualAnalysisStateRequest,
+  isSaveCurrentTabRequest,
   isSaveToObsidianRequest,
   isStartVisualAnalysisRequest,
   isTestAiRequest,
@@ -160,6 +162,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     getVisualAnalysisState(msg.payload.tabId)
       .then((state) => sendResponse({ success: true, state }))
+      .catch((e) => sendResponse({ success: false, error: String(e) }));
+    return true;
+  }
+
+  // ---- 保存当前标签页（side panel 保存按钮，复用快捷键保存管道） ----
+  if (messageType(msg) === 'SAVE_CURRENT_TAB') {
+    if (!isAllowedSender(sender)) {
+      sendResponse({ success: false, error: '来自不受信任页面的保存请求已被拒绝。' });
+      return false;
+    }
+    if (!isSaveCurrentTabRequest(msg)) {
+      sendResponse({ success: false, error: '非法保存载荷。' });
+      return false;
+    }
+    runSave('default', msg.payload.tabId)
+      .then((outcome) => {
+        if (outcome.ok) sendResponse({ success: true, filename: outcome.filename });
+        else sendResponse({ success: false, error: outcome.error });
+      })
       .catch((e) => sendResponse({ success: false, error: String(e) }));
     return true;
   }

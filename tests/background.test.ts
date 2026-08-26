@@ -6,6 +6,7 @@ import {
   mockSessionStorage,
   mockStoredSettings,
   permissionsContainsMock,
+  tabsQueryMock,
   tabsSendMessageMock,
 } from './setup';
 import type { ContentDocument } from '../src/core/schema';
@@ -244,5 +245,41 @@ describe('background visual summary message handlers', () => {
     );
     expect(resp).toEqual({ success: false, error: expect.stringContaining('API Key') });
     vi.unstubAllGlobals();
+  });
+});
+
+describe('background SAVE_CURRENT_TAB handler (Phase 8)', () => {
+  it('受信任 sender → 以指定标签页保存并返回文件名，不查询活动标签', async () => {
+    mockStoredSettings['clip2md.settings'] = {};
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      callback?.({ success: true, document: extractedDocument() });
+    });
+    tabsQueryMock.mockClear();
+
+    const resp = await dispatchRuntimeMessage(
+      { type: 'SAVE_CURRENT_TAB', payload: { tabId: 5 } },
+      { url: 'chrome-extension://test-extension-id/sidepanel.html' },
+    );
+
+    expect(resp).toEqual({ success: true, filename: expect.stringMatching(/\.md$/) });
+    expect(tabsQueryMock).not.toHaveBeenCalled();
+    expect(tabsSendMessageMock).toHaveBeenCalledWith(5, { type: 'EXTRACT' }, expect.any(Function));
+    expect(chromeCalls.downloads).toHaveLength(1);
+  });
+
+  it('非法载荷 → 拒绝', async () => {
+    const resp = await dispatchRuntimeMessage(
+      { type: 'SAVE_CURRENT_TAB', payload: { tabId: 'not-a-number' } },
+      { url: 'chrome-extension://test-extension-id/sidepanel.html' },
+    );
+    expect(resp).toEqual({ success: false, error: '非法保存载荷。' });
+  });
+
+  it('不受信任 sender → 拒绝', async () => {
+    const resp = await dispatchRuntimeMessage(
+      { type: 'SAVE_CURRENT_TAB', payload: { tabId: 5 } },
+      { url: 'https://evil.example.com/' },
+    );
+    expect(resp).toEqual({ success: false, error: expect.stringContaining('不受信任') });
   });
 });

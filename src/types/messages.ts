@@ -60,6 +60,15 @@ export type TestAiResponse =
   | { success: true; model: string }
   | { success: false; error: string };
 
+/** 保存当前标签页为 Markdown（side panel 保存按钮，复用快捷键保存管道）。 */
+export type SaveCurrentTabRequest = {
+  type: 'SAVE_CURRENT_TAB';
+  payload: { tabId: number };
+};
+export type SaveCurrentTabResponse =
+  | { success: true; filename: string }
+  | { success: false; error: string };
+
 export type ContentRequest = StatusRequest | ExtractRequest;
 export type RuntimeMessage =
   | ContentRequest
@@ -69,7 +78,8 @@ export type RuntimeMessage =
   | TestObsidianRequest
   | StartVisualAnalysisRequest
   | GetVisualAnalysisStateRequest
-  | TestAiRequest;
+  | TestAiRequest
+  | SaveCurrentTabRequest;
 
 // ---------- offscreen 消息 ----------
 
@@ -165,5 +175,12 @@ export function isGetVisualAnalysisStateRequest(m: unknown): m is GetVisualAnaly
 export function isTestAiRequest(m: unknown): m is TestAiRequest {
   if (!isRecord(m)) return false;
   return m.type === 'TEST_AI';
+}
+
+export function isSaveCurrentTabRequest(m: unknown): m is SaveCurrentTabRequest {
+  if (!isRecord(m)) return false;
+  if (m.type !== 'SAVE_CURRENT_TAB') return false;
+  if (!isRecord(m.payload)) return false;
+  return typeof m.payload.tabId === 'number' && Number.isInteger(m.payload.tabId);
 }
 

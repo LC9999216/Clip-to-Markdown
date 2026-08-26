@@ -63,6 +63,31 @@ function openSettings(): void {
   chrome.runtime.openOptionsPage();
 }
 
+/**
+ * 请求 Background 保存当前标签页并展示结果。
+ * 保存期间禁用按钮（防止重复提交），完成/失败后恢复并写入 aria-live 状态区。
+ */
+function sendSaveRequest(tabId: number): void {
+  const button = element<HTMLButtonElement>('action-save');
+  const status = element<HTMLElement>('save-status');
+  button.disabled = true;
+  button.textContent = '保存中…';
+  chrome.runtime.sendMessage({ type: 'SAVE_CURRENT_TAB', payload: { tabId } }, (resp) => {
+    const m = resp as { success?: boolean; filename?: string; error?: string } | undefined;
+    if (m?.success) {
+      status.textContent = `已保存：${m.filename ?? ''}`;
+    } else {
+      status.textContent = `保存失败：${m?.error ?? '未知错误'}`;
+    }
+    button.disabled = false;
+    button.textContent = '保存 Markdown';
+  });
+}
+
+function wireSaveButton(tabId: number): void {
+  element<HTMLButtonElement>('action-save').onclick = () => sendSaveRequest(tabId);
+}
+
 function renderKeyPoints(container: HTMLElement, points: VisualSummary['keyPoints']): void {
   container.replaceChildren();
   const list = document.createElement('ul');
@@ -119,6 +144,7 @@ function renderResult(state: VisualAnalysisState, tabId: number): void {
   const regenerate = element<HTMLButtonElement>('action-regenerate');
   regenerate.onclick = () => sendStartAnalysis(tabId, true);
   element<HTMLButtonElement>('action-settings').onclick = openSettings;
+  wireSaveButton(tabId);
 
   element<HTMLElement>('preview').hidden = false;
 }

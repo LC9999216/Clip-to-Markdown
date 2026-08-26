@@ -15,6 +15,7 @@ import {
   sessionGetMock,
   tabsQueryMock,
 } from './setup';
+import type { SaveCurrentTabResponse } from '../src/types/messages';
 
 function mountPanel(): void {
   document.body.innerHTML = `
@@ -38,6 +39,8 @@ function mountPanel(): void {
         <ul id="takeaways"></ul>
         <button id="action-regenerate" type="button">重新生成</button>
         <button id="action-settings" type="button">AI 设置</button>
+        <button id="action-save" type="button">保存 Markdown</button>
+        <p id="save-status" role="status" aria-live="polite"></p>
       </section>
     </main>`;
 }
@@ -185,6 +188,30 @@ describe('Side Panel phase 6 result rendering', () => {
     (document.querySelector('#action-settings') as HTMLButtonElement).click();
 
     expect(openOptionsPageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('save button saves the current tab and shows an accessible result', async () => {
+    mockSessionStorage['clip2md.visualSummary.state.7'] = doneState('当前推文', '摘要');
+    runtimeSendMessageMock.mockImplementation((msg: unknown, cb?: (resp: unknown) => void) => {
+      const m = msg as { type?: string };
+      if (m.type === 'SAVE_CURRENT_TAB') {
+        cb?.({ success: true, filename: 'notes/@alice-2026.md' } as SaveCurrentTabResponse);
+      } else {
+        cb?.({});
+      }
+    });
+
+    dispose = await initializeSidePanel();
+    (document.querySelector('#action-save') as HTMLButtonElement).click();
+
+    expect(runtimeSendMessageMock).toHaveBeenCalledWith(
+      { type: 'SAVE_CURRENT_TAB', payload: { tabId: 7 } },
+      expect.any(Function),
+    );
+    await vi.waitFor(() =>
+      expect(document.querySelector('#save-status')?.textContent).toContain('已保存'),
+    );
+    expect(document.querySelector('#save-status')?.textContent).toContain('notes/@alice-2026.md');
   });
 
   it('shows actionable errors and clears stale preview content', async () => {

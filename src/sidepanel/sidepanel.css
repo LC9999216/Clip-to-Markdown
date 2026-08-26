@@ -342,6 +342,19 @@ h1 {
   margin-top: 20px;
 }
 
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.save-status {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 1em;
+}
+
 .orbit {
   position: relative;
   width: 58px;

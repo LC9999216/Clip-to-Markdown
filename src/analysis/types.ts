@@ -124,8 +124,8 @@ export interface VisualAnalysisState {
   tabId: number;
   requestId: string;
   status: VisualAnalysisStatus;
-  source?: VisualAnalysisSource;
-  result?: VisualSummary;
+  source?: VisualAnalysisSource | VisualAnalysisSourceV2;
+  result?: VisualSummary | VisualSummaryV2;
   error?: VisualAnalysisError;
   updatedAt: number;
 }

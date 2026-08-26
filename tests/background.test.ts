@@ -131,14 +131,10 @@ const AI_SETTINGS_FIXTURE: Record<string, unknown> = {
 };
 
 const VALID_SUMMARY = {
-  schemaVersion: 1,
-  articleType: 'comparison',
-  confidence: 0.93,
-  classificationReason: '比较',
-  summary: '总结',
+  schemaVersion: 2,
+  summary: ['总结一', '总结二'],
   keyPoints: [{ title: 'a', description: 'b' }, { title: 'c', description: 'd' }],
-  structure: { label: 'root' },
-  takeaways: ['takeaway'],
+  structure: [{ title: '正文', sourceBlockId: 'B001', sourceQuote: '正文' }],
 };
 
 function okAiContent(content: string): Response {
@@ -168,7 +164,11 @@ describe('background visual summary message handlers', () => {
     mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
     permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
     tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
-      callback?.({ success: true, document: extractedDocument() });
+      callback?.({
+        success: true,
+        document: extractedDocument(),
+        sourceBlocks: [{ id: 'B001', kind: 'paragraph', text: '正文' }],
+      });
     });
     const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
     vi.stubGlobal('fetch', fetchMock);

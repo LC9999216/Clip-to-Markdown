@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initializeSidePanel } from '../src/sidepanel/sidepanel';
-import type { VisualAnalysisState, VisualSummary } from '../src/analysis/types';
+import type { VisualAnalysisState, VisualSummaryV2 } from '../src/analysis/types';
 
 type DoneState = Omit<VisualAnalysisState, 'status' | 'result'> & {
   status: 'done';
-  result: VisualSummary;
+  result: VisualSummaryV2;
 };
 import {
   dispatchStorageChange,
@@ -54,20 +54,18 @@ function doneState(title: string, summary: string): DoneState {
     source: {
       url: 'https://x.com/alice/status/123',
       title,
-      author: 'Alice (@alice)',
+      author: { name: 'Alice', handle: 'alice' },
+      platform: 'x',
+      contentType: 'tweet',
     },
     result: {
-      schemaVersion: 1,
-      articleType: 'opinion',
-      confidence: 0.92,
-      classificationReason: '判断理由',
-      summary,
+      schemaVersion: 2,
+      summary: [summary, '第二句总结'],
       keyPoints: [
         { title: '观点一', description: '说明一' },
         { title: '观点二', description: '说明二' },
       ],
-      structure: { label: '核心主题', children: [{ label: '子主题' }] },
-      takeaways: ['值得记住的结论'],
+      structure: [{ title: '核心主题' }, { title: '子主题' }],
     },
   };
 }
@@ -92,16 +90,16 @@ describe('Side Panel phase 6 result rendering', () => {
     expect(document.querySelector('#status-label')?.textContent).toBe('内容已分析');
     expect(document.querySelector('#preview-title')?.textContent).toBe('当前推文');
     expect(document.querySelector('#preview-author')?.textContent).toBe('Alice (@alice)');
-    expect(document.querySelector('#preview-body')?.textContent).toBe('正文预览');
+    expect(document.querySelector('#preview-body')?.textContent).toBe('正文预览\n第二句总结');
   });
 
-  it('renders article type, confidence, key points, structure tree, and takeaways', async () => {
+  it('renders v2 key points and flat structure items', async () => {
     mockSessionStorage['clip2md.visualSummary.state.7'] = doneState('当前推文', '一句话总结');
 
     dispose = await initializeSidePanel();
 
-    expect(document.querySelector('#preview-type')?.textContent).toBe('观点');
-    expect(document.querySelector('#preview-confidence')?.textContent).toBe('92%');
+    expect(document.querySelector('#preview-type')?.textContent).toBe('');
+    expect(document.querySelector('#preview-confidence')?.textContent).toBe('');
     expect(
       [...document.querySelectorAll('.keypoint-title')].map((el) => el.textContent),
     ).toEqual(['观点一', '观点二']);
@@ -109,50 +107,27 @@ describe('Side Panel phase 6 result rendering', () => {
       [...document.querySelectorAll('.keypoint-desc')].map((el) => el.textContent),
     ).toEqual(['说明一', '说明二']);
     expect(
-      [...document.querySelectorAll('#structure .tree-node')].map((el) => el.textContent),
+      [...document.querySelectorAll('#structure .structure-v2-item')].map((el) => el.textContent),
     ).toEqual(['核心主题', '子主题']);
-    expect(
-      [...document.querySelectorAll('#takeaways li')].map((el) => el.textContent),
-    ).toEqual(['值得记住的结论']);
+    expect(document.querySelectorAll('#takeaways li')).toHaveLength(0);
     expect(document.querySelector('#preview-link')?.getAttribute('href')).toBe(
       'https://x.com/alice/status/123',
     );
   });
 
-  it('renders a nested 10-node tree without interpreting markup', async () => {
+  it('renders v2 structure text without interpreting markup', async () => {
     const state = doneState('深层结构', '摘要');
-    state.result.structure = {
-      label: '<img src=x onerror=alert(1)>',
-      children: [
-        {
-          label: '一',
-          children: [
-            {
-              label: '1.1',
-              children: [{ label: '1.1.1' }, { label: '1.1.2' }],
-            },
-            { label: '1.2' },
-          ],
-        },
-        {
-          label: '二',
-          children: [{ label: '2.1' }, { label: '2.2' }],
-        },
-        { label: '三' },
-      ],
-    };
-    state.result.takeaways = ['<strong>不要被标签欺骗</strong>'];
+    state.result.structure = Array.from({ length: 10 }, (_, i) => ({
+      title: i === 0 ? '<img src=x onerror=alert(1)>' : `结构 ${i}`,
+    }));
     mockSessionStorage['clip2md.visualSummary.state.7'] = state;
 
     dispose = await initializeSidePanel();
 
-    const labels = [...document.querySelectorAll('#structure .tree-node')].map((el) => el.textContent);
+    const labels = [...document.querySelectorAll('#structure .structure-v2-item')].map((el) => el.textContent);
     expect(labels).toHaveLength(10);
     expect(labels[0]).toBe('<img src=x onerror=alert(1)>');
     expect(document.querySelector('#structure img')).toBeNull();
-    expect(document.querySelector('#structure b')).toBeNull();
-    expect(document.querySelector('#takeaways strong')).toBeNull();
-    expect(document.querySelector('#takeaways li')?.textContent).toBe('<strong>不要被标签欺骗</strong>');
   });
 
   it('listens for session changes and renders text without interpreting markup', async () => {
@@ -164,9 +139,32 @@ describe('Side Panel phase 6 result rendering', () => {
     });
 
     expect(document.querySelector('#preview-title')?.textContent).toBe('<img src=x onerror=alert(1)>');
-    expect(document.querySelector('#preview-body')?.textContent).toBe('<strong>正文</strong>');
+    expect(document.querySelector('#preview-body')?.textContent).toBe('<strong>正文</strong>\n第二句总结');
     expect(document.querySelector('#preview img')).toBeNull();
     expect(document.querySelector('#preview strong')).toBeNull();
+  });
+
+  it('does not render a legacy v1 done state', async () => {
+    const legacy = {
+      ...doneState('旧结果', '旧正文'),
+      result: {
+        schemaVersion: 1,
+        articleType: 'opinion',
+        confidence: 0.9,
+        classificationReason: '旧格式',
+        summary: '旧正文',
+        keyPoints: [],
+        structure: { label: '旧结构' },
+        takeaways: ['旧结论'],
+      },
+    } as unknown as DoneState;
+    mockSessionStorage['clip2md.visualSummary.state.7'] = legacy;
+
+    dispose = await initializeSidePanel();
+
+    expect(document.querySelector('#status-label')?.textContent).toBe('结果版本已更新');
+    expect(document.querySelector('#preview')?.hasAttribute('hidden')).toBe(true);
+    expect(document.querySelector('#status-action')?.textContent).toBe('重新生成');
   });
 
   it('regenerate button requests a forced analysis for the current tab', async () => {

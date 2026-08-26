@@ -10,9 +10,11 @@
  * 旧请求的后续写入被静默丢弃，防止 A 后返回覆盖 B。
  */
 
-import { buildAnalysisInput, formatAuthor } from '../analysis/input';
+import { buildAnalysisInputV2 } from '../analysis/input';
 import { readCachedSummary, visualSummaryCacheKey, writeCachedSummary } from '../analysis/cache';
-import { analyzeContent, VisualAnalysisRequestError } from '../analysis/client';
+import { analyzeContentV2, VisualAnalysisRequestError } from '../analysis/client';
+import { validateVisualSummaryAnchors } from '../analysis/schema';
+import { renderBody } from '../core/markdown-renderer';
 import { getAiOriginPattern } from '../core/ai-settings';
 import { loadSettings } from '../core/settings';
 import {
@@ -20,10 +22,10 @@ import {
   type VisualAnalysisError,
   type VisualAnalysisSource,
   type VisualAnalysisState,
-  type VisualSummary,
+  type VisualAnalysisSourceV2,
 } from '../analysis/types';
 import type { ContentDocument } from '../core/schema';
-import type { ExtractResponse } from '../types/messages';
+import type { ExtractVisualSourceResponse } from '../types/messages';
 
 const currentRequestIds = new Map<number, string>();
 let requestSequence = 0;
@@ -63,12 +65,16 @@ export function getVisualAnalysisState(tabId: number): Promise<VisualAnalysisSta
   });
 }
 
-function extractCurrentDocument(tabId: number): Promise<ExtractResponse> {
+function extractCurrentSource(tabId: number): Promise<ExtractVisualSourceResponse> {
   return new Promise((resolve, reject) => {
-    chrome.tabs.sendMessage(tabId, { type: 'EXTRACT' }, (response: ExtractResponse) => {
+    chrome.tabs.sendMessage(tabId, { type: 'EXTRACT_VISUAL_SOURCE' }, (response: ExtractVisualSourceResponse) => {
       const error = chrome.runtime.lastError;
       if (error) reject(new Error(error.message));
-      else resolve(response);
+      else if (response?.success) {
+        resolve({ ...response, sourceBlocks: Array.isArray(response.sourceBlocks) ? response.sourceBlocks : [] });
+      } else {
+        resolve(response);
+      }
     });
   });
 }
@@ -77,17 +83,23 @@ function errorState(
   tabId: number,
   requestId: string,
   error: VisualAnalysisError,
-  source?: VisualAnalysisSource,
+  source?: VisualAnalysisSource | VisualAnalysisSourceV2,
 ): VisualAnalysisState {
   return { status: 'error', tabId, requestId, error, ...(source ? { source } : {}), updatedAt: Date.now() };
 }
 
-function extractSource(document: ContentDocument): VisualAnalysisSource {
-  const author = formatAuthor(document.metadata.author);
+function extractSource(document: ContentDocument): VisualAnalysisSourceV2 {
+  const name = document.metadata.author.name.trim();
+  const handle = document.metadata.author.handle?.trim().replace(/^@/, '');
+  const bodyTitle = Array.from(renderBody(document).trim()).slice(0, 50).join('');
+  const title = document.metadata.title?.trim()
+    || (document.metadata.contentType === 'tweet' ? bodyTitle || '当前推文' : '当前内容');
   return {
     url: document.metadata.sourceUrl,
-    ...(document.metadata.title ? { title: document.metadata.title } : {}),
-    ...(author ? { author } : {}),
+    title,
+    author: { name, ...(handle ? { handle } : {}) },
+    platform: document.metadata.platform,
+    contentType: document.metadata.contentType,
   };
 }
 
@@ -134,9 +146,9 @@ export async function startVisualAnalysis(
 
   await writeState({ status: 'extracting', tabId, requestId, updatedAt: Date.now() });
 
-  let extracted: ExtractResponse;
+  let extracted: ExtractVisualSourceResponse;
   try {
-    extracted = await extractCurrentDocument(tabId);
+    extracted = await extractCurrentSource(tabId);
   } catch {
     await writeState(errorState(
       tabId,
@@ -159,7 +171,7 @@ export async function startVisualAnalysis(
     return { requestId };
   }
 
-  const { document } = extracted;
+  const { document, sourceBlocks } = extracted;
   if (!isXDocument(document)) {
     await writeState(errorState(
       tabId,
@@ -204,18 +216,18 @@ export async function startVisualAnalysis(
     return { requestId };
   }
 
-  const input = buildAnalysisInput(document);
-  const cacheKey = visualSummaryCacheKey(input.sourceUrl, input.body, ai.model);
+  const input = buildAnalysisInputV2(document, sourceBlocks);
+  const cacheKey = visualSummaryCacheKey(input.sourceUrl, input.body, ai.model, ai.endpoint);
 
   if (!options.force) {
     const cached = await readCachedSummary(cacheKey);
-    if (cached) {
+    if (cached && validateVisualSummaryAnchors(cached, input).length === 0) {
       await writeState({
         status: 'done',
         tabId,
         requestId,
         source,
-        result: cached as VisualSummary,
+        result: cached,
         updatedAt: Date.now(),
       });
       return { requestId };
@@ -225,7 +237,7 @@ export async function startVisualAnalysis(
   await writeState({ status: 'analyzing', tabId, requestId, source, updatedAt: Date.now() });
 
   try {
-    const result = await analyzeContent(input, ai);
+    const result = await analyzeContentV2(input, ai);
     await writeCachedSummary(cacheKey, result);
     await writeState({
       status: 'done',

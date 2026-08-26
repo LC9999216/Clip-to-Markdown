@@ -10,21 +10,10 @@
 
 import {
   visualSummaryStateKey,
-  type ArticleType,
   type VisualAnalysisState,
   type VisualSummary,
+  type VisualSummaryV2,
 } from '../analysis/types';
-import { renderTree } from './tree-renderer';
-
-const ARTICLE_TYPE_LABELS: Record<ArticleType, string> = {
-  opinion: '观点',
-  tutorial: '教程',
-  news: '新闻',
-  comparison: '对比',
-  technical: '技术',
-  list: '列表',
-  other: '其他',
-};
 
 /** 需要跳转设置页解决的错误码；其余错误允许「重新生成」。 */
 const CONFIG_ERROR_CODES = new Set(['AI_NOT_CONFIGURED', 'AI_HOST_NOT_GRANTED', 'AI_AUTH_FAILED']);
@@ -88,6 +77,10 @@ function wireSaveButton(tabId: number): void {
   element<HTMLButtonElement>('action-save').onclick = () => sendSaveRequest(tabId);
 }
 
+function isVisualSummaryV2(result: VisualSummary | VisualSummaryV2): result is VisualSummaryV2 {
+  return result.schemaVersion === 2 && Array.isArray(result.summary) && Array.isArray(result.structure);
+}
+
 function renderKeyPoints(container: HTMLElement, points: VisualSummary['keyPoints']): void {
   container.replaceChildren();
   const list = document.createElement('ul');
@@ -118,28 +111,59 @@ function renderTakeaways(container: HTMLElement, takeaways: string[]): void {
   container.appendChild(list);
 }
 
+function renderV2Structure(container: HTMLElement, items: VisualSummaryV2['structure']): void {
+  container.replaceChildren();
+  const list = document.createElement('ul');
+  list.className = 'structure-v2';
+  for (const item of items) {
+    const entry = document.createElement('li');
+    entry.className = 'structure-v2-item';
+    entry.textContent = item.title;
+    list.appendChild(entry);
+  }
+  container.appendChild(list);
+}
+
+function renderLegacyStateNotice(tabId: number): void {
+  element<HTMLElement>('status-label').textContent = '结果版本已更新';
+  element<HTMLElement>('status-copy').textContent = '当前结果不是 V2 格式，请重新生成。';
+  const actions = element<HTMLElement>('status-actions');
+  const action = element<HTMLButtonElement>('status-action');
+  actions.hidden = false;
+  action.textContent = '重新生成';
+  action.onclick = () => sendStartAnalysis(tabId, true);
+  element<HTMLElement>('preview').hidden = true;
+}
+
 function renderResult(state: VisualAnalysisState, tabId: number): void {
   const result = state.result;
   if (!result) return;
 
+  if (!isVisualSummaryV2(result)) {
+    renderLegacyStateNotice(tabId);
+    return;
+  }
+
   element<HTMLElement>('status-label').textContent = '内容已分析';
-  element<HTMLElement>('status-copy').textContent = result.summary;
-  element<HTMLElement>('preview-type').textContent =
-    ARTICLE_TYPE_LABELS[result.articleType] ?? '其他';
-  element<HTMLElement>('preview-confidence').textContent = `${Math.round(result.confidence * 100)}%`;
+  element<HTMLElement>('status-copy').textContent = result.summary.join('\n');
+  element<HTMLElement>('preview-type').textContent = '';
+  element<HTMLElement>('preview-confidence').textContent = '';
   element<HTMLElement>('preview-title').textContent = state.source?.title || '当前内容';
-  element<HTMLElement>('preview-author').textContent = state.source?.author || '作者信息未提供';
-  element<HTMLElement>('preview-body').textContent = result.summary;
+  const sourceAuthor = state.source?.author;
+  element<HTMLElement>('preview-author').textContent = typeof sourceAuthor === 'string'
+    ? sourceAuthor
+    : sourceAuthor
+      ? `${sourceAuthor.name}${sourceAuthor.handle ? ` (@${sourceAuthor.handle})` : ''}`
+      : '作者信息未提供';
+  element<HTMLElement>('preview-body').textContent = result.summary.join('\n');
 
   const link = element<HTMLAnchorElement>('preview-link');
   link.href = state.source?.url ?? '';
   link.textContent = '查看原文';
 
   renderKeyPoints(element<HTMLElement>('keypoints'), result.keyPoints);
-  const structure = element<HTMLElement>('structure');
-  structure.replaceChildren();
-  structure.appendChild(renderTree(result.structure));
-  renderTakeaways(element<HTMLElement>('takeaways'), result.takeaways);
+  renderV2Structure(element<HTMLElement>('structure'), result.structure);
+  renderTakeaways(element<HTMLElement>('takeaways'), []);
 
   const regenerate = element<HTMLButtonElement>('action-regenerate');
   regenerate.onclick = () => sendStartAnalysis(tabId, true);

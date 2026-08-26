@@ -16,7 +16,11 @@ import {
   tabsSendMessageMock,
   tabsQueryMock,
 } from './setup';
-import { visualSummaryStateKey, type VisualAnalysisState, type VisualSummary } from '../src/analysis/types';
+import {
+  visualSummaryStateKey,
+  type VisualAnalysisState,
+  type VisualSummaryV2,
+} from '../src/analysis/types';
 import type { ContentDocument } from '../src/core/schema';
 
 const root = resolve(import.meta.dirname, '..');
@@ -225,25 +229,34 @@ const AI_SETTINGS_FIXTURE: Record<string, unknown> = {
   },
 };
 
-const VALID_SUMMARY: VisualSummary = {
-  schemaVersion: 1,
-  articleType: 'comparison',
-  confidence: 0.93,
-  classificationReason: '文章主要比较两个 AI 工具。',
-  summary: '文章比较了两种 AI 开发环境。',
+const VALID_SUMMARY: VisualSummaryV2 = {
+  schemaVersion: 2,
+  summary: ['文章比较了两种 AI 开发环境。', '重点在完成度和成本。'],
   keyPoints: [
     { title: '完成度', description: 'DeepSeek Harness 完成度更高。' },
     { title: '成本', description: 'DeepSeek Harness 成本更低。' },
   ],
-  structure: { label: '对比', children: [{ label: 'DeepSeek Harness' }, { label: 'Claude Code' }] },
-  takeaways: ['看重成本选 DeepSeek Harness。'],
+  structure: [{ title: '对比正文', sourceBlockId: 'B001', sourceQuote: '正文' }],
 };
 
 function aiReadyFixture(document: ContentDocument = extractedDocument('正文', 'x-article')): void {
   mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
   permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
   tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
-    callback?.({ success: true, document });
+    const text = document.body.type === 'tweet'
+      ? document.body.content.map((block) => block.type === 'paragraph'
+        ? block.children.map((child) => child.type === 'text' ? child.value : '').join('')
+        : '').join('')
+      : document.body.children.map((block) => block.type === 'paragraph'
+        ? block.children.map((child) => child.type === 'text' ? child.value : '').join('')
+        : '').join('');
+    callback?.({
+      success: true,
+      document,
+      sourceBlocks: document.metadata.contentType === 'x-article'
+        ? [{ id: 'B001', kind: 'paragraph', text }]
+        : [],
+    });
   });
 }
 
@@ -273,7 +286,9 @@ describe('visual summary phase 5 background orchestration', () => {
     expect(state?.source).toEqual({
       url: 'https://x.com/alice/status/123',
       title: 'Article title',
-      author: 'Alice (@alice)',
+      author: { name: 'Alice', handle: 'alice' },
+      platform: 'x',
+      contentType: 'x-article',
     });
     expect(state?.result).toEqual(VALID_SUMMARY);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -415,7 +430,11 @@ describe('visual summary phase 5 background orchestration', () => {
     const newer = startVisualAnalysis(71);
     await vi.waitFor(() => expect(responses).toHaveLength(2));
 
-    responses[1]?.({ success: true, document: extractedDocument('newer content') });
+    responses[1]?.({
+      success: true,
+      document: extractedDocument('newer content', 'x-article'),
+      sourceBlocks: [{ id: 'B001', kind: 'paragraph', text: 'newer content 正文' }],
+    });
     await newer;
     setRuntimeLastError('The old page is gone');
     responses[0]?.(undefined);
@@ -441,9 +460,17 @@ describe('visual summary phase 5 background orchestration', () => {
     const newer = startVisualAnalysis(72);
     await vi.waitFor(() => expect(responses).toHaveLength(2));
 
-    responses[1]?.({ success: true, document: extractedDocument('newer content') });
+    responses[1]?.({
+      success: true,
+      document: extractedDocument('newer content', 'x-article'),
+      sourceBlocks: [{ id: 'B001', kind: 'paragraph', text: 'newer content 正文' }],
+    });
     await newer;
-    responses[0]?.({ success: true, document: extractedDocument('stale content') });
+    responses[0]?.({
+      success: true,
+      document: extractedDocument('stale content', 'x-article'),
+      sourceBlocks: [{ id: 'B001', kind: 'paragraph', text: 'stale content 正文' }],
+    });
     await older;
 
     expect(stateFor(72)?.status).toBe('done');
@@ -507,6 +534,72 @@ describe('visual summary phase 7 cache key and error mapping', () => {
       expect(state?.error?.code).toBe(expectedCode);
       expect(state?.error?.message).toMatch(messagePattern);
     }
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('visual summary v2 background orchestration', () => {
+  const validV2: VisualSummaryV2 = {
+    schemaVersion: 2,
+    summary: ['第一句总结', '第二句总结'],
+    keyPoints: [
+      { title: '观点一', description: '说明一' },
+      { title: '观点二', description: '说明二' },
+    ],
+    structure: [{ title: '正文', sourceBlockId: 'B001', sourceQuote: '正文' }],
+  };
+
+  it('extracts visual source blocks and stores a structured v2 source/result', async () => {
+    mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    tabsSendMessageMock.mockImplementation((_tabId, message, callback) => {
+      expect(message).toEqual({ type: 'EXTRACT_VISUAL_SOURCE' });
+      callback?.({
+        success: true,
+        document: extractedDocument('正文', 'x-article'),
+        sourceBlocks: [{ id: 'B001', kind: 'paragraph', text: '正文' }],
+      });
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okAiContent(JSON.stringify(validV2))));
+
+    const { requestId } = await startVisualAnalysis(90);
+    const state = stateFor(90);
+
+    expect(state?.requestId).toBe(requestId);
+    expect(state?.status).toBe('done');
+    expect(state?.source).toEqual({
+      url: 'https://x.com/alice/status/123',
+      title: 'Article title',
+      author: { name: 'Alice', handle: 'alice' },
+      platform: 'x',
+      contentType: 'x-article',
+    });
+    expect(state?.result).toEqual(validV2);
+    vi.unstubAllGlobals();
+  });
+
+  it('uses the first 50 Unicode characters as a tweet UI title', async () => {
+    const tweetText = '😀'.repeat(60);
+    const document = extractedDocument(tweetText, 'tweet');
+    const tweetSummary: VisualSummaryV2 = {
+      schemaVersion: 2,
+      summary: ['第一句', '第二句'],
+      keyPoints: [
+        { title: '观点一', description: '说明一' },
+        { title: '观点二', description: '说明二' },
+      ],
+      structure: [{ title: '推文结构' }],
+    };
+    mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      callback?.({ success: true, document, sourceBlocks: [] });
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okAiContent(JSON.stringify(tweetSummary))));
+
+    await startVisualAnalysis(91);
+
+    expect((stateFor(91)?.source as { title?: string } | undefined)?.title).toBe('😀'.repeat(50));
     vi.unstubAllGlobals();
   });
 });

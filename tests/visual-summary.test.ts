@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import '../src/background/background';
 import { openVisualSummaryPanel } from '../src/background/visual-summary-command';
+import { startVisualSummaryPreview } from '../src/background/visual-summary';
 import {
   chromeCalls,
   dispatchCommand,
@@ -267,6 +268,52 @@ describe('visual summary phase 2 preview extraction', () => {
         status: 'error',
         error: expect.stringMatching(/仅支持 X 推文和 X Article/),
       });
+    });
+  });
+
+  it('keeps newer preview when an older extraction succeeds later', async () => {
+    const responses: Array<(response: unknown) => void> = [];
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      if (callback) responses.push(callback);
+    });
+
+    const older = startVisualSummaryPreview(71);
+    await vi.waitFor(() => expect(responses).toHaveLength(1));
+    const newer = startVisualSummaryPreview(71);
+    await vi.waitFor(() => expect(responses).toHaveLength(2));
+
+    responses[1]?.({ success: true, document: extractedDocument('newer content') });
+    await newer;
+    responses[0]?.({ success: true, document: extractedDocument('stale content') });
+    await older;
+
+    expect(mockSessionStorage['clip2md.visualSummary.state.71']).toMatchObject({
+      status: 'done',
+      requestId: expect.any(String),
+      preview: { body: 'newer content' },
+    });
+  });
+
+  it('keeps newer preview when an older extraction errors later', async () => {
+    const responses: Array<(response: unknown) => void> = [];
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      if (callback) responses.push(callback);
+    });
+
+    const older = startVisualSummaryPreview(72);
+    await vi.waitFor(() => expect(responses).toHaveLength(1));
+    const newer = startVisualSummaryPreview(72);
+    await vi.waitFor(() => expect(responses).toHaveLength(2));
+
+    responses[1]?.({ success: true, document: extractedDocument('newer content') });
+    await newer;
+    setRuntimeLastError('The old page is gone');
+    responses[0]?.(undefined);
+    await older;
+
+    expect(mockSessionStorage['clip2md.visualSummary.state.72']).toMatchObject({
+      status: 'done',
+      preview: { body: 'newer content' },
     });
   });
 });

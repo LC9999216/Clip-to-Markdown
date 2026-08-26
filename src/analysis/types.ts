@@ -26,6 +26,7 @@ export interface VisualSummaryPreview {
 
 interface VisualAnalysisStateBase {
   tabId: number;
+  requestId: string;
   updatedAt: number;
 }
 

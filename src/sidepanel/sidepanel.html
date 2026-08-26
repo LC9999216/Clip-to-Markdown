@@ -31,17 +31,41 @@
       <div>
         <p class="status-label" id="status-label">等待开始</p>
         <p class="status-copy" id="status-copy">使用快捷键打开后，当前 X 内容将在此显示。</p>
+        <div class="card-actions" id="status-actions" hidden>
+          <button class="btn" id="status-action" type="button"></button>
+        </div>
       </div>
     </section>
 
     <article class="preview-card" id="preview" hidden>
       <div class="preview-meta">
         <span class="preview-type" id="preview-type"></span>
+        <span class="preview-confidence" id="preview-confidence"></span>
         <a id="preview-link" target="_blank" rel="noreferrer">查看原文</a>
       </div>
       <h2 id="preview-title"></h2>
       <p class="preview-author" id="preview-author"></p>
       <p class="preview-body" id="preview-body"></p>
+
+      <section class="result-section">
+        <h3 class="result-heading">核心观点</h3>
+        <div id="keypoints"></div>
+      </section>
+
+      <section class="result-section">
+        <h3 class="result-heading">内容结构</h3>
+        <div id="structure"></div>
+      </section>
+
+      <section class="result-section">
+        <h3 class="result-heading">结论</h3>
+        <div id="takeaways"></div>
+      </section>
+
+      <div class="result-actions">
+        <button class="btn btn-primary" id="action-regenerate" type="button">重新生成</button>
+        <button class="btn" id="action-settings" type="button">AI 设置</button>
+      </div>
     </article>
 
     <footer>

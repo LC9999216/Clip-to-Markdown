@@ -74,6 +74,7 @@ export async function dispatchRuntimeMessage(msg: unknown, sender: unknown = {})
 // ---- 各 API 的 mock（导出便于测试按需配置）----
 
 export const runtimeSendMessageMock = vi.fn();
+export const openOptionsPageMock = vi.fn();
 export const notificationsCreateMock = vi.fn(
   (options: { title?: string; message?: string }, cb?: (id: string) => void) => {
     currentLastError = null; // 模拟「本次调用成功」的 lastError 作用域
@@ -187,6 +188,7 @@ const chromeMock = {
       },
     },
     sendMessage: runtimeSendMessageMock,
+    openOptionsPage: openOptionsPageMock,
   },
   tabs: {
     query: tabsQueryMock,
@@ -321,6 +323,8 @@ beforeEach(() => {
   chromeCalls.badgeColor.length = 0;
   chromeCalls.sidePanelOpens.length = 0;
   currentLastError = null;
+  openOptionsPageMock.mockReset();
+  runtimeSendMessageMock.mockReset();
   tabsQueryMock.mockReset();
   tabsQueryMock.mockImplementation(defaultTabsQuery);
   tabsSendMessageMock.mockReset();

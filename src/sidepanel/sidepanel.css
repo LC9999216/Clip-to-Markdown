@@ -140,6 +140,12 @@ h1 {
   text-transform: uppercase;
 }
 
+.preview-confidence {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .preview-meta a {
   color: var(--accent);
   font-size: 11px;
@@ -175,6 +181,165 @@ h1 {
 .status-label {
   margin-bottom: 6px;
   letter-spacing: 0.08em;
+}
+
+/* ---- 结果区块 ---- */
+
+.result-section {
+  margin-top: 22px;
+}
+
+.result-heading {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.keypoints {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.keypoints li {
+  display: grid;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+}
+
+.keypoint-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.keypoint-desc {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree ul {
+  margin: 0;
+  padding-left: 15px;
+  list-style: none;
+}
+
+.tree li {
+  position: relative;
+  padding: 3px 0 3px 13px;
+}
+
+.tree li::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  content: "";
+  background: var(--line);
+}
+
+.tree li::after {
+  position: absolute;
+  top: 13px;
+  left: 0;
+  width: 11px;
+  height: 1px;
+  content: "";
+  background: var(--line);
+}
+
+.tree li:last-child::before {
+  bottom: auto;
+  height: 13px;
+}
+
+.tree-node {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.takeaways {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.takeaways li {
+  position: relative;
+  padding-left: 19px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.takeaways li::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-weight: 800;
+  color: var(--accent);
+  content: "✓";
+}
+
+/* ---- 按钮 ---- */
+
+.btn {
+  appearance: none;
+  padding: 9px 15px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.card-actions {
+  margin-top: 13px;
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
 }
 
 .orbit {

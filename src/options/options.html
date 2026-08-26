@@ -124,6 +124,78 @@
         <p class="card-footnote">快捷键由 Chrome 统一管理，点击“修改”前往快捷键页面自定义。</p>
       </section>
 
+      <section
+        id="ai-settings"
+        class="settings-card details-card"
+        data-settings-section
+        aria-labelledby="ai-settings-title"
+      >
+        <div class="settings-card__header">
+          <div>
+            <h2 id="ai-settings-title">一图速览（AI）</h2>
+            <p class="card-description">按 Ctrl + Shift + V 在侧栏生成页面速览，先看懂再收藏</p>
+          </div>
+        </div>
+
+        <div class="details-body ai-fields">
+          <label class="checkbox">
+            <input id="ai-enabled" name="ai-enabled" type="checkbox" />
+            <span>启用一图速览</span>
+          </label>
+
+          <div class="field">
+            <label for="ai-endpoint">API Endpoint</label>
+            <input
+              id="ai-endpoint"
+              name="ai-endpoint"
+              type="text"
+              placeholder="https://api.deepseek.com/chat/completions"
+              spellcheck="false"
+            />
+            <p class="hint">OpenAI 兼容接口；远程必须 HTTPS，HTTP 仅允许 localhost / 127.0.0.1。</p>
+          </div>
+
+          <div class="field">
+            <label for="ai-api-key">API Key</label>
+            <div class="secret-input-row">
+              <input
+                id="ai-api-key"
+                name="ai-api-key"
+                type="password"
+                placeholder="粘贴 API Key"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button
+                id="toggle-ai-api-key"
+                type="button"
+                class="secondary-button compact-button"
+                aria-pressed="false"
+                aria-label="显示 API Key"
+              >显示</button>
+            </div>
+            <p class="hint">仅保存在本机扩展存储，只用于请求 AI 接口。</p>
+          </div>
+
+          <div class="field">
+            <label for="ai-model">模型</label>
+            <input
+              id="ai-model"
+              name="ai-model"
+              type="text"
+              placeholder="例如：deepseek-chat"
+              spellcheck="false"
+            />
+          </div>
+
+          <div class="inline-actions">
+            <button id="ai-authorize-btn" type="button" class="secondary-button">授权并测试</button>
+            <button id="ai-test-btn" type="button" class="secondary-button">测试连接</button>
+            <span id="ai-status" class="inline-status" data-kind="muted" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+      </section>
+
       <details
         id="obsidian-settings"
         class="settings-card details-card"

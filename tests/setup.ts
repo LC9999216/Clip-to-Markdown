@@ -140,6 +140,21 @@ export const sidePanelOpenMock = vi.fn(async (opts: { tabId: number }) => {
   chromeCalls.sidePanelOpens.push(opts);
 });
 
+/** permissions.request：默认返回 granted=true；测试可用 mockImplementation 覆盖 */
+export const permissionsRequestMock = vi.fn(
+  (_permissions: chrome.permissions.Permissions, cb?: (granted: boolean) => void) => {
+    currentLastError = null;
+    cb?.(true);
+  },
+);
+/** permissions.contains：默认返回 false（尚未授权） */
+export const permissionsContainsMock = vi.fn(
+  (_permissions: chrome.permissions.Permissions, cb?: (result: boolean) => void) => {
+    currentLastError = null;
+    cb?.(false);
+  },
+);
+
 export const setBadgeTextMock = vi.fn((details: { text?: string }) => {
   chromeCalls.badgeText.push(details.text ?? '');
   return Promise.resolve();
@@ -283,6 +298,10 @@ const chromeMock = {
   sidePanel: {
     open: sidePanelOpenMock,
   },
+  permissions: {
+    request: permissionsRequestMock,
+    contains: permissionsContainsMock,
+  },
   offscreen: {
     hasDocument: offscreenHasDocumentMock,
     createDocument: offscreenCreateDocumentMock,
@@ -309,6 +328,16 @@ beforeEach(() => {
   sidePanelOpenMock.mockReset();
   sidePanelOpenMock.mockImplementation(async (opts: { tabId: number }) => {
     chromeCalls.sidePanelOpens.push(opts);
+  });
+  permissionsRequestMock.mockReset();
+  permissionsRequestMock.mockImplementation((_permissions, cb?: (granted: boolean) => void) => {
+    currentLastError = null;
+    cb?.(true);
+  });
+  permissionsContainsMock.mockReset();
+  permissionsContainsMock.mockImplementation((_permissions, cb?: (result: boolean) => void) => {
+    currentLastError = null;
+    cb?.(false);
   });
   for (const k of Object.keys(mockStoredSettings)) delete mockStoredSettings[k];
   for (const k of Object.keys(mockSessionStorage)) delete mockSessionStorage[k];

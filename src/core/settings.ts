@@ -16,11 +16,18 @@ import {
   type ObsidianFrontmatterSettings,
   type ObsidianSettings,
 } from './obsidian-settings';
+import {
+  DEFAULT_AI_SETTINGS,
+  normalizeAiEndpoint,
+  type AiSettings,
+} from './ai-settings';
 
 export { DEFAULT_OBSIDIAN_SETTINGS } from './obsidian-settings';
 export type { ObsidianFrontmatterSettings, ObsidianSettings } from './obsidian-settings';
+export { DEFAULT_AI_SETTINGS } from './ai-settings';
+export type { AiSettings } from './ai-settings';
 
-export const SETTINGS_VERSION = 2 as const;
+export const SETTINGS_VERSION = 3 as const;
 export const DEFAULT_FILENAME_TEMPLATE = '{date}-{title}';
 
 export interface SaveSettings {
@@ -40,6 +47,7 @@ export interface ClipSettings {
   save: SaveSettings;
   filename: FilenameSettings;
   obsidian: ObsidianSettings;
+  ai: AiSettings;
 }
 
 export const DEFAULT_SETTINGS: ClipSettings = {
@@ -52,6 +60,7 @@ export const DEFAULT_SETTINGS: ClipSettings = {
     template: DEFAULT_FILENAME_TEMPLATE,
   },
   obsidian: DEFAULT_OBSIDIAN_SETTINGS,
+  ai: DEFAULT_AI_SETTINGS,
 };
 
 /**
@@ -111,6 +120,21 @@ function cloneDefaultSettings(): ClipSettings {
       ...DEFAULT_OBSIDIAN_SETTINGS,
       frontmatter: { ...DEFAULT_OBSIDIAN_SETTINGS.frontmatter },
     },
+    ai: { ...DEFAULT_AI_SETTINGS },
+  };
+}
+
+/** 规范化 AI 设置：Endpoint 非法则清空、apiKey 去空白、outputLanguage 固定。 */
+function normalizeAiSettings(raw: unknown): AiSettings {
+  const value = isRecord(raw) ? raw : {};
+  return {
+    enabled: typeof value.enabled === 'boolean'
+      ? value.enabled
+      : DEFAULT_AI_SETTINGS.enabled,
+    endpoint: normalizeAiEndpoint(readString(value.endpoint) ?? '') ?? '',
+    apiKey: readString(value.apiKey)?.trim() ?? '',
+    model: readString(value.model)?.trim() ?? '',
+    outputLanguage: DEFAULT_AI_SETTINGS.outputLanguage,
   };
 }
 
@@ -173,6 +197,7 @@ export function migrateSettings(raw: unknown): ClipSettings {
       noteDirectory,
       frontmatter: normalizeFrontmatter(obsidian.frontmatter),
     },
+    ai: normalizeAiSettings(raw.ai),
   };
 }
 
@@ -206,6 +231,7 @@ export function saveSettings(settings: ClipSettings): Promise<void> {
         apiKey: migrated.obsidian.apiKey.trim(),
         frontmatter: { ...migrated.obsidian.frontmatter },
       },
+      ai: normalizeAiSettings(migrated.ai),
     };
     try {
       chrome.storage.local.set({ [STORAGE_KEY]: normalized }, () => {

@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   commandsGetAllMock,
   mockStoredSettings,
+  permissionsContainsMock,
+  permissionsRequestMock,
   runtimeSendMessageMock,
   setRuntimeLastError,
 } from './setup';
@@ -87,7 +89,7 @@ beforeEach(() => {
 });
 
 describe('Clip2MD 设置页结构', () => {
-  it('按保存位置、快捷键、Obsidian、保存栏的优先级组织页面', () => {
+  it('按保存位置、快捷键、AI 一图速览、Obsidian、保存栏的优先级组织页面', () => {
     const form = document.getElementById('settings-form');
     expect(form).not.toBeNull();
 
@@ -96,6 +98,7 @@ describe('Clip2MD 设置页结构', () => {
     expect(sectionIds).toEqual([
       'save-location-card',
       'shortcut-card',
+      'ai-settings',
       'obsidian-settings',
     ]);
 
@@ -137,6 +140,15 @@ describe('Clip2MD 设置页结构', () => {
   'about-card',
   'app-version',
   'initial-setup-guide',
+  'ai-settings',
+  'ai-enabled',
+  'ai-endpoint',
+  'ai-api-key',
+  'toggle-ai-api-key',
+  'ai-model',
+  'ai-authorize-btn',
+  'ai-test-btn',
+  'ai-status',
     ];
 
     for (const id of requiredIds) {
@@ -264,7 +276,7 @@ describe('表单保存状态', () => {
       expect(document.getElementById('save-status')?.textContent).toBe('设置已保存');
       expect(saveButton.disabled).toBe(true);
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 2,
+        settingsVersion: 3,
         save: {
           subfolder: 'Clip2MD/知乎',
         },
@@ -339,7 +351,7 @@ describe('Obsidian 高级设置', () => {
         expect.any(Function),
       );
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 2,
+        settingsVersion: 3,
         obsidian: { apiKey: 'secret-key' },
       });
       expect(document.getElementById('obsidian-status')?.textContent)
@@ -361,6 +373,144 @@ describe('Obsidian 高级设置', () => {
       expect(document.getElementById('obsidian-status')?.textContent)
         .toBe('连接失败，请检查地址或 API Key。');
       expect(document.getElementById('obsidian-status')?.dataset.kind).toBe('error');
+    });
+  });
+});
+
+describe('AI 一图速览设置', () => {
+  it('AI API Key 支持显示/隐藏，且不把显示状态视为表单修改', async () => {
+    await bootOptions(null);
+    const input = document.getElementById('ai-api-key') as HTMLInputElement;
+    const toggle = document.getElementById('toggle-ai-api-key') as HTMLButtonElement;
+    const saveButton = document.getElementById('save-btn') as HTMLButtonElement;
+
+    expect(input.type).toBe('password');
+    toggle.click();
+    expect(input.type).toBe('text');
+    expect(toggle.textContent).toBe('隐藏');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(saveButton.disabled).toBe(true);
+
+    toggle.click();
+    expect(input.type).toBe('password');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('授权并测试：由用户按钮手势请求 Endpoint 对应的运行时主机权限并保存配置', async () => {
+    await bootOptions(null);
+    (document.getElementById('ai-enabled') as HTMLInputElement).checked = true;
+    (document.getElementById('ai-endpoint') as HTMLInputElement).value = 'https://api.deepseek.com/chat/completions';
+    (document.getElementById('ai-api-key') as HTMLInputElement).value = 'sk-secret';
+    (document.getElementById('ai-model') as HTMLInputElement).value = 'deepseek-chat';
+
+    (document.getElementById('ai-authorize-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(permissionsContainsMock).toHaveBeenCalledWith(
+        { origins: ['https://api.deepseek.com/*'] },
+        expect.any(Function),
+      );
+      expect(permissionsRequestMock).toHaveBeenCalledWith(
+        { origins: ['https://api.deepseek.com/*'] },
+        expect.any(Function),
+      );
+      expect(mockStoredSettings['clip2md.settings']).toMatchObject({
+        settingsVersion: 3,
+        ai: {
+          enabled: true,
+          endpoint: 'https://api.deepseek.com/chat/completions',
+          apiKey: 'sk-secret',
+          model: 'deepseek-chat',
+        },
+      });
+    });
+  });
+
+  it('拒绝普通远程 HTTP endpoint，不发起权限请求并给出可操作提示', async () => {
+    await bootOptions(null);
+    (document.getElementById('ai-endpoint') as HTMLInputElement).value = 'http://example.com/chat/completions';
+
+    (document.getElementById('ai-authorize-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(permissionsRequestMock).not.toHaveBeenCalled();
+      expect(document.getElementById('ai-status')?.textContent).toContain('不支持');
+    });
+  });
+
+  it('允许 localhost HTTP endpoint 并请求 http://localhost/* 权限', async () => {
+    await bootOptions(null);
+    (document.getElementById('ai-endpoint') as HTMLInputElement).value = 'http://localhost:11434/v1/chat/completions';
+
+    (document.getElementById('ai-authorize-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(permissionsContainsMock).toHaveBeenCalledWith(
+        { origins: ['http://localhost/*'] },
+        expect.any(Function),
+      );
+      expect(permissionsRequestMock).toHaveBeenCalledWith(
+        { origins: ['http://localhost/*'] },
+        expect.any(Function),
+      );
+    });
+  });
+
+  it('已授权域名不再重复请求权限，直接进入连接测试', async () => {
+    permissionsContainsMock.mockImplementation((_permissions, cb?: (result: boolean) => void) => {
+      cb?.(true);
+    });
+    await bootOptions(null);
+    (document.getElementById('ai-endpoint') as HTMLInputElement).value = 'https://api.openai.com/v1/chat/completions';
+
+    (document.getElementById('ai-authorize-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(permissionsRequestMock).not.toHaveBeenCalled();
+      expect(runtimeSendMessageMock).toHaveBeenCalledWith(
+        { type: 'TEST_AI' },
+        expect.any(Function),
+      );
+    });
+  });
+
+  it('测试 AI 保存当前字段并发起 TEST_AI 消息，就近显示成功', async () => {
+    runtimeSendMessageMock.mockImplementation((_message, callback?: (response: unknown) => void) => {
+      callback?.({ success: true, model: 'deepseek-chat' });
+    });
+    await bootOptions(null);
+    (document.getElementById('ai-endpoint') as HTMLInputElement).value = 'https://api.deepseek.com/chat/completions';
+    (document.getElementById('ai-api-key') as HTMLInputElement).value = 'sk-secret';
+    (document.getElementById('ai-model') as HTMLInputElement).value = 'deepseek-chat';
+
+    (document.getElementById('ai-test-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(runtimeSendMessageMock).toHaveBeenCalledWith(
+        { type: 'TEST_AI' },
+        expect.any(Function),
+      );
+      expect(document.getElementById('ai-status')?.textContent).toContain('连接成功');
+      expect(document.getElementById('ai-status')?.textContent).toContain('deepseek-chat');
+      expect(mockStoredSettings['clip2md.settings']).toMatchObject({
+        settingsVersion: 3,
+        ai: { apiKey: 'sk-secret', model: 'deepseek-chat' },
+      });
+    });
+  });
+
+  it('测试 AI 失败时给出可操作提示', async () => {
+    runtimeSendMessageMock.mockImplementation((_message, callback?: (response: unknown) => void) => {
+      callback?.({ success: false, error: 'API Key 无效' });
+    });
+    await bootOptions(null);
+    (document.getElementById('ai-endpoint') as HTMLInputElement).value = 'https://api.deepseek.com/chat/completions';
+
+    (document.getElementById('ai-test-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(document.getElementById('ai-status')?.textContent).toContain('API Key 无效');
+      expect(document.getElementById('ai-status')?.dataset.kind).toBe('error');
     });
   });
 });

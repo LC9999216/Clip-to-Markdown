@@ -12,6 +12,7 @@ import {
   type ObsidianFrontmatterSettings,
   type ClipSettings,
 } from '../core/settings';
+import { getAiOriginPattern, normalizeAiEndpoint } from '../core/ai-settings';
 import { validateFilenameTemplate } from '../core/filename';
 import {
   clearDirectoryHandle,
@@ -36,6 +37,15 @@ const testObsidianBtn = document.getElementById('test-obsidian-btn') as HTMLButt
 const obsidianStatus = document.getElementById('obsidian-status') as HTMLElement;
 const toggleApiKeyBtn = document.getElementById('toggle-api-key') as HTMLButtonElement;
 const obsidianSummaryStateEl = document.getElementById('obsidian-summary-state') as HTMLSpanElement;
+
+const aiEnabledInput = document.getElementById('ai-enabled') as HTMLInputElement;
+const aiEndpointInput = document.getElementById('ai-endpoint') as HTMLInputElement;
+const aiApiKeyInput = document.getElementById('ai-api-key') as HTMLInputElement;
+const aiModelInput = document.getElementById('ai-model') as HTMLInputElement;
+const toggleAiApiKeyBtn = document.getElementById('toggle-ai-api-key') as HTMLButtonElement;
+const aiAuthorizeBtn = document.getElementById('ai-authorize-btn') as HTMLButtonElement;
+const aiTestBtn = document.getElementById('ai-test-btn') as HTMLButtonElement;
+const aiStatus = document.getElementById('ai-status') as HTMLElement;
 const frontmatterInputs: Record<keyof ObsidianFrontmatterSettings, HTMLInputElement> = {
   sourceUrl: document.getElementById('frontmatter-source-url') as HTMLInputElement,
   author: document.getElementById('frontmatter-author') as HTMLInputElement,
@@ -107,6 +117,13 @@ function readFormSettings() {
     filename: {
       ...currentSettings.filename,
       template: filenameTemplateInput.value.trim(),
+    },
+    ai: {
+      ...currentSettings.ai,
+      enabled: aiEnabledInput.checked,
+      endpoint: aiEndpointInput.value,
+      apiKey: aiApiKeyInput.value,
+      model: aiModelInput.value,
     },
   };
 }
@@ -267,6 +284,15 @@ function onToggleApiKey(): void {
   toggleApiKeyBtn.setAttribute('aria-label', `${reveal ? '隐藏' : '显示'} API Key`);
 }
 
+/** 切换「一图速览」API Key 明/密文；同样不触发表单脏标记。 */
+function onToggleAiApiKey(): void {
+  const reveal = aiApiKeyInput.type === 'password';
+  aiApiKeyInput.type = reveal ? 'text' : 'password';
+  toggleAiApiKeyBtn.textContent = reveal ? '隐藏' : '显示';
+  toggleAiApiKeyBtn.setAttribute('aria-pressed', String(reveal));
+  toggleAiApiKeyBtn.setAttribute('aria-label', `${reveal ? '隐藏' : '显示'} API Key`);
+}
+
 async function init(): Promise<void> {
   currentSettings = await loadSettings();
   initialSetupComplete = await isInitialSetupComplete();
@@ -279,6 +305,10 @@ async function init(): Promise<void> {
   for (const [name, input] of Object.entries(frontmatterInputs) as Array<[keyof ObsidianFrontmatterSettings, HTMLInputElement]>) {
     input.checked = currentSettings.obsidian.frontmatter[name];
   }
+  aiEnabledInput.checked = currentSettings.ai.enabled;
+  aiEndpointInput.value = currentSettings.ai.endpoint;
+  aiApiKeyInput.value = currentSettings.ai.apiKey;
+  aiModelInput.value = currentSettings.ai.model;
   appVersionEl.textContent = `v${chrome.runtime.getManifest().version}`;
   refreshObsidianSummary();
   const handle = await refreshFolderState();
@@ -377,12 +407,112 @@ function runtimeSend<T>(msg: unknown): Promise<T> {
   });
 }
 
+function permissionsContains(permissions: chrome.permissions.Permissions): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.permissions.contains(permissions, (result) => resolve(result === true));
+  });
+}
+
+function permissionsRequest(permissions: chrome.permissions.Permissions): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.permissions.request(permissions, (granted) => resolve(granted === true));
+  });
+}
+
+/**
+ * 确保运行时已获得该 AI Endpoint 域名的主机权限。
+ * 已授权直接通过；未授权弹出浏览器权限请求，用户拒绝则返回 false。
+ */
+async function ensureAiOriginPermission(endpoint: string): Promise<boolean> {
+  const pattern = getAiOriginPattern(endpoint);
+  if (pattern === null) return false;
+  if (await permissionsContains({ origins: [pattern] })) return true;
+  return permissionsRequest({ origins: [pattern] });
+}
+
+/** 调用 Background 的 TEST_AI 并就近显示结果。 */
+async function testAiConnection(): Promise<void> {
+  const response = await runtimeSend<{ success: boolean; model?: string; error?: string }>({
+    type: 'TEST_AI',
+  });
+  if (!response.success) {
+    setInlineStatus(
+      aiStatus,
+      response.error ? `连接失败：${response.error}` : '连接失败，请检查 Endpoint、API Key 或模型。',
+      'error',
+    );
+    return;
+  }
+  setInlineStatus(aiStatus, `连接成功：${response.model ?? 'OpenAI Compatible API'}`, 'ok');
+}
+
+/** 授权并测试：保存当前 AI 字段 → 请求域名权限 → 测试连接。 */
+async function onAuthorizeAndTestAi(): Promise<void> {
+  aiAuthorizeBtn.disabled = true;
+  aiAuthorizeBtn.textContent = '处理中…';
+  setInlineStatus(aiStatus, '正在保存配置…');
+  try {
+    const settings = readFormSettings();
+    const endpoint = normalizeAiEndpoint(settings.ai.endpoint);
+    if (endpoint === null) {
+      setInlineStatus(aiStatus, 'Endpoint 不支持：仅 HTTPS 或 localhost / 127.0.0.1。', 'error');
+      return;
+    }
+    const next = { ...settings, ai: { ...settings.ai, endpoint } };
+    await saveSettings(next);
+    currentSettings = next;
+    setDirty(false);
+    if (!(await ensureAiOriginPermission(endpoint))) {
+      setInlineStatus(aiStatus, '未获得该 API 域名的访问权限，无法测试。', 'error');
+      return;
+    }
+    await testAiConnection();
+  } catch (error) {
+    setInlineStatus(aiStatus, `处理失败：${String(error)}`, 'error');
+  } finally {
+    aiAuthorizeBtn.disabled = false;
+    aiAuthorizeBtn.textContent = '授权并测试';
+  }
+}
+
+/** 测试连接：保存当前 AI 字段，必要时请求域名权限后调用 TEST_AI。 */
+async function onTestAi(): Promise<void> {
+  aiTestBtn.disabled = true;
+  aiTestBtn.textContent = '测试中…';
+  setInlineStatus(aiStatus, '正在测试…');
+  try {
+    const settings = readFormSettings();
+    const endpoint = normalizeAiEndpoint(settings.ai.endpoint);
+    if (endpoint === null) {
+      setInlineStatus(aiStatus, 'Endpoint 不支持：仅 HTTPS 或 localhost / 127.0.0.1。', 'error');
+      return;
+    }
+    const next = { ...settings, ai: { ...settings.ai, endpoint } };
+    await saveSettings(next);
+    currentSettings = next;
+    setDirty(false);
+    if (!(await ensureAiOriginPermission(endpoint))) {
+      setInlineStatus(aiStatus, '未获得该 API 域名的访问权限。', 'error');
+      return;
+    }
+    await testAiConnection();
+  } catch (error) {
+    setInlineStatus(aiStatus, `测试失败：${String(error)}`, 'error');
+  } finally {
+    aiTestBtn.disabled = false;
+    aiTestBtn.textContent = '测试连接';
+  }
+}
+
 chooseFolderBtn.addEventListener('click', () => void onChooseFolder());
 clearFolderBtn.addEventListener('click', () => void onClearFolder());
 shortcutBtn.addEventListener('click', onOpenShortcuts);
 obsidianShortcutBtn.addEventListener('click', onOpenShortcuts);
 testObsidianBtn.addEventListener('click', () => void onTestObsidian());
 toggleApiKeyBtn.addEventListener('click', onToggleApiKey);
+toggleAiApiKeyBtn.addEventListener('click', onToggleAiApiKey);
+aiAuthorizeBtn.addEventListener('click', () => void onAuthorizeAndTestAi());
+aiTestBtn.addEventListener('click', () => void onTestAi());
 
 document.addEventListener('DOMContentLoaded', () => {
   void init();

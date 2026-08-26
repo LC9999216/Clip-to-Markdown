@@ -9,6 +9,7 @@ import {
   saveSettings,
   sanitizeSubfolder,
 } from '../../src/core/settings';
+import { DEFAULT_AI_SETTINGS } from '../../src/core/ai-settings';
 
 describe('sanitizeSubfolder', () => {
   it('空串 / 纯空白 → 空串', () => {
@@ -60,14 +61,15 @@ describe('resolveDownloadPath', () => {
   });
 });
 
-describe('Settings V2', () => {
-  it('默认设置包含版本、文件名模板和 Obsidian 默认值', () => {
-    expect(DEFAULT_SETTINGS.settingsVersion).toBe(2);
+describe('Settings V3', () => {
+  it('默认设置包含版本、文件名模板、Obsidian 与 AI 默认值', () => {
+    expect(DEFAULT_SETTINGS.settingsVersion).toBe(3);
     expect(DEFAULT_SETTINGS.filename.template).toBe(DEFAULT_FILENAME_TEMPLATE);
     expect(DEFAULT_SETTINGS.obsidian).toEqual(DEFAULT_OBSIDIAN_SETTINGS);
+    expect(DEFAULT_SETTINGS.ai).toEqual(DEFAULT_AI_SETTINGS);
   });
 
-  it('把 V0.1 扁平设置迁移为 V2，并保留现有 Obsidian 配置', () => {
+  it('把 V0.1 扁平设置迁移为 V3，并保留现有 Obsidian 配置、补齐 AI 默认值', () => {
     expect(migrateSettings({
       subfolder: 'Clip2MD/知乎',
       saveAs: true,
@@ -75,7 +77,7 @@ describe('Settings V2', () => {
       obsidianApiKey: ' secret ',
       noteFolder: 'Clippings',
     })).toEqual({
-      settingsVersion: 2,
+      settingsVersion: 3,
       save: { subfolder: 'Clip2MD/知乎', saveAs: true },
       filename: { template: DEFAULT_FILENAME_TEMPLATE },
       obsidian: {
@@ -84,25 +86,76 @@ describe('Settings V2', () => {
         apiKey: 'secret',
         noteDirectory: 'Clippings',
       },
+      ai: DEFAULT_AI_SETTINGS,
     });
   });
 
-  it('V2 缺字段时补齐默认值', () => {
-    const settings = migrateSettings({
+  it('V2 迁移到 V3 时无损保留 save/filename/obsidian，只补 ai 默认值', () => {
+    const v2 = {
       settingsVersion: 2,
+      save: { subfolder: 'Clippings/知乎', saveAs: true },
+      filename: { template: '{platform}-{title}' },
+      obsidian: {
+        ...DEFAULT_OBSIDIAN_SETTINGS,
+        apiUrl: 'http://127.0.0.1:27123',
+        apiKey: 'key',
+        noteDirectory: 'Notes',
+        frontmatter: { ...DEFAULT_OBSIDIAN_SETTINGS.frontmatter, tags: true },
+      },
+    };
+    const migrated = migrateSettings(v2);
+
+    expect(migrated.settingsVersion).toBe(3);
+    expect(migrated.save).toEqual(v2.save);
+    expect(migrated.filename).toEqual(v2.filename);
+    expect(migrated.obsidian).toEqual(v2.obsidian);
+    expect(migrated.ai).toEqual(DEFAULT_AI_SETTINGS);
+  });
+
+  it('V3 缺字段时补齐默认值', () => {
+    const settings = migrateSettings({
+      settingsVersion: 3,
       save: { saveAs: true },
       filename: {},
       obsidian: { apiKey: 'key' },
+      ai: { enabled: true },
     });
 
-    expect(settings.settingsVersion).toBe(2);
+    expect(settings.settingsVersion).toBe(3);
     expect(settings.save).toEqual({ subfolder: '', saveAs: true });
     expect(settings.filename).toEqual({ template: DEFAULT_FILENAME_TEMPLATE });
     expect(settings.obsidian.apiKey).toBe('key');
-    expect(settings.obsidian.noteDirectory).toBe(DEFAULT_OBSIDIAN_SETTINGS.noteDirectory);
+    expect(settings.ai).toEqual({
+      enabled: true,
+      endpoint: '',
+      apiKey: '',
+      model: '',
+      outputLanguage: 'zh-CN',
+    });
   });
 
-  it('保存后可以读取完整的 V2 设置', async () => {
+  it('AI 字段在迁移时被规范化：endpoint 非法则清空、apiKey 去空白', () => {
+    const settings = migrateSettings({
+      settingsVersion: 3,
+      ai: {
+        enabled: true,
+        endpoint: 'http://example.com/chat/completions',
+        apiKey: '  secret  ',
+        model: 'deepseek-chat',
+        outputLanguage: 'zh-CN',
+      },
+    });
+
+    expect(settings.ai).toEqual({
+      enabled: true,
+      endpoint: '',
+      apiKey: 'secret',
+      model: 'deepseek-chat',
+      outputLanguage: 'zh-CN',
+    });
+  });
+
+  it('保存后可以读取完整的 V3 设置（含 AI 字段）', async () => {
     const settings = {
       ...DEFAULT_SETTINGS,
       save: { subfolder: 'Notes', saveAs: true },
@@ -111,6 +164,13 @@ describe('Settings V2', () => {
         ...DEFAULT_OBSIDIAN_SETTINGS,
         apiKey: 'local-only-key',
         frontmatter: { ...DEFAULT_OBSIDIAN_SETTINGS.frontmatter, tags: true },
+      },
+      ai: {
+        enabled: true,
+        endpoint: 'https://api.deepseek.com/chat/completions',
+        apiKey: 'ai-key',
+        model: 'deepseek-chat',
+        outputLanguage: 'zh-CN' as const,
       },
     };
 

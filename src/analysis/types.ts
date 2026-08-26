@@ -16,6 +16,15 @@ export interface AnalysisInput {
   truncated: boolean;
 }
 
+// ---------- Source Blocks（V2 原文定位） ----------
+
+/** 单个原文来源块：从真实 DOM 提取，供分析引用与导航定位。 */
+export interface AnalysisSourceBlock {
+  id: string;
+  kind: 'heading' | 'paragraph' | 'list-item' | 'quote' | 'code' | 'table';
+  text: string;
+}
+
 // ---------- VisualSummary（Phase 4） ----------
 
 export type ArticleType =

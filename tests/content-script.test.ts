@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import '../src/content/content-script';
 import { dispatchRuntimeMessage } from './setup';
 import { mountFixture } from './helpers';
-import type { ExtractResponse, StatusResponse } from '../src/types/messages';
+import type { ExtractResponse, ExtractVisualSourceResponse, StatusResponse } from '../src/types/messages';
 
 /** jsdom 中重定向 window.location（jsdom 默认 origin 不匹配，用 defineProperty 覆盖） */
 function setLocation(url: string): void {
@@ -129,5 +129,48 @@ describe('content script：ChatGPT', () => {
       '<div data-message-author-role="system">系统</div><div data-message-author-role="tool">工具</div>';
     const resp = (await dispatchRuntimeMessage({ type: 'GET_STATUS' })) as StatusResponse;
     expect(resp.supported).toBe(false);
+  });
+});
+
+describe('content script EXTRACT_VISUAL_SOURCE', () => {
+  it('X 长文章返回 ContentDocument + Source Blocks', async () => {
+    setLocation('https://x.com/deepseek_ai/status/8888');
+    mountFixture('x', 'article');
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT_VISUAL_SOURCE' })) as ExtractVisualSourceResponse;
+    expect(resp.success).toBe(true);
+    if (resp.success) {
+      expect(resp.document.metadata.platform).toBe('x');
+      expect(resp.document.metadata.contentType).toBe('x-article');
+      expect(resp.document.body.type).toBe('article');
+      expect(resp.sourceBlocks.length).toBeGreaterThan(0);
+      expect(resp.sourceBlocks[0]!.id).toBe('B001');
+      expect(resp.sourceBlocks.every((b) => /^B\d{3,}$/.test(b.id))).toBe(true);
+    }
+  });
+
+  it('X 普通推文返回空 Source Blocks', async () => {
+    setLocation('https://x.com/alice/status/123456');
+    mountFixture('x', 'normal');
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT_VISUAL_SOURCE' })) as ExtractVisualSourceResponse;
+    expect(resp.success).toBe(true);
+    if (resp.success) {
+      expect(resp.document.metadata.contentType).toBe('tweet');
+      expect(resp.sourceBlocks).toEqual([]);
+    }
+  });
+
+  it('不支持的页面返回 UNSUPPORTED_PAGE', async () => {
+    setLocation('https://example.com/page');
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT_VISUAL_SOURCE' })) as ExtractVisualSourceResponse;
+    expect(resp.success).toBe(false);
+    if (!resp.success) expect(resp.error.code).toBe('UNSUPPORTED_PAGE');
+  });
+
+  it('原 EXTRACT 路径不受影响（X 长文章仍返回 ContentDocument）', async () => {
+    setLocation('https://x.com/deepseek_ai/status/8888');
+    mountFixture('x', 'article');
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT' })) as ExtractResponse;
+    expect(resp.success).toBe(true);
+    if (resp.success) expect(resp.document.metadata.contentType).toBe('x-article');
   });
 });

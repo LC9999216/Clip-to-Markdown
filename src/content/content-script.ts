@@ -1,13 +1,19 @@
 /**
  * Content Script：在受支持平台页面注入。
- * 处理 GET_STATUS（探测当前页面）与 EXTRACT（提取为 ContentDocument）。
+ * 处理 GET_STATUS（探测当前页面）、EXTRACT（提取为 ContentDocument）
+ * 与 EXTRACT_VISUAL_SOURCE（同时返回 Source Blocks 供原文定位）。
  * 消息触发时即时读取 DOM，不缓存状态（应对 SPA 导航）。
  */
 
 import '../adapters/index';
 import { registry } from '../core/platform-registry';
 import { ExtractionError } from '../core/error';
-import type { ExtractResponse, StatusResponse } from '../types/messages';
+import { collectArticleSourceBlocks } from '../adapters/x/article-source';
+import type {
+  ExtractResponse,
+  ExtractVisualSourceResponse,
+  StatusResponse,
+} from '../types/messages';
 import type { PlatformAdapter } from '../adapters/types';
 import type { PlatformContentType } from '../core/schema';
 
@@ -46,6 +52,7 @@ function toExtractError(e: unknown): ExtractResponse {
   return { success: false, error: { code: 'UNKNOWN', message: `发生未知错误：${String(e)}` } };
 }
 
+/** EXTRACT 保持原路径，不受 EXTRACT_VISUAL_SOURCE 影响 */
 function handleExtract(): ExtractResponse | Promise<ExtractResponse> {
   try {
     const url = currentUrl();
@@ -65,6 +72,31 @@ function handleExtract(): ExtractResponse | Promise<ExtractResponse> {
   }
 }
 
+/** EXTRACT_VISUAL_SOURCE：X Article 附带 DOM Source Blocks，其余返回空 Blocks */
+function handleExtractVisualSource(): ExtractVisualSourceResponse | Promise<ExtractVisualSourceResponse> {
+  try {
+    const url = currentUrl();
+    const adapter = registry.match(url);
+    if (!adapter) {
+      throw new ExtractionError('UNSUPPORTED_PAGE', '当前页面不是受支持的帖子/文章页面。');
+    }
+
+    const contentType = adapter.detectType(url, document);
+    const sourceBlocks =
+      adapter.platform === 'x' && contentType === 'x-article' ? collectArticleSourceBlocks(document) : [];
+
+    if (adapter.extractAsync) {
+      return adapter
+        .extractAsync(document, url)
+        .then((contentDoc): ExtractVisualSourceResponse => ({ success: true, document: contentDoc, sourceBlocks }))
+        .catch((e) => toExtractError(e) as ExtractVisualSourceResponse);
+    }
+    return { success: true, document: adapter.extract(document, url), sourceBlocks };
+  } catch (e) {
+    return toExtractError(e) as ExtractVisualSourceResponse;
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (typeof msg === 'object' && msg !== null) {
     const type = (msg as { type?: string }).type;
@@ -77,6 +109,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (result instanceof Promise) {
         result.then((resp) => sendResponse(resp));
         return true; // 保持异步响应通道（B 站等需网络请求的平台）
+      }
+      sendResponse(result);
+      return false;
+    }
+    if (type === 'EXTRACT_VISUAL_SOURCE') {
+      const result = handleExtractVisualSource();
+      if (result instanceof Promise) {
+        result.then((resp) => sendResponse(resp));
+        return true;
       }
       sendResponse(result);
       return false;

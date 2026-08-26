@@ -4,12 +4,18 @@
  */
 
 import type { ContentDocument, PlatformContentType, PlatformId } from '../core/schema';
-import type { VisualAnalysisState } from '../analysis/types';
+import type { AnalysisSourceBlock, VisualAnalysisState } from '../analysis/types';
 
 // ---------- 请求 ----------
 
 export type StatusRequest = { type: 'GET_STATUS' };
 export type ExtractRequest = { type: 'EXTRACT' };
+
+/**
+ * 一次读取返回 ContentDocument + Source Blocks（X Article 原文定位用）。
+ * X Article 返回 DOM Blocks；Tweet 及其他平台返回空 Blocks。
+ */
+export type ExtractVisualSourceRequest = { type: 'EXTRACT_VISUAL_SOURCE' };
 export type DownloadRequest = { type: 'DOWNLOAD'; payload: { markdown: string; filename: string } };
 
 /**
@@ -69,7 +75,7 @@ export type SaveCurrentTabResponse =
   | { success: true; filename: string }
   | { success: false; error: string };
 
-export type ContentRequest = StatusRequest | ExtractRequest;
+export type ContentRequest = StatusRequest | ExtractRequest | ExtractVisualSourceRequest;
 export type RuntimeMessage =
   | ContentRequest
   | DownloadRequest
@@ -109,6 +115,10 @@ export type ExtractResponse =
   | { success: true; document: ContentDocument }
   | { success: false; error: { code: string; message: string } };
 
+export type ExtractVisualSourceResponse =
+  | { success: true; document: ContentDocument; sourceBlocks: AnalysisSourceBlock[] }
+  | { success: false; error: { code: string; message: string } };
+
 export type DownloadResponse = { success: true; filename: string } | { success: false; error: string };
 
 // ---------- 类型守卫 ----------
@@ -136,6 +146,10 @@ export function isWriteCustomRequest(m: unknown): m is WriteCustomRequest {
   if (typeof markdown !== 'string' || markdown === '') return false;
   if (/[/\\]/.test(filename)) return false;
   return true;
+}
+
+export function isExtractVisualSourceRequest(m: unknown): m is ExtractVisualSourceRequest {
+  return isRecord(m) && m.type === 'EXTRACT_VISUAL_SOURCE';
 }
 
 export function isFetchJsonRequest(m: unknown): m is FetchJsonRequest {

@@ -304,8 +304,9 @@ export function findArticleContainer(doc: Document): Element | null {
 /**
  * 正文容器：严格路径 twitterArticleRichTextView → longformRichTextComponent → [data-contents]。
  * 中间层级缺环时兜底在 article 内直接找 [data-contents]，结构变动只改 selectors。
+ * 导出供 article-source（Source Block 收集）共享，避免提取器与导航器各自猜正文根。
  */
-function findArticleBody(article: Element): Element | null {
+export function findArticleBody(article: Element): Element | null {
   const rich = article.querySelector(X_SELECTORS.articleRichView);
   const longform = rich
     ? rich.querySelector(X_SELECTORS.articleLongform)

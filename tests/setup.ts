@@ -341,7 +341,10 @@ beforeEach(() => {
   });
   for (const k of Object.keys(mockStoredSettings)) delete mockStoredSettings[k];
   for (const k of Object.keys(mockSessionStorage)) delete mockSessionStorage[k];
+  // 每个测试重新注册 chrome：个别测试末尾调用 vi.unstubAllGlobals() 会注销全局，
+  // 若只在模块顶部 stub 一次，后续测试将遇到 chrome is not defined。
+  vi.stubGlobal('chrome', chromeMock);
 });
 
-// 暴露为全局 chrome
+// 暴露为全局 chrome（模块顶层 stub：部分模块在 import 阶段即读取 chrome，需早于 beforeEach 可用）
 vi.stubGlobal('chrome', chromeMock);

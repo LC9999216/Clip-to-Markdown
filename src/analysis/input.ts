@@ -7,7 +7,7 @@ const HEAD_CHARS = 12_000;
 const TAIL_CHARS = 4_000;
 const TRUNCATION_MARKER = '[内容过长，中间部分已省略]';
 
-function formatAuthor(author: ContentDocument['metadata']['author']): string {
+export function formatAuthor(author: ContentDocument['metadata']['author']): string {
   const name = author.name.trim();
   const handle = author.handle?.trim().replace(/^@/, '');
   if (name && handle) return `${name} (@${handle})`;

@@ -23,17 +23,29 @@ function mountPanel(): void {
     </main>`;
 }
 
-function doneState(title: string, body: string) {
+function doneState(title: string, summary: string) {
   return {
     status: 'done' as const,
     tabId: 7,
+    requestId: 'req-1',
     updatedAt: 1,
-    preview: {
+    source: {
+      url: 'https://x.com/alice/status/123',
       title,
       author: 'Alice (@alice)',
-      body,
-      contentType: 'tweet' as const,
-      sourceUrl: 'https://x.com/alice/status/123',
+    },
+    result: {
+      schemaVersion: 1 as const,
+      articleType: 'opinion' as const,
+      confidence: 0.92,
+      classificationReason: '判断理由',
+      summary,
+      keyPoints: [
+        { title: '观点一', description: '说明一' },
+        { title: '观点二', description: '说明二' },
+      ],
+      structure: { label: '核心主题', children: [{ label: '子主题' }] },
+      takeaways: ['值得记住的结论'],
     },
   };
 }
@@ -55,7 +67,7 @@ describe('Side Panel phase 2 preview', () => {
 
     dispose = await initializeSidePanel();
 
-    expect(document.querySelector('#status-label')?.textContent).toBe('内容已提取');
+    expect(document.querySelector('#status-label')?.textContent).toBe('内容已分析');
     expect(document.querySelector('#preview-title')?.textContent).toBe('当前推文');
     expect(document.querySelector('#preview-author')?.textContent).toBe('Alice (@alice)');
     expect(document.querySelector('#preview-body')?.textContent).toBe('正文预览');
@@ -84,13 +96,17 @@ describe('Side Panel phase 2 preview', () => {
         newValue: {
           status: 'error',
           tabId: 7,
+          requestId: 'req-error',
           updatedAt: 2,
-          error: '当前版本仅支持 X 推文和 X Article。请切换到受支持的 X 内容后重试。',
+          error: {
+            code: 'UNSUPPORTED_VISUAL_PLATFORM',
+            message: '当前版本仅支持 X 推文和 X Article。请切换到受支持的 X 内容后重试。',
+          },
         },
       },
     });
 
-    expect(document.querySelector('#status-label')?.textContent).toBe('暂时无法预览');
+    expect(document.querySelector('#status-label')?.textContent).toBe('暂时无法生成一图速览');
     expect(document.querySelector('#status-copy')?.textContent).toMatch(/X 推文/);
     expect((document.querySelector('#preview') as HTMLElement).hidden).toBe(true);
   });

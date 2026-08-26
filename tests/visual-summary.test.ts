@@ -1,17 +1,21 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../src/background/background';
 import { openVisualSummaryPanel } from '../src/background/visual-summary-command';
-import { startVisualSummaryPreview } from '../src/background/visual-summary';
+import { startVisualAnalysis } from '../src/background/visual-summary';
 import {
   chromeCalls,
   dispatchCommand,
+  dispatchRuntimeMessage,
   mockSessionStorage,
+  mockStoredSettings,
+  permissionsContainsMock,
   setRuntimeLastError,
   tabsSendMessageMock,
   tabsQueryMock,
 } from './setup';
+import { visualSummaryStateKey, type VisualAnalysisState, type VisualSummary } from '../src/analysis/types';
 import type { ContentDocument } from '../src/core/schema';
 
 const root = resolve(import.meta.dirname, '..');
@@ -175,73 +179,89 @@ function extractedDocument(text: string, contentType: 'tweet' | 'x-article' = 't
   };
 }
 
-describe('visual summary phase 2 preview extraction', () => {
-  it('opens the panel, extracts the command tab, and persists a 300-character preview', async () => {
-    tabsSendMessageMock.mockImplementation((_tabId, message, callback) => {
-      expect(message).toEqual({ type: 'EXTRACT' });
-      callback?.({ success: true, document: extractedDocument('甲'.repeat(340), 'x-article') });
-    });
+const AI_SETTINGS_FIXTURE: Record<string, unknown> = {
+  settingsVersion: 3,
+  save: { subfolder: '', saveAs: false },
+  filename: { template: '{date}-{title}' },
+  obsidian: {
+    enabled: false,
+    apiUrl: 'http://127.0.0.1:27123',
+    apiKey: '',
+    noteDirectory: 'Clippings/Inbox',
+    frontmatter: {
+      sourceUrl: true,
+      author: true,
+      published: true,
+      platform: true,
+      clippedAt: true,
+      tags: false,
+    },
+  },
+  ai: {
+    enabled: true,
+    endpoint: 'https://api.deepseek.com/chat/completions',
+    apiKey: 'sk-test',
+    model: 'deepseek-chat',
+    outputLanguage: 'zh-CN',
+  },
+};
 
-    dispatchCommand('visual-summary', { id: 42 } as chrome.tabs.Tab);
+const VALID_SUMMARY: VisualSummary = {
+  schemaVersion: 1,
+  articleType: 'comparison',
+  confidence: 0.93,
+  classificationReason: '文章主要比较两个 AI 工具。',
+  summary: '文章比较了两种 AI 开发环境。',
+  keyPoints: [
+    { title: '完成度', description: 'DeepSeek Harness 完成度更高。' },
+    { title: '成本', description: 'DeepSeek Harness 成本更低。' },
+  ],
+  structure: { label: '对比', children: [{ label: 'DeepSeek Harness' }, { label: 'Claude Code' }] },
+  takeaways: ['看重成本选 DeepSeek Harness。'],
+};
 
-    await vi.waitFor(() => {
-      expect(mockSessionStorage['clip2md.visualSummary.state.42']).toMatchObject({
-        status: 'done',
-        preview: {
-          title: 'Article title',
-          author: 'Alice (@alice)',
-          body: '甲'.repeat(300),
-          contentType: 'x-article',
-          sourceUrl: 'https://x.com/alice/status/123',
-        },
-      });
+function aiReadyFixture(document: ContentDocument = extractedDocument('正文', 'x-article')): void {
+  mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+  permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+  tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+    callback?.({ success: true, document });
+  });
+}
+
+function jsonResponse(payload: unknown, status = 200): Response {
+  return { ok: status >= 200 && status < 300, status, json: async () => payload } as unknown as Response;
+}
+
+function okAiContent(content: string): Response {
+  return jsonResponse({ choices: [{ message: { content } }] });
+}
+
+function stateFor(tabId: number): VisualAnalysisState | undefined {
+  return mockSessionStorage[visualSummaryStateKey(tabId)] as VisualAnalysisState | undefined;
+}
+
+describe('visual summary phase 5 background orchestration', () => {
+  it('runs the full pipeline and persists a validated done state', async () => {
+    aiReadyFixture();
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { requestId } = await startVisualAnalysis(42);
+
+    const state = stateFor(42);
+    expect(state?.status).toBe('done');
+    expect(state?.requestId).toBe(requestId);
+    expect(state?.source).toEqual({
+      url: 'https://x.com/alice/status/123',
+      title: 'Article title',
+      author: 'Alice (@alice)',
     });
-    expect(chromeCalls.sidePanelOpens).toEqual([{ tabId: 42 }]);
-    expect(tabsSendMessageMock).toHaveBeenCalledTimes(1);
+    expect(state?.result).toEqual(VALID_SUMMARY);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
   });
 
-  it('runs a fresh EXTRACT on every shortcut trigger for an X SPA', async () => {
-    tabsSendMessageMock
-      .mockImplementationOnce((_tabId, _message, callback) => {
-        callback?.({ success: true, document: extractedDocument('first route') });
-      })
-      .mockImplementationOnce((_tabId, _message, callback) => {
-        callback?.({ success: true, document: extractedDocument('second route') });
-      });
-
-    dispatchCommand('visual-summary', { id: 9 } as chrome.tabs.Tab);
-    await vi.waitFor(() => {
-      expect(mockSessionStorage['clip2md.visualSummary.state.9']).toMatchObject({
-        preview: { body: 'first route' },
-      });
-    });
-
-    dispatchCommand('visual-summary', { id: 9 } as chrome.tabs.Tab);
-    await vi.waitFor(() => {
-      expect(mockSessionStorage['clip2md.visualSummary.state.9']).toMatchObject({
-        preview: { body: 'second route' },
-      });
-    });
-    expect(tabsSendMessageMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('persists an actionable error when extraction cannot reach the page', async () => {
-    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
-      setRuntimeLastError('Receiving end does not exist');
-      callback?.(undefined);
-    });
-
-    dispatchCommand('visual-summary', { id: 5 } as chrome.tabs.Tab);
-
-    await vi.waitFor(() => {
-      expect(mockSessionStorage['clip2md.visualSummary.state.5']).toMatchObject({
-        status: 'error',
-        error: expect.stringMatching(/仅支持 X.*刷新|刷新.*仅支持 X/),
-      });
-    });
-  });
-
-  it('persists an actionable error for extracted non-X content', async () => {
+  it('persists an actionable UNSUPPORTED_VISUAL_PLATFORM error for non-X content', async () => {
     const nonXDocument: ContentDocument = {
       version: 1,
       metadata: {
@@ -257,52 +277,123 @@ describe('visual summary phase 2 preview extraction', () => {
         children: [{ type: 'paragraph', children: [{ type: 'text', value: '正文' }] }],
       },
     };
+    mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
     tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
       callback?.({ success: true, document: nonXDocument });
     });
 
-    dispatchCommand('visual-summary', { id: 6 } as chrome.tabs.Tab);
+    const { requestId } = await startVisualAnalysis(6);
 
-    await vi.waitFor(() => {
-      expect(mockSessionStorage['clip2md.visualSummary.state.6']).toMatchObject({
-        status: 'error',
-        error: expect.stringMatching(/仅支持 X 推文和 X Article/),
-      });
-    });
+    const state = stateFor(6);
+    expect(state?.status).toBe('error');
+    expect(state?.error?.code).toBe('UNSUPPORTED_VISUAL_PLATFORM');
+    expect(state?.error?.message).toMatch(/仅支持 X/);
+    expect(state?.requestId).toBe(requestId);
   });
 
-  it('keeps newer preview when an older extraction succeeds later', async () => {
+  it('persists an actionable AI_NOT_CONFIGURED error when AI settings are missing', async () => {
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      callback?.({ success: true, document: extractedDocument('正文') });
+    });
+
+    const { requestId } = await startVisualAnalysis(7);
+
+    const state = stateFor(7);
+    expect(state?.status).toBe('error');
+    expect(state?.error?.code).toBe('AI_NOT_CONFIGURED');
+    expect(state?.error?.message).toMatch(/还没有配置 AI|请.*配置/);
+    expect(state?.requestId).toBe(requestId);
+  });
+
+  it('persists an actionable AI_HOST_NOT_GRANTED error when the AI host is not authorized', async () => {
+    mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+    // permissions.contains 保持默认 false（未授权）
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      callback?.({ success: true, document: extractedDocument('正文') });
+    });
+
+    const { requestId } = await startVisualAnalysis(8);
+
+    const state = stateFor(8);
+    expect(state?.status).toBe('error');
+    expect(state?.error?.code).toBe('AI_HOST_NOT_GRANTED');
+    expect(state?.error?.message).toMatch(/授权/);
+    expect(state?.requestId).toBe(requestId);
+  });
+
+  it('serves a cached summary without a second AI call', async () => {
+    aiReadyFixture();
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startVisualAnalysis(9);
+    await startVisualAnalysis(9);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(stateFor(9)?.status).toBe('done');
+    vi.unstubAllGlobals();
+  });
+
+  it('force:true bypasses the session cache and calls AI again', async () => {
+    aiReadyFixture();
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startVisualAnalysis(10);
+    await startVisualAnalysis(10, { force: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+  });
+
+  it('writes extracting → analyzing → done state transitions in order', async () => {
+    aiReadyFixture();
+    const statuses: string[] = [];
+    const sessionSet = chrome.storage.session.set as unknown as ReturnType<typeof vi.fn>;
+    const original = sessionSet.getMockImplementation() as
+      | ((items: Record<string, unknown>, cb?: () => void) => void)
+      | undefined;
+    sessionSet.mockImplementation((items: Record<string, unknown>, cb?: () => void) => {
+      const state = Object.values(items)[0] as { status?: string } | undefined;
+      if (state?.status) statuses.push(state.status);
+      original?.(items, cb);
+    });
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startVisualAnalysis(42);
+
+    expect(statuses).toEqual(['extracting', 'analyzing', 'done']);
+    vi.unstubAllGlobals();
+  });
+
+  it('maps AI HTTP failures to an actionable error state', async () => {
+    aiReadyFixture();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'bad key' }, 401)));
+
+    const { requestId } = await startVisualAnalysis(11);
+
+    const state = stateFor(11);
+    expect(state?.status).toBe('error');
+    expect(state?.error?.code).toBe('AI_AUTH_FAILED');
+    expect(state?.error?.message).toMatch(/API Key/);
+    expect(state?.requestId).toBe(requestId);
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps newer result when an older request errors later', async () => {
+    mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
     const responses: Array<(response: unknown) => void> = [];
     tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
       if (callback) responses.push(callback);
     });
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
+    vi.stubGlobal('fetch', fetchMock);
 
-    const older = startVisualSummaryPreview(71);
+    const older = startVisualAnalysis(71);
     await vi.waitFor(() => expect(responses).toHaveLength(1));
-    const newer = startVisualSummaryPreview(71);
-    await vi.waitFor(() => expect(responses).toHaveLength(2));
-
-    responses[1]?.({ success: true, document: extractedDocument('newer content') });
-    await newer;
-    responses[0]?.({ success: true, document: extractedDocument('stale content') });
-    await older;
-
-    expect(mockSessionStorage['clip2md.visualSummary.state.71']).toMatchObject({
-      status: 'done',
-      requestId: expect.any(String),
-      preview: { body: 'newer content' },
-    });
-  });
-
-  it('keeps newer preview when an older extraction errors later', async () => {
-    const responses: Array<(response: unknown) => void> = [];
-    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
-      if (callback) responses.push(callback);
-    });
-
-    const older = startVisualSummaryPreview(72);
-    await vi.waitFor(() => expect(responses).toHaveLength(1));
-    const newer = startVisualSummaryPreview(72);
+    const newer = startVisualAnalysis(71);
     await vi.waitFor(() => expect(responses).toHaveLength(2));
 
     responses[1]?.({ success: true, document: extractedDocument('newer content') });
@@ -311,9 +402,33 @@ describe('visual summary phase 2 preview extraction', () => {
     responses[0]?.(undefined);
     await older;
 
-    expect(mockSessionStorage['clip2md.visualSummary.state.72']).toMatchObject({
-      status: 'done',
-      preview: { body: 'newer content' },
+    expect(stateFor(71)?.status).toBe('done');
+    expect(stateFor(71)?.result).toEqual(VALID_SUMMARY);
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps newer result when an older extraction succeeds later', async () => {
+    mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    const responses: Array<(response: unknown) => void> = [];
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      if (callback) responses.push(callback);
     });
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const older = startVisualAnalysis(72);
+    await vi.waitFor(() => expect(responses).toHaveLength(1));
+    const newer = startVisualAnalysis(72);
+    await vi.waitFor(() => expect(responses).toHaveLength(2));
+
+    responses[1]?.({ success: true, document: extractedDocument('newer content') });
+    await newer;
+    responses[0]?.({ success: true, document: extractedDocument('stale content') });
+    await older;
+
+    expect(stateFor(72)?.status).toBe('done');
+    expect(stateFor(72)?.result).toEqual(VALID_SUMMARY);
+    vi.unstubAllGlobals();
   });
 });

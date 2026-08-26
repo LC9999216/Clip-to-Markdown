@@ -43,22 +43,33 @@ function renderState(state: VisualAnalysisState | undefined): void {
     return;
   }
 
-  if (state.status === 'error') {
-    statusLabel.textContent = '暂时无法预览';
-    statusCopy.textContent = state.error;
+  if (state.status === 'analyzing') {
+    statusLabel.textContent = 'AI 正在阅读';
+    statusCopy.textContent = '正在生成一句话总结、核心观点与内容结构…';
     return;
   }
 
-  const content = state.preview;
-  statusLabel.textContent = '内容已提取';
-  statusCopy.textContent = '以下是即将用于视觉概览的内容预览。';
-  element<HTMLElement>('preview-type').textContent = content.contentType === 'tweet' ? 'X 推文' : 'X Article';
-  element<HTMLElement>('preview-title').textContent = content.title
-    || (content.contentType === 'tweet' ? '当前 X 推文' : '当前 X Article');
-  element<HTMLElement>('preview-author').textContent = content.author || '作者信息未提供';
-  element<HTMLElement>('preview-body').textContent = content.body;
+  if (state.status === 'error') {
+    statusLabel.textContent = '暂时无法生成一图速览';
+    statusCopy.textContent = state.error?.message ?? '发生未知错误，请重新生成。';
+    return;
+  }
+
+  const result = state.result;
+  if (!result) {
+    statusLabel.textContent = '内容已提取';
+    statusCopy.textContent = '分析结果尚未生成，请点击「重新生成」。';
+    return;
+  }
+
+  statusLabel.textContent = '内容已分析';
+  statusCopy.textContent = result.summary;
+  element<HTMLElement>('preview-type').textContent = '一图速览';
+  element<HTMLElement>('preview-title').textContent = state.source?.title || '当前内容';
+  element<HTMLElement>('preview-author').textContent = state.source?.author || '作者信息未提供';
+  element<HTMLElement>('preview-body').textContent = result.summary;
   const link = element<HTMLAnchorElement>('preview-link');
-  link.href = content.sourceUrl;
+  link.href = state.source?.url ?? '';
   link.textContent = '查看原文';
   preview.hidden = false;
 }

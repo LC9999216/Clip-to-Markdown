@@ -16,14 +16,6 @@ export interface AnalysisInput {
   truncated: boolean;
 }
 
-export interface VisualSummaryPreview {
-  title: string;
-  author: string;
-  body: string;
-  contentType: 'tweet' | 'x-article';
-  sourceUrl: string;
-}
-
 // ---------- VisualSummary（Phase 4） ----------
 
 export type ArticleType =
@@ -62,13 +54,26 @@ export interface VisualSummary {
   takeaways: string[];
 }
 
-interface VisualAnalysisStateBase {
-  tabId: number;
-  requestId: string;
-  updatedAt: number;
+export type VisualAnalysisStatus = 'idle' | 'extracting' | 'analyzing' | 'done' | 'error';
+
+/** 文章来源（用于结果 UI 与错误上下文，不含正文内容）。 */
+export interface VisualAnalysisSource {
+  url: string;
+  title?: string;
+  author?: string;
 }
 
-export type VisualAnalysisState =
-  | (VisualAnalysisStateBase & { status: 'extracting' })
-  | (VisualAnalysisStateBase & { status: 'done'; preview: VisualSummaryPreview })
-  | (VisualAnalysisStateBase & { status: 'error'; error: string });
+export interface VisualAnalysisError {
+  code: string;
+  message: string;
+}
+
+export interface VisualAnalysisState {
+  tabId: number;
+  requestId: string;
+  status: VisualAnalysisStatus;
+  source?: VisualAnalysisSource;
+  result?: VisualSummary;
+  error?: VisualAnalysisError;
+  updatedAt: number;
+}

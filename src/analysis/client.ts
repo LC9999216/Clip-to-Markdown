@@ -166,3 +166,23 @@ export async function analyzeContent(input: AnalysisInput, settings: AiSettings)
     clearTimeout(timer);
   }
 }
+
+/**
+ * 最小请求验证 AI 配置（Options 页「授权并测试」）。
+ * 发送一个极小的 Chat Completion；只关心能连上并返回模型名，
+ * 不暴露响应正文或 API Key。失败时抛出 VisualAnalysisRequestError。
+ */
+export async function testAiConnection(settings: AiSettings): Promise<{ model: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  try {
+    const messages: ChatMessage[] = [
+      { role: 'system', content: '你是连通性测试。请只回复一个词：OK。' },
+      { role: 'user', content: 'ping' },
+    ];
+    await requestCompletion(settings, messages, controller.signal);
+    return { model: settings.model };
+  } finally {
+    clearTimeout(timer);
+  }
+}

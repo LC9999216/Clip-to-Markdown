@@ -1,4 +1,4 @@
-import { startVisualSummaryPreview } from './visual-summary';
+import { startVisualAnalysis } from './visual-summary';
 
 const VISUAL_SUMMARY_COMMAND = 'visual-summary';
 
@@ -45,7 +45,7 @@ async function handleVisualSummaryCommand(commandTab?: chrome.tabs.Tab): Promise
   if (tabId === undefined) return;
 
   await chrome.sidePanel.open({ tabId });
-  await startVisualSummaryPreview(tabId);
+  await startVisualAnalysis(tabId);
 }
 
 chrome.commands.onCommand.addListener((command, tab) => {

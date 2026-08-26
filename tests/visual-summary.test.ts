@@ -432,3 +432,62 @@ describe('visual summary phase 5 background orchestration', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('visual summary phase 7 cache key and error mapping', () => {
+  it('different body content misses the session cache (key covers body)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    aiReadyFixture(extractedDocument('第一版正文', 'x-article'));
+    await startVisualAnalysis(81);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(stateFor(81)?.status).toBe('done');
+
+    // 同一 URL、不同正文 → 缓存键不同 → 应再次调用 AI
+    aiReadyFixture(extractedDocument('完全不同的正文', 'x-article'));
+    await startVisualAnalysis(81);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(stateFor(81)?.status).toBe('done');
+    vi.unstubAllGlobals();
+  });
+
+  it('different model produces a different cache key (key covers model)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    aiReadyFixture(extractedDocument('同一正文', 'x-article'));
+    await startVisualAnalysis(82);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // 同一正文、不同模型 → 缓存键不同 → 应再次调用 AI
+    mockStoredSettings['clip2md.settings'] = {
+      ...AI_SETTINGS_FIXTURE,
+      ai: { ...(AI_SETTINGS_FIXTURE.ai as Record<string, unknown>), model: 'deepseek-reasoner' },
+    };
+    await startVisualAnalysis(82);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+  });
+
+  it('maps every AI failure status to an actionable error state', async () => {
+    const cases: Array<[number, string, RegExp]> = [
+      [401, 'AI_AUTH_FAILED', /API Key|权限/],
+      [403, 'AI_AUTH_FAILED', /API Key|权限/],
+      [404, 'AI_ENDPOINT_OR_MODEL_NOT_FOUND', /Endpoint|模型/],
+      [429, 'AI_RATE_LIMITED', /稍后重试/],
+      [500, 'AI_PROVIDER_ERROR', /稍后重试/],
+    ];
+
+    for (const [status, expectedCode, messagePattern] of cases) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'x' }, status)));
+      aiReadyFixture(extractedDocument('正文', 'x-article'));
+      await startVisualAnalysis(83);
+
+      const state = stateFor(83);
+      expect(state?.status).toBe('error');
+      expect(state?.error?.code).toBe(expectedCode);
+      expect(state?.error?.message).toMatch(messagePattern);
+    }
+    vi.unstubAllGlobals();
+  });
+});

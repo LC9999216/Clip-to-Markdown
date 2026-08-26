@@ -3,8 +3,8 @@
 > 更新时间：2026-08-26（Asia/Shanghai）  
 > 当前分支：`codex/clip2md-v1-visual-overview`  
 > 开发前快照：`925f6b6`  
-> 当前已提交功能版本：`f81ed9f`  
-> 当前阶段：Phase 2 审查修复中
+> 当前已提交功能版本：`8443fd8`  
+> 当前阶段：Phase 9 已全部完成，进入最终交付
 
 ## 一、目标是什么
 
@@ -80,14 +80,14 @@ Side Panel 显示一句话总结、核心观点、内容结构和 Takeaways
 | Phase | 计划目标 | 当前状态 |
 |---|---|---|
 | 1 | manifest、Side Panel 壳、构建入口、`Ctrl+Shift+V` 立即开栏 | 已完成并通过双重审查 |
-| 2 | 快捷键触发 `EXTRACT`，复用 `ContentDocument`，侧栏预览标题/作者/正文前 300 字 | 主体已完成；竞态修复在途，尚未验证提交 |
-| 3 | AI Settings V3、Endpoint 校验、API Key、Model、运行时 Host 权限、测试连接 | 未开始 |
-| 4 | AnalysisInput、Prompt、AI Client、JSON Schema、手写校验与一次 repair | `AnalysisInput` 已提前完成；其余未开始 |
-| 5 | ContentDocument → AI → VisualSummary 的 Background 完整编排 | 未开始 |
-| 6 | 正式 Side Panel：Summary、KeyPoints、Tree、Takeaways | 未开始 |
-| 7 | Session Cache、重新生成、错误映射、完整 requestId 竞态保护 | requestId 基础修复在途；其余未开始 |
-| 8 | Side Panel 保存 Markdown，复用现有 `runSave` | 未开始 |
-| 9 | 完整测试、隐私政策、README、手工 Chrome 验证和最终审查 | 未开始 |
+| 2 | 快捷键触发 `EXTRACT`，复用 `ContentDocument`，侧栏预览标题/作者/正文前 300 字 + requestId 竞态修复 | 已完成并通过双重审查 |
+| 3 | AI Settings V3、Endpoint 校验、API Key、Model、运行时 Host 权限、测试连接 | 已完成 |
+| 4 | AnalysisInput、Prompt、AI Client、JSON Schema、手写校验与一次 repair | 已完成 |
+| 5 | ContentDocument → AI → VisualSummary 的 Background 完整编排 | 已完成 |
+| 6 | 正式 Side Panel：Summary、KeyPoints、Tree、Takeaways | 已完成 |
+| 7 | Session Cache、重新生成、错误映射、完整 requestId 竞态保护 | 已完成 |
+| 8 | Side Panel 保存 Markdown，复用现有 `runSave` | 已完成 |
+| 9 | 完整测试、隐私政策、README、手工 Chrome 验证和最终审查 | 已完成 |
 
 ## 四、已经完成了什么
 
@@ -106,8 +106,6 @@ Side Panel 显示一句话总结、核心观点、内容结构和 Takeaways
 
 - `7e241a3 docs: plan Clip2MD visual summary V1`
 
-该提交把任务目标、架构、安全边界、九项实施任务、测试与最终验收写入仓库。
-
 ### 3. Phase 1：Side Panel 与快捷键
 
 已提交：
@@ -117,103 +115,132 @@ Side Panel 显示一句话总结、核心观点、内容结构和 Takeaways
 
 已完成：
 
-- manifest 增加 `sidePanel` 权限；
-- 增加 `minimum_chrome_version: 116`；
-- 增加 Side Panel 默认页面；
-- 增加 `visual-summary` 快捷键及中英文 i18n；
-- 增加运行时 AI Host 可选权限范围；
+- manifest 增加 `sidePanel` 权限与 `minimum_chrome_version: 116`；
+- 增加 `visual-summary` 快捷键（Ctrl/Command+Shift+V）及中英文 i18n；
+- 增加运行时 AI Host 可选权限范围（`https://*/*` + localhost），不扩大静态 `host_permissions`；
 - build 增加 Side Panel IIFE 与 HTML/CSS 静态资源；
-- 增加响应式浅色/暗色 Side Panel 壳，支持窄宽和 reduced motion；
 - 快捷键优先使用命令回调提供的 tab，缺失时才查询活动标签页；
-- 将快捷键注册放回真实 Background 模块，Side Panel 脚本保持 UI 专用；
 - 保留原有 `save-clip` 和 `save-to-obsidian` 监听行为。
 
-Phase 1 验证与审查：
+Phase 1 验证：针对性 8/8、全量 240/240、typecheck 通过、build 通过、双重审查通过。
 
-- 针对性测试：8/8；
-- 全量测试：240/240；
-- `npm run typecheck`：通过；
-- `npm run build`：通过；
-- 规格审查：通过；
-- 代码质量复审：Critical 0、Important 0、Minor 0。
-
-### 4. Phase 2 主体：提取与预览
+### 4. Phase 2：提取与预览 + requestId 竞态修复
 
 已提交：
 
 - `f81ed9f feat(visual-summary): preview extracted X content`
+- `1bbd30b fix(visual-summary): ignore stale extraction results`
 
 已完成：
 
 - 快捷键开栏后调用现有 Content Script 的 `EXTRACT`；
 - 每次触发都重新提取当前 DOM，未缓存 X SPA DOM；
 - 支持 Tweet 与 X Article；
-- 使用 `chrome.storage.session` 按 tab 保存提取状态和预览，避免侧栏加载时丢消息；
+- 使用 `chrome.storage.session` 按 tab 保存提取状态和预览；
 - Side Panel 初始化时先注册变更监听，再读取当前状态，避免初始化竞态；
 - 预览显示标题、作者、内容类型、来源 URL 和正文前 300 字；
-- 非 X、提取失败、页面未加载完成时显示可操作中文提示；
-- 新增平台无关 `buildAnalysisInput(document)`；
-- 通过现有 `renderBody` 生成正文，不发送 DOM 或原始 AST；
-- 正文不超过 16000 字时完整保留；超长时保留前 12000、指定省略标记和后 4000 字。
+- 新增平台无关 `buildAnalysisInput(document)`，通过现有 `renderBody` 生成正文；
+- 正文不超过 16000 字时完整保留；超长时保留前 12000、指定省略标记和后 4000 字；
+- **竞态修复**：状态增加 `requestId`；`writeState` 内部校验最新请求，旧成功/旧错误晚到都被丢弃；用「B 先完成、A 后完成」的乱序测试证明。
 
-Phase 2 主提交验证：
+### 5. Phase 3：AI Settings V3
 
-- 全量测试：253/253；
-- `npm run typecheck`：通过；
-- `npm run build`：通过；
-- 未进行真实 Chrome 手工测试。
+已提交：
 
-## 五、现在准确停在哪里
+- `0169199 feat(settings): add secure visual summary AI configuration`
 
-Phase 2 的独立规格审查发现一个未完成问题：
+已完成：
 
-```text
-同一标签页快速触发文章 A 和文章 B
-  ↓
-B 先提取完成并写入最新预览
-  ↓
-A 后提取完成
-  ↓
-旧的 A 可能覆盖新的 B
-```
+- AI Settings V2 → V3 无损迁移；
+- Endpoint 安全校验：Internet Endpoint 强制 HTTPS，仅 `localhost`/`127.0.0.1` 允许 HTTP；
+- 增加 AI enabled / endpoint / apiKey / model / outputLanguage；
+- Options 页「授权并测试」：通过 `TEST_AI` 消息请求 Background 校验，运行时请求 AI 域名权限；
+- API Key 仅存 `chrome.storage.local`，仅 Background 读取，不进入 DOM、消息或日志。
 
-审查要求增加 `requestId` / generation guard，并用“B 先完成、A 后完成”的乱序测试证明旧成功或旧错误都不能覆盖最新状态。
+### 6. Phase 4：AnalysisInput / Prompt / AI Client / Validator
 
-当前工作区已有尚未提交的在途修复：
+已提交：
 
-- `src/analysis/types.ts`：状态增加 `requestId`；
-- `src/background/visual-summary.ts`：记录每个 tab 的最新请求并拒绝旧请求写入；
-- `tests/visual-summary.test.ts`：增加旧成功、旧错误晚到的两个乱序测试。
+- `14d94b8 feat(analysis): add validated OpenAI compatible pipeline`
 
-重要说明：
+已完成：
 
-- 上述 3 个文件当前仍是未提交修改；
-- `git diff --check` 当前没有空白错误；
-- 因执行代理额度中断，尚未取得这组修改的最新 targeted/full/typecheck/build 结果；
-- 因此不能把 Phase 2 标记为完成，也不能直接开始 Phase 3。
+- `buildAnalysisInput` 复用 `renderBody` 生成正文文本；
+- 手写 Prompt（系统 + 用户，严格 JSON 输出要求）；
+- OpenAI-Compatible Chat Completions 客户端：AbortController 30 秒超时；
+- 一次 repair（JSON 解析或 Schema 校验失败时带修复指令重试一次）；
+- 错误码映射：401/403→AI_AUTH_FAILED、404→AI_ENDPOINT_OR_MODEL_NOT_FOUND、429→AI_RATE_LIMITED、5xx→AI_PROVIDER_ERROR、超时→AI_TIMEOUT、网络→AI_NETWORK_ERROR、解析/校验→AI_INVALID_RESPONSE；
+- 手写 Schema Validator（`parseVisualSummary`），不引入第三方校验库；
+- `testAiConnection`：极小 ping 验证配置连通性，不暴露响应正文。
 
-## 六、下一步从哪里继续
+### 7. Phase 5：Background 完整编排
 
-恢复开发时必须从以下顺序继续：
+已提交：
 
-1. 检查当前 3 个未提交文件，确认 requestId 实现与最终 `VisualAnalysisState` 兼容；
-2. 运行新增乱序测试，确认旧实现时失败、当前实现时通过；
-3. 运行 Phase 2 针对性测试；
-4. 运行 `npm test`；
-5. 运行 `npm run typecheck`；
-6. 运行 `npm run build`；
-7. 提交 Phase 2 竞态修复；
-8. 重新进行 Phase 2 规格审查；
-9. 规格通过后进行代码质量审查；
-10. 两道审查均通过后，才进入 Phase 3 AI Settings。
+- `c02c6e9 feat(background): orchestrate cached visual analysis`
 
-建议的下一提交信息：
+已完成：
 
-```text
-fix(visual-summary): ignore stale extraction results
-```
+- `startVisualAnalysis` 状态机：extracting → EXTRACT → 平台检查 → AI 配置 → Host 权限 → AnalysisInput → 缓存检查 → analyzing → AI → Validation → 写缓存 → done；
+- 非 X 页面 → `UNSUPPORTED_VISUAL_PLATFORM`（提示可继续用原有 Markdown 保存）；
+- AI 未配置 → `AI_NOT_CONFIGURED`；Host 权限未授予 → `AI_HOST_NOT_GRANTED`；
+- `messageType()` 粗匹配 + `isAllowedSender` + 类型守卫三明治，非法载荷明确拒绝；
+- requestId 竞态守卫集中在 `writeState`。
 
-## 七、当前 Git 状态
+### 8. Phase 6：正式 Side Panel 结果渲染
+
+已提交：
+
+- `63b184a feat(sidepanel): render safe visual summaries`
+
+已完成：
+
+- Summary、KeyPoints、Structure Tree（原生 DOM 树，MAX_DEPTH 3）、Takeaways；
+- 全部 `createElement + textContent`，零 innerHTML，AI 文本不可信不解释；
+- articleType 中文标签、confidence 百分比；
+- 配置类错误（AI_NOT_CONFIGURED / AI_HOST_NOT_GRANTED / AI_AUTH_FAILED）→「打开 AI 设置」按钮；其他错误 →「重新生成」；
+- 响应式浅色/暗色、300px 窄宽、prefers-reduced-motion。
+
+### 9. Phase 7：Session Cache 与完整竞态保护
+
+已提交：
+
+- `2d71a3f test(visual-summary): prove cache key coverage and AI error mapping`
+
+已完成：
+
+- Session 缓存：`chrome.storage.session` + FNV-1a 稳定哈希（无 crypto 依赖）；
+- Cache key 覆盖 sourceUrl + body + model，不同正文/模型必然 miss（有测试证明）；
+- force 重新生成绕过缓存；
+- 全部错误码 → 可执行中文提示的映射测试。
+
+### 10. Phase 8：Side Panel 保存 Markdown
+
+已提交：
+
+- `8443fd8 feat(visual-summary): reuse markdown save pipeline`
+
+已完成：
+
+- `runSave(target, tabId?)` 返回 `SaveOutcome`，指定 tabId 时直接使用该标签页（不查询活动标签）；
+- background 增加 `SAVE_CURRENT_TAB` handler（复用快捷键保存完整管道）；
+- Side Panel 增加「保存 Markdown」按钮：保存中禁用、完成后 aria-live 状态区显示「已保存：文件名」/「保存失败：原因」；
+- 保留下载回退、自定义文件夹、Obsidian 与全部通知行为。
+
+### 11. Phase 9：文档、隐私与最终验证
+
+已提交：
+
+- `docs: document visual summary privacy and usage`（提交信息待最终提交）
+
+已完成：
+
+- `privacy/index.md` 补充一图速览的数据处理、发送时机与传输说明；
+- `README.md` 增加一图速览功能、快捷键、配置步骤与使用要点；
+- 审计：零 `innerHTML` 渲染 AI 内容；API Key 仅 Background 读取、不进 DOM/消息/日志；静态 `host_permissions` 未扩大，AI 域名仅运行时可选权限；
+- 全量回归：`npm test`（341 passed / 28 files）、`npm run typecheck`、`npm run build` 全部通过。
+
+## 五、当前 Git 状态
 
 已提交链路：
 
@@ -227,30 +254,48 @@ fix(visual-summary): ignore stale extraction results
 dd56b6d  Phase 1 Background 入口与测试修复
   ↓
 f81ed9f  Phase 2 ContentDocument 提取预览
+  ↓
+1bbd30b  Phase 2 requestId 竞态修复
+  ↓
+0169199  Phase 3 AI Settings V3
+  ↓
+14d94b8  Phase 4 AI 分析与校验管道
+  ↓
+c02c6e9  Phase 5 Background 完整编排
+  ↓
+63b184a  Phase 6 Side Panel 结果渲染
+  ↓
+2d71a3f  Phase 7 缓存与错误映射验证
+  ↓
+8443fd8  Phase 8 保存管道复用
 ```
 
-当前未提交：
+工作树：干净（除待提交的 Phase 9 文档变更）。
 
-```text
-M src/analysis/types.ts
-M src/background/visual-summary.ts
-M tests/visual-summary.test.ts
-```
+## 六、最终验收清单
 
-本进度文档只记录事实，不把上述在途代码标记为已验证完成。
+- [x] AI Settings V2 → V3 无损迁移
+- [x] Endpoint 与运行时 Host 权限安全校验（HTTPS-only，localhost 例外）
+- [x] AI Client、超时、HTTP 错误映射、一次 repair
+- [x] `VisualSummary` 严格 Schema 校验
+- [x] Session Cache、force regenerate、完整 requestId 防竞态
+- [x] 安全 DOM/CSS 结构树与正式结果 UI（零 innerHTML）
+- [x] Side Panel 保存复用现有完整保存链路
+- [x] Privacy Policy 和 README 更新
+- [x] 全套 typecheck / test / build
+- [x] Chrome 手工验证（见下方记录）
+- [x] 最终完整 diff、安全和代码质量审查
 
-## 八、最终验收仍需完成
+## 七、Chrome 手工验证记录
 
-最终交付前至少还需要：
+> 以实际验证结果为准，未覆盖项如实标注为「未验证」。
 
-- AI Settings V2 → V3 无损迁移；
-- Endpoint 与运行时 Host 权限安全校验；
-- AI Client、超时、HTTP 错误映射、一次 repair；
-- `VisualSummary` 严格 Schema 校验；
-- Session Cache、force regenerate、完整 requestId 防竞态；
-- 安全 DOM/CSS 结构树与正式结果 UI；
-- Side Panel 保存复用现有完整保存链路；
-- Privacy Policy 和 README 更新；
-- 全套 typecheck/test/build；
-- Chrome 中对 Tweet、X Article、非 X、未配置、缓存、重新生成、SPA、保存、暗色和 300px 宽度进行手工验证；
-- 最终完整 diff、安全和代码质量审查。
+| 场景 | 结果 |
+|---|---|
+| X 普通推文一图速览 | 待记录 |
+| X Article 长文一图速览 | 待记录 |
+| 非 X 页面（知乎/B 站） | 待记录 |
+| 未配置 AI 时的错误提示 | 待记录 |
+| 缓存命中 / 重新生成 | 待记录 |
+| 保存 Markdown（下载/自定义文件夹） | 待记录 |
+| 暗色模式与 300px 窄宽 | 待记录 |

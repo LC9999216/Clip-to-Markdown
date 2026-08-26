@@ -2,7 +2,7 @@
  * esbuild 构建脚本。
  *
  * 三种产物格式：
- *  - content / popup   → IIFE（content script 不能使用 ES module，popup 用 <script src> 引入）
+ *  - content / popup / sidepanel → IIFE（扩展页通过 <script src> 引入）
  *  - background        → ESM（MV3 service worker，manifest 里 type: "module"）
  */
 import { build, context } from 'esbuild';
@@ -44,6 +44,7 @@ const entryPoints = [
   { entryPoints: ['src/popup/popup.ts'], outfile: 'dist/popup.js', format: 'iife' },
   { entryPoints: ['src/options/options.ts'], outfile: 'dist/options.js', format: 'iife' },
   { entryPoints: ['src/offscreen/offscreen.ts'], outfile: 'dist/offscreen.js', format: 'iife' },
+  { entryPoints: ['src/sidepanel/sidepanel.ts'], outfile: 'dist/sidepanel.js', format: 'iife' },
   { entryPoints: ['src/background/background.ts'], outfile: 'dist/background.js', format: 'esm' },
 ];
 
@@ -55,10 +56,13 @@ for (const [from, to] of [
   ['src/options/options.html', 'dist/options.html'],
   ['src/options/options.css', 'dist/options.css'],
   ['src/offscreen/offscreen.html', 'dist/offscreen.html'],
+  ['src/sidepanel/sidepanel.html', 'dist/sidepanel.html'],
+  ['src/sidepanel/sidepanel.css', 'dist/sidepanel.css'],
 ]) {
   copyFileSync(join(root, from), join(root, to));
 }
 copyDir(join(root, 'src/icons'), join(dist, 'icons'));
+copyDir(join(root, 'src/_locales'), join(dist, '_locales'));
 
 async function main() {
   if (watch) {

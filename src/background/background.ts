@@ -7,13 +7,21 @@ import { downloadMarkdown } from '../core/downloader';
 import { sanitizeFilenamePart } from '../core/filename';
 import { loadSettings, resolveDownloadPath } from '../core/settings';
 import { saveToObsidian, testObsidian } from './obsidian';
+import { testAiConnection } from '../analysis/client';
+import { getVisualAnalysisState, startVisualAnalysis } from './visual-summary';
+import { runSave } from './quick-save';
 import {
   isDownloadRequest,
   isFetchJsonRequest,
+  isGetVisualAnalysisStateRequest,
+  isSaveCurrentTabRequest,
   isSaveToObsidianRequest,
+  isStartVisualAnalysisRequest,
+  isTestAiRequest,
   isTestObsidianRequest,
 } from '../types/messages';
 import './quick-save';
+import './visual-summary-command';
 
 /** 与 manifest host_permissions 保持一致 */
 const ALLOWED_HOSTS = [
@@ -37,6 +45,13 @@ function hostAllowed(hostname: string): boolean {
 function fetchJsonHostAllowed(hostname: string): boolean {
   const host = hostname.toLowerCase();
   return FETCH_JSON_ALLOWED_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+/** 仅按 type 字段做粗匹配（不校验 payload），用于先拒绝非法载荷再进入正式守卫。 */
+function messageType(msg: unknown): string | null {
+  if (typeof msg !== 'object' || msg === null) return null;
+  const t = (msg as { type?: unknown }).type;
+  return typeof t === 'string' ? t : null;
 }
 
 /** 只接受来自受支持平台页面（content script）或扩展页面的下载请求 */
@@ -115,6 +130,70 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     testObsidian()
       .then((service) => sendResponse({ success: true, service }))
+      .catch((e) => sendResponse({ success: false, error: String(e) }));
+    return true;
+  }
+
+  // ---- 开始一图速览分析（side panel 触发） ----
+  if (messageType(msg) === 'START_VISUAL_ANALYSIS') {
+    if (!isAllowedSender(sender)) {
+      sendResponse({ success: false, error: '来自不受信任页面的一图速览请求已被拒绝。' });
+      return false;
+    }
+    if (!isStartVisualAnalysisRequest(msg)) {
+      sendResponse({ success: false, error: '非法一图速览载荷。' });
+      return false;
+    }
+    startVisualAnalysis(msg.payload.tabId, { force: msg.payload.force })
+      .then(({ requestId }) => sendResponse({ success: true, requestId }))
+      .catch((e) => sendResponse({ success: false, error: String(e) }));
+    return true;
+  }
+
+  // ---- 读取一图速览状态（side panel 轮询） ----
+  if (messageType(msg) === 'GET_VISUAL_ANALYSIS_STATE') {
+    if (!isAllowedSender(sender)) {
+      sendResponse({ success: false, error: '来自不受信任页面的状态读取已被拒绝。' });
+      return false;
+    }
+    if (!isGetVisualAnalysisStateRequest(msg)) {
+      sendResponse({ success: false, error: '非法一图速览载荷。' });
+      return false;
+    }
+    getVisualAnalysisState(msg.payload.tabId)
+      .then((state) => sendResponse({ success: true, state }))
+      .catch((e) => sendResponse({ success: false, error: String(e) }));
+    return true;
+  }
+
+  // ---- 保存当前标签页（side panel 保存按钮，复用快捷键保存管道） ----
+  if (messageType(msg) === 'SAVE_CURRENT_TAB') {
+    if (!isAllowedSender(sender)) {
+      sendResponse({ success: false, error: '来自不受信任页面的保存请求已被拒绝。' });
+      return false;
+    }
+    if (!isSaveCurrentTabRequest(msg)) {
+      sendResponse({ success: false, error: '非法保存载荷。' });
+      return false;
+    }
+    runSave('default', msg.payload.tabId)
+      .then((outcome) => {
+        if (outcome.ok) sendResponse({ success: true, filename: outcome.filename });
+        else sendResponse({ success: false, error: outcome.error });
+      })
+      .catch((e) => sendResponse({ success: false, error: String(e) }));
+    return true;
+  }
+
+  // ---- 测试 AI 连接（options 页「授权并测试」） ----
+  if (isTestAiRequest(msg)) {
+    if (!isAllowedSender(sender)) {
+      sendResponse({ success: false, error: '来自不受信任页面的请求已被拒绝。' });
+      return false;
+    }
+    loadSettings()
+      .then((settings) => testAiConnection(settings.ai))
+      .then(({ model }) => sendResponse({ success: true, model }))
       .catch((e) => sendResponse({ success: false, error: String(e) }));
     return true;
   }

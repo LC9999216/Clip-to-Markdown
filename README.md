@@ -1,6 +1,6 @@
 # Clip to Markdown
 
-一键把 **X / Twitter、ChatGPT、B 站、知乎、小黑盒** 中的内容保存为干净 Markdown，并支持直接发送到 **Obsidian**。
+一键把 **X / Twitter、ChatGPT、B 站、知乎、小黑盒** 中的内容保存为干净 Markdown，并支持直接发送到 **Obsidian**。还提供「一图速览」：通过你配置的 AI 服务，把 X 内容变成一句话总结、核心观点、内容结构和结论。
 
 > 只保存“内容本体”：标题、作者、发布时间、正文、图片、链接、引用和原文地址；尽量排除评论、回复、推荐、广告、侧边栏和操作按钮。
 
@@ -63,8 +63,9 @@ npm run build
 | --- | --- |
 | 普通保存 | `Ctrl + Shift + S` |
 | 保存到 Obsidian | `Alt + Shift + S` |
+| 打开一图速览 | `Ctrl + Shift + Y` |
 
-Mac 普通保存：`Command + Shift + S`
+Mac：普通保存 `Command + Shift + S`，一图速览 `Command + Shift + Y`
 
 快捷键冲突时，可前往：
 
@@ -85,6 +86,7 @@ chrome://extensions/shortcuts
 - **Obsidian 模式**：通过本机 Local REST API 直接写入 Vault
 - **双快捷键**：普通保存与 Obsidian 保存互不干扰
 - **Markdown 语义保留**：标题、列表、链接、引用、代码块、表格、图片等
+- **一图速览**：对 X 内容生成一句话总结、核心观点、内容结构与结论，确认后再保存
 
 ---
 
@@ -121,6 +123,27 @@ chrome://extensions/shortcuts
 非法字符会自动清理，并统一补齐 `.md`。
 
 ---
+
+## 🔭 一图速览（可选）
+
+在 X / Twitter 上打开具体内容页（`/status/{id}` 推文或 X Article），按 `Ctrl + Shift + Y` 打开 Side Panel，即可生成当前内容的一句话总结、核心观点、内容结构与结论。
+
+需要先配置一个 OpenAI-Compatible 的 AI 服务：
+
+1. 打开 Clip to Markdown 设置页
+2. 在「AI」区域填写：
+   - **Endpoint**：如 `https://api.deepseek.com/chat/completions`（仅允许 HTTPS；本机调试可用 `http://127.0.0.1` / `http://localhost`）
+   - **API Key**：你的服务商密钥（仅保存在浏览器本地，由扩展后台读取）
+   - **Model**：如 `deepseek-chat`
+3. 点击「授权并测试」：首次使用会请求该 API 域名的访问权限，测试成功后即可使用
+
+使用要点：
+
+- **只在主动触发时发送正文**：只有按下快捷键或点击「重新生成」才把当前页面正文发送到 AI 服务，不会自动分析网页
+- **结果可缓存**：同一页面同一模型的结果会临时缓存，避免重复消耗额度；点击「重新生成」可强制刷新
+- **看完再收藏**：Side Panel 里确认内容有价值后，点击「保存 Markdown」即可复用原有保存链路
+
+> 一图速览 V1 仅支持 X / Twitter；其他平台页面仍可正常使用原有 Markdown 保存功能。
 
 ## 🟣 Obsidian（可选）
 
@@ -216,6 +239,7 @@ src/
 - B 站没有可用字幕时不会自动语音识别
 - ChatGPT 的文件附件、图片附件、Canvas、语音和 Thinking 内部过程暂不作为独立内容保存
 - Obsidian 模式需要本机运行 Local REST API
+- 一图速览 V1 仅支持 X / Twitter 内容；使用前需配置 OpenAI-Compatible AI 服务
 
 ---
 

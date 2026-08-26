@@ -4,6 +4,7 @@
  */
 
 import type { ContentDocument, PlatformContentType, PlatformId } from '../core/schema';
+import type { VisualAnalysisState } from '../analysis/types';
 
 // ---------- 请求 ----------
 
@@ -35,13 +36,50 @@ export type SaveToObsidianResponse =
 export type TestObsidianRequest = { type: 'TEST_OBSIDIAN' };
 export type TestObsidianResponse = { success: true; service: string } | { success: false; error: string };
 
+/** 开始一图速览分析。force 为 true 时绕过会话缓存。 */
+export type StartVisualAnalysisRequest = {
+  type: 'START_VISUAL_ANALYSIS';
+  payload: { tabId: number; force?: boolean };
+};
+export type StartVisualAnalysisResponse =
+  | { success: true; requestId: string }
+  | { success: false; error: string };
+
+/** 读取指定标签页当前的一图速览状态。 */
+export type GetVisualAnalysisStateRequest = {
+  type: 'GET_VISUAL_ANALYSIS_STATE';
+  payload: { tabId: number };
+};
+export type GetVisualAnalysisStateResponse =
+  | { success: true; state: VisualAnalysisState | null }
+  | { success: false; error: string };
+
+/** 测试 AI 连接（Options 页「授权并测试」）。 */
+export type TestAiRequest = { type: 'TEST_AI' };
+export type TestAiResponse =
+  | { success: true; model: string }
+  | { success: false; error: string };
+
+/** 保存当前标签页为 Markdown（side panel 保存按钮，复用快捷键保存管道）。 */
+export type SaveCurrentTabRequest = {
+  type: 'SAVE_CURRENT_TAB';
+  payload: { tabId: number };
+};
+export type SaveCurrentTabResponse =
+  | { success: true; filename: string }
+  | { success: false; error: string };
+
 export type ContentRequest = StatusRequest | ExtractRequest;
 export type RuntimeMessage =
   | ContentRequest
   | DownloadRequest
   | FetchJsonRequest
   | SaveToObsidianRequest
-  | TestObsidianRequest;
+  | TestObsidianRequest
+  | StartVisualAnalysisRequest
+  | GetVisualAnalysisStateRequest
+  | TestAiRequest
+  | SaveCurrentTabRequest;
 
 // ---------- offscreen 消息 ----------
 
@@ -116,5 +154,33 @@ export function isSaveToObsidianRequest(m: unknown): m is SaveToObsidianRequest 
 export function isTestObsidianRequest(m: unknown): m is TestObsidianRequest {
   if (!isRecord(m)) return false;
   return m.type === 'TEST_OBSIDIAN';
+}
+
+export function isStartVisualAnalysisRequest(m: unknown): m is StartVisualAnalysisRequest {
+  if (!isRecord(m)) return false;
+  if (m.type !== 'START_VISUAL_ANALYSIS') return false;
+  if (!isRecord(m.payload)) return false;
+  if (typeof m.payload.tabId !== 'number' || !Number.isInteger(m.payload.tabId)) return false;
+  if (m.payload.force !== undefined && typeof m.payload.force !== 'boolean') return false;
+  return true;
+}
+
+export function isGetVisualAnalysisStateRequest(m: unknown): m is GetVisualAnalysisStateRequest {
+  if (!isRecord(m)) return false;
+  if (m.type !== 'GET_VISUAL_ANALYSIS_STATE') return false;
+  if (!isRecord(m.payload)) return false;
+  return typeof m.payload.tabId === 'number' && Number.isInteger(m.payload.tabId);
+}
+
+export function isTestAiRequest(m: unknown): m is TestAiRequest {
+  if (!isRecord(m)) return false;
+  return m.type === 'TEST_AI';
+}
+
+export function isSaveCurrentTabRequest(m: unknown): m is SaveCurrentTabRequest {
+  if (!isRecord(m)) return false;
+  if (m.type !== 'SAVE_CURRENT_TAB') return false;
+  if (!isRecord(m.payload)) return false;
+  return typeof m.payload.tabId === 'number' && Number.isInteger(m.payload.tabId);
 }
 

@@ -19,10 +19,12 @@ export const chromeCalls = {
   tabsCreated: [] as Array<{ url: string }>,
   badgeText: [] as string[],
   badgeColor: [] as string[],
+  sidePanelOpens: [] as Array<{ tabId: number }>,
 };
 
 /** 测试可读写的 mock 存储：storage.local 的 get/set 都反映到这个对象 */
 export const mockStoredSettings: Record<string, unknown> = {};
+export const mockSessionStorage: Record<string, unknown> = {};
 
 type MessageListener = (
   msg: unknown,
@@ -31,6 +33,11 @@ type MessageListener = (
 ) => boolean | void;
 
 const runtimeListeners: MessageListener[] = [];
+const storageChangeListeners: Array<(
+  changes: Record<string, chrome.storage.StorageChange>,
+  areaName: chrome.storage.AreaName,
+) => void> = [];
+const tabActivatedListeners: Array<(activeInfo: chrome.tabs.OnActivatedInfo) => void> = [];
 let currentLastError: { message: string } | null = null;
 
 /** 测试中模拟 chrome.runtime.lastError（如「Receiving end does not exist」） */
@@ -67,6 +74,7 @@ export async function dispatchRuntimeMessage(msg: unknown, sender: unknown = {})
 // ---- 各 API 的 mock（导出便于测试按需配置）----
 
 export const runtimeSendMessageMock = vi.fn();
+export const openOptionsPageMock = vi.fn();
 export const notificationsCreateMock = vi.fn(
   (options: { title?: string; message?: string }, cb?: (id: string) => void) => {
     currentLastError = null; // 模拟「本次调用成功」的 lastError 作用域
@@ -75,31 +83,47 @@ export const notificationsCreateMock = vi.fn(
   },
 );
 
-export const tabsQueryMock = vi.fn(
-  (opts: unknown, cb?: (tabs: chrome.tabs.Tab[]) => void) => {
-    chromeCalls.tabsQueried.push(opts as { active: boolean; currentWindow: boolean });
-    const tabs = [{ id: 1, active: true }] as chrome.tabs.Tab[];
-    if (cb) cb(tabs);
-    return tabs as unknown;
-  },
-);
+function defaultTabsQuery(opts: unknown, cb?: (tabs: chrome.tabs.Tab[]) => void): unknown {
+  currentLastError = null;
+  chromeCalls.tabsQueried.push(opts as { active: boolean; currentWindow: boolean });
+  const tabs = [{ id: 1, active: true }] as chrome.tabs.Tab[];
+  if (cb) cb(tabs);
+  return tabs as unknown;
+}
+
+export const tabsQueryMock = vi.fn(defaultTabsQuery);
 
 // 把 tabs.sendMessage 路由到 runtime.onMessage 监听（让 EXTRACT 能回读 fixture）
-export const tabsSendMessageMock = vi.fn(
-  (tabId: number, msg: unknown, cb?: (resp: unknown) => void) => {
-    const sender = { tab: { id: tabId } };
-    const result = dispatchRuntimeMessage(msg, sender);
-    if (result && typeof (result as Promise<unknown>).then === 'function') {
-      (result as Promise<unknown>).then((resp) => {
-        currentLastError = null;
-        if (cb) cb(resp);
-      });
-    } else {
-      currentLastError = { message: 'Could not establish connection. Receiving end does not exist.' };
-      if (cb) cb(undefined);
-    }
-  },
-);
+function defaultTabsSendMessage(
+  tabId: number,
+  msg: unknown,
+  cb?: (resp: unknown) => void,
+): void {
+  const sender = { tab: { id: tabId } };
+  const result = dispatchRuntimeMessage(msg, sender);
+  if (result && typeof (result as Promise<unknown>).then === 'function') {
+    (result as Promise<unknown>).then((resp) => {
+      currentLastError = null;
+      cb?.(resp);
+    });
+  } else {
+    currentLastError = { message: 'Could not establish connection. Receiving end does not exist.' };
+    cb?.(undefined);
+  }
+}
+
+export const tabsSendMessageMock = vi.fn(defaultTabsSendMessage);
+
+export function dispatchStorageChange(
+  changes: Record<string, chrome.storage.StorageChange>,
+  areaName: chrome.storage.AreaName = 'session',
+): void {
+  for (const listener of [...storageChangeListeners]) listener(changes, areaName);
+}
+
+export function dispatchTabActivated(tabId: number, windowId = 1): void {
+  for (const listener of [...tabActivatedListeners]) listener({ tabId, windowId });
+}
 
 export const offscreenHasDocumentMock = vi.fn(async () => false);
 export const offscreenCreateDocumentMock = vi.fn(async () => {
@@ -113,6 +137,25 @@ export const tabsCreateMock = vi.fn((opts: { url?: string }, cb?: () => void) =>
   if (cb) cb();
 });
 
+export const sidePanelOpenMock = vi.fn(async (opts: { tabId: number }) => {
+  chromeCalls.sidePanelOpens.push(opts);
+});
+
+/** permissions.request：默认返回 granted=true；测试可用 mockImplementation 覆盖 */
+export const permissionsRequestMock = vi.fn(
+  (_permissions: chrome.permissions.Permissions, cb?: (granted: boolean) => void) => {
+    currentLastError = null;
+    cb?.(true);
+  },
+);
+/** permissions.contains：默认返回 false（尚未授权） */
+export const permissionsContainsMock = vi.fn(
+  (_permissions: chrome.permissions.Permissions, cb?: (result: boolean) => void) => {
+    currentLastError = null;
+    cb?.(false);
+  },
+);
+
 export const setBadgeTextMock = vi.fn((details: { text?: string }) => {
   chromeCalls.badgeText.push(details.text ?? '');
   return Promise.resolve();
@@ -125,8 +168,8 @@ export const setBadgeBackgroundColorMock = vi.fn((details: { color?: string }) =
 const commandListeners: Array<(command: string, tab?: chrome.tabs.Tab) => void> = [];
 
 /** 供测试触发 chrome.commands.onCommand 监听 */
-export function dispatchCommand(command: string): void {
-  for (const l of [...commandListeners]) l(command);
+export function dispatchCommand(command: string, tab?: chrome.tabs.Tab): void {
+  for (const l of [...commandListeners]) l(command, tab);
 }
 
 const chromeMock = {
@@ -145,11 +188,21 @@ const chromeMock = {
       },
     },
     sendMessage: runtimeSendMessageMock,
+    openOptionsPage: openOptionsPageMock,
   },
   tabs: {
     query: tabsQueryMock,
     sendMessage: tabsSendMessageMock,
     create: tabsCreateMock,
+    onActivated: {
+      addListener: (listener: (activeInfo: chrome.tabs.OnActivatedInfo) => void) => {
+        tabActivatedListeners.push(listener);
+      },
+      removeListener: (listener: (activeInfo: chrome.tabs.OnActivatedInfo) => void) => {
+        const index = tabActivatedListeners.indexOf(listener);
+        if (index >= 0) tabActivatedListeners.splice(index, 1);
+      },
+    },
   },
   storage: {
     local: {
@@ -171,6 +224,46 @@ const chromeMock = {
         Object.assign(mockStoredSettings, items);
         if (cb) cb();
       }),
+    },
+    session: {
+      get: vi.fn((keys: unknown, cb?: (items: Record<string, unknown>) => void) => {
+        currentLastError = null;
+        const items: Record<string, unknown> = {};
+        if (typeof keys === 'string') {
+          items[keys] = mockSessionStorage[keys];
+        } else if (Array.isArray(keys)) {
+          for (const key of keys as string[]) items[key] = mockSessionStorage[key];
+        } else if (keys && typeof keys === 'object') {
+          const defaults = keys as Record<string, unknown>;
+          for (const key of Object.keys(defaults)) {
+            items[key] = key in mockSessionStorage ? mockSessionStorage[key] : defaults[key];
+          }
+        }
+        cb?.(items);
+      }),
+      set: vi.fn((items: Record<string, unknown>, cb?: () => void) => {
+        currentLastError = null;
+        const changes: Record<string, chrome.storage.StorageChange> = {};
+        for (const [key, value] of Object.entries(items)) {
+          changes[key] = { oldValue: mockSessionStorage[key], newValue: value };
+          mockSessionStorage[key] = value;
+        }
+        cb?.();
+        dispatchStorageChange(changes, 'session');
+      }),
+    },
+    onChanged: {
+      addListener: (listener: (
+        changes: Record<string, chrome.storage.StorageChange>,
+        areaName: chrome.storage.AreaName,
+      ) => void) => storageChangeListeners.push(listener),
+      removeListener: (listener: (
+        changes: Record<string, chrome.storage.StorageChange>,
+        areaName: chrome.storage.AreaName,
+      ) => void) => {
+        const index = storageChangeListeners.indexOf(listener);
+        if (index >= 0) storageChangeListeners.splice(index, 1);
+      },
     },
   },
   downloads: {
@@ -204,12 +297,21 @@ const chromeMock = {
     },
     getAll: commandsGetAllMock,
   },
+  sidePanel: {
+    open: sidePanelOpenMock,
+  },
+  permissions: {
+    request: permissionsRequestMock,
+    contains: permissionsContainsMock,
+  },
   offscreen: {
     hasDocument: offscreenHasDocumentMock,
     createDocument: offscreenCreateDocumentMock,
     closeDocument: offscreenCloseDocumentMock,
   },
 };
+
+export const sessionGetMock = chromeMock.storage.session.get;
 
 beforeEach(() => {
   chromeCalls.downloads.length = 0;
@@ -219,9 +321,34 @@ beforeEach(() => {
   chromeCalls.tabsCreated.length = 0;
   chromeCalls.badgeText.length = 0;
   chromeCalls.badgeColor.length = 0;
+  chromeCalls.sidePanelOpens.length = 0;
   currentLastError = null;
+  openOptionsPageMock.mockReset();
+  runtimeSendMessageMock.mockReset();
+  tabsQueryMock.mockReset();
+  tabsQueryMock.mockImplementation(defaultTabsQuery);
+  tabsSendMessageMock.mockReset();
+  tabsSendMessageMock.mockImplementation(defaultTabsSendMessage);
+  sidePanelOpenMock.mockReset();
+  sidePanelOpenMock.mockImplementation(async (opts: { tabId: number }) => {
+    chromeCalls.sidePanelOpens.push(opts);
+  });
+  permissionsRequestMock.mockReset();
+  permissionsRequestMock.mockImplementation((_permissions, cb?: (granted: boolean) => void) => {
+    currentLastError = null;
+    cb?.(true);
+  });
+  permissionsContainsMock.mockReset();
+  permissionsContainsMock.mockImplementation((_permissions, cb?: (result: boolean) => void) => {
+    currentLastError = null;
+    cb?.(false);
+  });
   for (const k of Object.keys(mockStoredSettings)) delete mockStoredSettings[k];
+  for (const k of Object.keys(mockSessionStorage)) delete mockSessionStorage[k];
+  // 每个测试重新注册 chrome：个别测试末尾调用 vi.unstubAllGlobals() 会注销全局，
+  // 若只在模块顶部 stub 一次，后续测试将遇到 chrome is not defined。
+  vi.stubGlobal('chrome', chromeMock);
 });
 
-// 暴露为全局 chrome
+// 暴露为全局 chrome（模块顶层 stub：部分模块在 import 阶段即读取 chrome，需早于 beforeEach 可用）
 vi.stubGlobal('chrome', chromeMock);

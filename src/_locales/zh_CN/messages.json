@@ -1,0 +1,17 @@
+{
+  "extensionName": {
+    "message": "Clip to Markdown"
+  },
+  "extensionDescription": {
+    "message": "一键将 X、知乎、小黑盒、B站和 ChatGPT 内容保存为干净 Markdown，并支持发送到 Obsidian"
+  },
+  "saveClipCommandDescription": {
+    "message": "保存当前帖子、文章、视频字幕或对话为 Markdown"
+  },
+  "saveToObsidianCommandDescription": {
+    "message": "保存当前内容到 Obsidian"
+  },
+  "visualSummaryCommandDescription": {
+    "message": "打开当前页面的视觉概览"
+  }
+}

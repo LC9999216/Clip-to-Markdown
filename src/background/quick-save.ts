@@ -46,24 +46,30 @@ if (chrome.commands?.onCommand) {
   });
 }
 
-export async function runSave(target: SaveTarget): Promise<void> {
-  const tab = await getActiveTab();
+/** 保存结果：供 side panel / 消息响应区分成功与失败，并携带文件名。 */
+export type SaveOutcome =
+  | { ok: true; kind: 'download' | 'custom' | 'obsidian'; filename: string }
+  | { ok: false; error: string };
+
+/**
+ * 保存当前内容。tabId 省略时使用活动标签页（快捷键路径），
+ * 指定时直接使用该标签页（side panel 保存按钮路径）。
+ */
+export async function runSave(target: SaveTarget, tabId?: number): Promise<SaveOutcome> {
+  const tab = Number.isInteger(tabId) ? ({ id: tabId } as chrome.tabs.Tab) : await getActiveTab();
   if (tab?.id == null) {
-    notify('保存失败', '无法获取当前标签页。');
-    return;
+    return fail('保存失败', '无法获取当前标签页。');
   }
 
   let extract: ExtractResponse;
   try {
     extract = await tabSend<ExtractResponse>(tab.id, { type: 'EXTRACT' });
   } catch {
-    notify('保存失败', '当前页面暂不支持，或页面尚未加载完成，请刷新后重试。');
-    return;
+    return fail('保存失败', '当前页面暂不支持，或页面尚未加载完成，请刷新后重试。');
   }
 
   if (!extract?.success) {
-    notify('保存失败', extract?.error?.message ?? '提取内容失败。');
-    return;
+    return fail('保存失败', extract?.error?.message ?? '提取内容失败。');
   }
 
   let prepared: Awaited<ReturnType<typeof prepareSave>>;
@@ -71,8 +77,7 @@ export async function runSave(target: SaveTarget): Promise<void> {
     prepared = await prepareSave(extract.document, new Date(), target);
   } catch (error) {
     if (error instanceof InitialSetupRequiredError) {
-      notify('需要完成首次设置', '请先打开设置页选择自定义保存文件夹。');
-      return;
+      return fail('需要完成首次设置', '请先打开设置页选择自定义保存文件夹。');
     }
     throw error;
   }
@@ -82,10 +87,10 @@ export async function runSave(target: SaveTarget): Promise<void> {
     try {
       const filepath = await saveToObsidian({ markdown, filename }, settings);
       notify('已保存到 Obsidian', filepath);
+      return { ok: true, kind: 'obsidian', filename: filepath };
     } catch {
-      notify('Obsidian 保存失败', '请检查连接设置。');
+      return fail('Obsidian 保存失败', '请检查连接设置。');
     }
-    return;
   }
 
   // 自定义文件夹优先（IndexedDB 在 SW 可用，异常视为未配置）
@@ -100,16 +105,15 @@ export async function runSave(target: SaveTarget): Promise<void> {
     try {
       const written = await writeViaOffscreen(filename, markdown);
       notify('已保存', written);
-      return;
+      return { ok: true, kind: 'custom', filename: written };
     } catch (e) {
       // 错误详情只写开发日志，用户通知不拼接冗长的 Error
       console.error('自定义文件夹写入失败：', e);
-      await downloadFallback(markdown, filename, '自定义文件夹写入失败，已保存到下载目录：', settings);
-      return;
+      return downloadFallback(markdown, filename, '自定义文件夹写入失败，已保存到下载目录：', settings);
     }
   }
 
-  await downloadFallback(markdown, filename, '', settings);
+  return downloadFallback(markdown, filename, '', settings);
 }
 
 async function downloadFallback(
@@ -117,14 +121,21 @@ async function downloadFallback(
   filename: string,
   note: string,
   settings: Awaited<ReturnType<typeof prepareSave>>['settings'],
-): Promise<void> {
+): Promise<SaveOutcome> {
   try {
     const { filename: path, saveAs } = resolveDownloadPath(filename, settings.save);
     const r = await downloadMarkdown({ markdown, filename: path, saveAs });
     notify('已保存', `${note}${r.filename}`);
+    return { ok: true, kind: 'download', filename: r.filename };
   } catch (e) {
-    notify('保存失败', String(e));
+    return fail('保存失败', String(e));
   }
+}
+
+/** 通知用户失败原因并返回失败 outcome，供消息响应复用同一文案。 */
+function fail(title: string, error: string): SaveOutcome {
+  notify(title, error);
+  return { ok: false, error };
 }
 
 // ---------- 写入（最多重试一次，仅生命周期错误） ----------

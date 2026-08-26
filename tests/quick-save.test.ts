@@ -10,8 +10,11 @@ import {
   runtimeSendMessageMock,
   setRuntimeLastError,
   mockStoredSettings,
+  tabsQueryMock,
+  tabsSendMessageMock,
 } from './setup';
 import { mountFixture } from './helpers';
+import { runSave } from '../src/background/quick-save';
 import { loadDirectoryHandle } from '../src/core/custom-folder';
 
 vi.mock('../src/core/custom-folder', async (importOriginal) => {
@@ -180,5 +183,31 @@ describe('快捷键保存（save-clip）', () => {
     expect(chromeCalls.downloads).toHaveLength(0);
     expect(chromeCalls.notifications.some((n) => n.title === '已保存到 Obsidian')).toBe(true);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('runSave(target, tabId?) 指定标签页保存（Phase 8）', () => {
+  beforeEach(() => {
+    setLocation('https://x.com/alice/status/123456');
+    mountFixture('x', 'normal');
+    mockStoredSettings['clip2md.settings'] = {};
+  });
+
+  it('提供 tabId 时直接使用该标签页，不再查询活动标签', async () => {
+    tabsQueryMock.mockClear();
+
+    const outcome = await runSave('default', 5);
+
+    expect(tabsQueryMock).not.toHaveBeenCalled();
+    expect(tabsSendMessageMock).toHaveBeenCalledWith(5, { type: 'EXTRACT' }, expect.any(Function));
+    expect(outcome.ok).toBe(true);
+    expect(chromeCalls.downloads).toHaveLength(1);
+  });
+
+  it('省略 tabId 时仍查询活动标签页（快捷键路径不变）', async () => {
+    await runSave('default');
+
+    expect(tabsQueryMock).toHaveBeenCalled();
+    expect(chromeCalls.downloads).toHaveLength(1);
   });
 });

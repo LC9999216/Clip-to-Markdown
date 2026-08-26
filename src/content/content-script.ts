@@ -9,11 +9,14 @@ import '../adapters/index';
 import { registry } from '../core/platform-registry';
 import { ExtractionError } from '../core/error';
 import { collectArticleSourceBlocks } from '../adapters/x/article-source';
+import { navigateToSource } from '../adapters/x/navigation';
 import type {
   ExtractResponse,
   ExtractVisualSourceResponse,
+  NavigateToSourceResponse,
   StatusResponse,
 } from '../types/messages';
+import { isNavigateToSourceRequest } from '../types/messages';
 import type { PlatformAdapter } from '../adapters/types';
 import type { PlatformContentType } from '../core/schema';
 
@@ -120,6 +123,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return true;
       }
       sendResponse(result);
+      return false;
+    }
+    if (type === 'NAVIGATE_TO_SOURCE') {
+      if (!isNavigateToSourceRequest(msg)) {
+        sendResponse({
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: '原文导航请求无效。' },
+        } satisfies NavigateToSourceResponse);
+        return false;
+      }
+      sendResponse(navigateToSource(msg.payload));
       return false;
     }
   }

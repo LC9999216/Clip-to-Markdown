@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import '../src/content/content-script';
 import { dispatchRuntimeMessage } from './setup';
 import { mountFixture } from './helpers';
@@ -172,5 +172,38 @@ describe('content script EXTRACT_VISUAL_SOURCE', () => {
     const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT' })) as ExtractResponse;
     expect(resp.success).toBe(true);
     if (resp.success) expect(resp.document.metadata.contentType).toBe('x-article');
+  });
+});
+
+describe('content script NAVIGATE_TO_SOURCE', () => {
+  it('routes a valid navigation request to the X Article engine', async () => {
+    setLocation('https://x.com/deepseek_ai/status/8888');
+    mountFixture('x', 'article');
+    const target = document.querySelector('[data-contents="true"] p') as HTMLElement;
+    target.scrollIntoView = vi.fn();
+
+    const response = await dispatchRuntimeMessage({
+      type: 'NAVIGATE_TO_SOURCE',
+      payload: {
+        expectedSourceUrl: 'https://x.com/deepseek_ai/status/8888',
+        sourceBlockId: 'B001',
+        sourceQuote: '这是一篇介绍 DeepSeek-Harness 的长文章，作者在 这里 首发。',
+      },
+    });
+
+    expect(response).toEqual({ success: true });
+    expect(target.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('returns a stable INVALID_REQUEST response for malformed navigation payloads', async () => {
+    const response = await dispatchRuntimeMessage({
+      type: 'NAVIGATE_TO_SOURCE',
+      payload: { expectedSourceUrl: 'https://evil.example/', sourceBlockId: 'bad', sourceQuote: '' },
+    });
+
+    expect(response).toEqual({
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: '原文导航请求无效。' },
+    });
   });
 });

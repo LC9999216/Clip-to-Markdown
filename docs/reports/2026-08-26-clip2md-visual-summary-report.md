@@ -13,7 +13,7 @@
 产品定位：**先看懂，再收藏。**
 
 ```
-Ctrl+Shift+V 打开 Side Panel
+Ctrl+Shift+Y 打开 Side Panel
   → 复用现有 X Adapter 提取 ContentDocument
   → Background 把正文发送到用户配置的 AI 服务
   → 严格 Schema 校验 VisualSummary JSON
@@ -43,7 +43,7 @@ Ctrl+Shift+V 打开 Side Panel
 ## 三、交付内容
 
 ### 3.1 功能清单
-- **Side Panel**：快捷键 `Ctrl+Shift+V` 立即开栏；浅色/暗色、300px 窄宽、reduced-motion
+- **Side Panel**：快捷键 `Ctrl+Shift+Y` 立即开栏；浅色/暗色、300px 窄宽、reduced-motion
 - **提取预览**：EXTRACT 复用 ContentDocument；非 X 页面给出可操作中文提示
 - **AI 配置（Options）**：Endpoint / API Key / Model，HTTPS-only 校验，「授权并测试」一键授权域名 + 连通性测试
 - **AI 分析管道**：手写 Prompt、30s 超时、HTTP 错误映射（401/403→`AI_AUTH_FAILED`、404→`AI_ENDPOINT_OR_MODEL_NOT_FOUND`、429→`AI_RATE_LIMITED`、5xx→`AI_PROVIDER_ERROR`、超时→`AI_TIMEOUT`、网络→`AI_NETWORK_ERROR`、解析/校验→`AI_INVALID_RESPONSE`）

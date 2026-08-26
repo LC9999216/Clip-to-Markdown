@@ -11,6 +11,7 @@ import {
   mockSessionStorage,
   mockStoredSettings,
   permissionsContainsMock,
+  sidePanelOpenMock,
   setRuntimeLastError,
   tabsSendMessageMock,
   tabsQueryMock,
@@ -47,8 +48,8 @@ describe('visual summary phase 1 shell', () => {
     ]);
     expect(manifest.commands['visual-summary']).toEqual({
       suggested_key: {
-        default: 'Ctrl+Shift+V',
-        mac: 'Command+Shift+V',
+        default: 'Ctrl+Shift+Y',
+        mac: 'Command+Shift+Y',
       },
       description: '__MSG_visualSummaryCommandDescription__',
     });
@@ -99,6 +100,24 @@ describe('visual summary phase 1 shell', () => {
 
     await vi.waitFor(() => expect(chromeCalls.sidePanelOpens).toEqual([{ tabId: 42 }]));
     expect(tabsQueryMock).not.toHaveBeenCalled();
+  });
+
+  it('opens the side panel synchronously for a command tab user gesture', () => {
+    dispatchCommand('visual-summary', { id: 42 } as chrome.tabs.Tab);
+
+    expect(sidePanelOpenMock).toHaveBeenCalledWith({ tabId: 42 });
+  });
+
+  it('notifies the user when the side panel cannot be opened', async () => {
+    sidePanelOpenMock.mockRejectedValueOnce(new Error('side panel unavailable'));
+
+    dispatchCommand('visual-summary', { id: 42 } as chrome.tabs.Tab);
+
+    await vi.waitFor(() => expect(chromeCalls.notifications).toHaveLength(1));
+    expect(chromeCalls.notifications[0]).toEqual({
+      title: '一图速览无法打开',
+      message: '侧栏未能打开，请在 X/Twitter 内容页重试，或点击浏览器侧边栏图标打开。',
+    });
   });
 
   it('real background wiring falls back to the active tab', async () => {

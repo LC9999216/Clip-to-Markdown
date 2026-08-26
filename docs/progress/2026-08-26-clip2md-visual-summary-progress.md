@@ -20,7 +20,7 @@ V1 只支持：
 ```text
 浏览 X 内容
   ↓
-按 Ctrl + Shift + V
+按 Ctrl + Shift + Y
   ↓
 Chrome Side Panel 立即打开
   ↓
@@ -79,7 +79,7 @@ Side Panel 显示一句话总结、核心观点、内容结构和 Takeaways
 
 | Phase | 计划目标 | 当前状态 |
 |---|---|---|
-| 1 | manifest、Side Panel 壳、构建入口、`Ctrl+Shift+V` 立即开栏 | 已完成并通过双重审查 |
+| 1 | manifest、Side Panel 壳、构建入口、`Ctrl+Shift+Y` 立即开栏 | 已完成并通过双重审查 |
 | 2 | 快捷键触发 `EXTRACT`，复用 `ContentDocument`，侧栏预览标题/作者/正文前 300 字 + requestId 竞态修复 | 已完成并通过双重审查 |
 | 3 | AI Settings V3、Endpoint 校验、API Key、Model、运行时 Host 权限、测试连接 | 已完成 |
 | 4 | AnalysisInput、Prompt、AI Client、JSON Schema、手写校验与一次 repair | 已完成 |
@@ -116,7 +116,7 @@ Side Panel 显示一句话总结、核心观点、内容结构和 Takeaways
 已完成：
 
 - manifest 增加 `sidePanel` 权限与 `minimum_chrome_version: 116`；
-- 增加 `visual-summary` 快捷键（Ctrl/Command+Shift+V）及中英文 i18n；
+- 增加 `visual-summary` 快捷键（Ctrl/Command+Shift+Y）及中英文 i18n；
 - 增加运行时 AI Host 可选权限范围（`https://*/*` + localhost），不扩大静态 `host_permissions`；
 - build 增加 Side Panel IIFE 与 HTML/CSS 静态资源；
 - 快捷键优先使用命令回调提供的 tab，缺失时才查询活动标签页；

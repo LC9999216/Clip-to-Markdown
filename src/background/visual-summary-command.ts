@@ -36,16 +36,59 @@ export async function openVisualSummaryPanel(commandTab?: chrome.tabs.Tab): Prom
   const tabId = await resolveTabId(commandTab);
   if (tabId === undefined) return false;
 
-  await chrome.sidePanel.open({ tabId });
+  await openSidePanel(tabId);
   return true;
 }
 
-async function handleVisualSummaryCommand(commandTab?: chrome.tabs.Tab): Promise<void> {
-  const tabId = await resolveTabId(commandTab);
-  if (tabId === undefined) return;
+function notifyPanelOpenFailure(): void {
+  try {
+    chrome.notifications.create(
+      {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+        title: '一图速览无法打开',
+        message: '侧栏未能打开，请在 X/Twitter 内容页重试，或点击浏览器侧边栏图标打开。',
+      },
+      () => {
+        const error = chrome.runtime.lastError;
+        if (error) console.error('一图速览通知失败：', error.message);
+      },
+    );
+  } catch (error) {
+    console.error('一图速览通知不可用：', String(error));
+  }
+}
 
-  await chrome.sidePanel.open({ tabId });
-  await startVisualAnalysis(tabId);
+function openSidePanel(tabId: number): Promise<void> {
+  try {
+    // Invoke this synchronously from the command callback so Chrome retains the user gesture.
+    return Promise.resolve(chrome.sidePanel.open({ tabId })).catch((error) => {
+      notifyPanelOpenFailure();
+      throw error;
+    });
+  } catch (error) {
+    notifyPanelOpenFailure();
+    return Promise.reject(error);
+  }
+}
+
+function openPanelAndAnalyze(tabId: number): void {
+  void openSidePanel(tabId)
+    .then(() => startVisualAnalysis(tabId))
+    .catch((error) => {
+      console.error('打开视觉概览失败：', error);
+    });
+}
+
+async function handleVisualSummaryCommand(commandTab?: chrome.tabs.Tab): Promise<void> {
+  const commandTabId = commandTab?.id;
+  if (isValidTabId(commandTabId)) {
+    openPanelAndAnalyze(commandTabId);
+    return;
+  }
+
+  const tabId = await resolveTabId(commandTab);
+  if (tabId !== undefined) openPanelAndAnalyze(tabId);
 }
 
 chrome.commands.onCommand.addListener((command, tab) => {

@@ -63,9 +63,9 @@ npm run build
 | --- | --- |
 | 普通保存 | `Ctrl + Shift + S` |
 | 保存到 Obsidian | `Alt + Shift + S` |
-| 打开一图速览 | `Ctrl + Shift + V` |
+| 打开一图速览 | `Ctrl + Shift + Y` |
 
-Mac：普通保存 `Command + Shift + S`，一图速览 `Command + Shift + V`
+Mac：普通保存 `Command + Shift + S`，一图速览 `Command + Shift + Y`
 
 快捷键冲突时，可前往：
 
@@ -126,7 +126,7 @@ chrome://extensions/shortcuts
 
 ## 🔭 一图速览（可选）
 
-在 X / Twitter 上打开具体内容页（`/status/{id}` 推文或 X Article），按 `Ctrl + Shift + V` 打开 Side Panel，即可生成当前内容的一句话总结、核心观点、内容结构与结论。
+在 X / Twitter 上打开具体内容页（`/status/{id}` 推文或 X Article），按 `Ctrl + Shift + Y` 打开 Side Panel，即可生成当前内容的一句话总结、核心观点、内容结构与结论。
 
 需要先配置一个 OpenAI-Compatible 的 AI 服务：
 

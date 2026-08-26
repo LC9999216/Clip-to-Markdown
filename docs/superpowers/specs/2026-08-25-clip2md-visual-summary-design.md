@@ -2,7 +2,7 @@
 
 ## 目标与范围
 
-在现有 Chrome MV3 扩展中增加用户主动触发的 X/Twitter 内容分析。快捷键 `Ctrl+Shift+V` 立即打开 Side Panel，后台复用现有 `EXTRACT -> ContentDocument` 流程，将正文发送到用户配置的 OpenAI-Compatible Chat Completions API，并把严格校验后的 `VisualSummary` 渲染为一句话总结、核心观点、三层以内结构树与最多三条结论。用户可从 Side Panel 复用现有保存链路保存当前标签页的 Markdown。
+在现有 Chrome MV3 扩展中增加用户主动触发的 X/Twitter 内容分析。快捷键 `Ctrl+Shift+Y` 立即打开 Side Panel，后台复用现有 `EXTRACT -> ContentDocument` 流程，将正文发送到用户配置的 OpenAI-Compatible Chat Completions API，并把严格校验后的 `VisualSummary` 渲染为一句话总结、核心观点、三层以内结构树与最多三条结论。用户可从 Side Panel 复用现有保存链路保存当前标签页的 Markdown。
 
 V1 只支持普通 Tweet 与 X Article；不增加聊天、RAG、多模态、自动分析、远程后端、第三方图表或框架。
 
@@ -60,4 +60,3 @@ Side Panel 使用与现有设置页一致的浅色卡片体系并支持暗色模
 - 单元测试：AI 设置迁移与 Endpoint、安全 Schema、输入截断、客户端响应/错误/repair、缓存和后台状态机、Options、Side Panel 树与现有保存回归。
 - 构建检查：`npm run typecheck`、`npm test`、`npm run build`。
 - 浏览器检查：加载 `dist`，验证快捷键立即开栏、Tweet/X Article、未配置/未授权/非 X 错误、缓存/force、SPA 切换和保存。
-

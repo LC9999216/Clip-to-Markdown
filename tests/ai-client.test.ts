@@ -20,6 +20,7 @@ const INPUT: AnalysisInput = {
   sourceUrl: 'https://x.com/handle/status/123',
   body: '这是正文内容。',
   truncated: false,
+  sourceBlocks: [],
 };
 
 const VALID: VisualSummary = {
@@ -198,5 +199,104 @@ describe('analyzeContent 一次 repair', () => {
     await analyzeContent(INPUT, SETTINGS);
     const repairBody = JSON.parse(fetchMock.mock.calls[1]![1]!.body as string);
     expect(repairBody.messages[0].content).toContain('修复');
+  });
+});
+
+// ============================================================
+// V2：source-linked Visual Summary
+// ============================================================
+
+import { analyzeContentV2 } from '../src/analysis/client';
+import { buildAnalysisPromptV2 } from '../src/analysis/prompt';
+import type { AnalysisSourceBlock, VisualSummaryV2 } from '../src/analysis/types';
+
+const V2_INPUT: AnalysisInput = {
+  platform: 'x',
+  contentType: 'x-article',
+  title: '两种 AI 开发环境对比',
+  author: '作者 (@handle)',
+  sourceUrl: 'https://x.com/handle/status/123',
+  body: '[B001]\n这是第一段正文。\n\n[B002]\n第二部分内容。',
+  truncated: false,
+  sourceBlocks: [
+    { id: 'B001', kind: 'paragraph', text: '这是第一段正文。' },
+    { id: 'B002', kind: 'heading', text: '第二部分内容。' },
+  ],
+};
+
+const V2_VALID: VisualSummaryV2 = {
+  schemaVersion: 2,
+  summary: ['这是第一句总结。', '这是第二句总结。'],
+  keyPoints: [
+    { title: '完成度', description: 'DeepSeek Harness 完成度更高。' },
+    { title: '成本', description: 'DeepSeek Harness 调用成本更低。' },
+  ],
+  structure: [
+    { title: '引言', sourceBlockId: 'B001', sourceQuote: '这是第一段正文。' },
+    { title: '第二章', sourceBlockId: 'B002', sourceQuote: '第二部分内容。' },
+  ],
+};
+
+describe('buildAnalysisPromptV2', () => {
+  it('system 强制 schemaVersion 2 与引用锚点规则', () => {
+    const { system } = buildAnalysisPromptV2(V2_INPUT);
+    expect(system).toContain('schemaVersion');
+    expect(system).toContain('sourceBlockId');
+    expect(system).toContain('sourceQuote');
+    expect(system).toContain('合法 JSON');
+  });
+
+  it('user prompt 携带正文（含 [Bxxx] 块标记）', () => {
+    const { user } = buildAnalysisPromptV2(V2_INPUT);
+    expect(user).toContain('[B001]');
+    expect(user).toContain('这是第一段正文。');
+  });
+});
+
+describe('analyzeContentV2 成功路径', () => {
+  it('200 合法 V2 JSON 且 anchor 匹配时返回', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okContent(JSON.stringify(V2_VALID))));
+    const result = await analyzeContentV2(V2_INPUT, SETTINGS);
+    expect(result).toEqual(V2_VALID);
+  });
+
+  it('anchor 校验失败时触发一次 repair 后成功', async () => {
+    const badAnchor = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B999', sourceQuote: '不存在' }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okContent(JSON.stringify(badAnchor)))
+      .mockResolvedValueOnce(okContent(JSON.stringify(V2_VALID)));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await analyzeContentV2(V2_INPUT, SETTINGS);
+    expect(result).toEqual(V2_VALID);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('repair 请求携带具体错误列表与上次输出', async () => {
+    const badAnchor = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B999', sourceQuote: '不存在' }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okContent(JSON.stringify(badAnchor)))
+      .mockResolvedValueOnce(okContent(JSON.stringify(V2_VALID)));
+    vi.stubGlobal('fetch', fetchMock);
+    await analyzeContentV2(V2_INPUT, SETTINGS);
+    const repairBody = JSON.parse(fetchMock.mock.calls[1]![1]!.body as string);
+    expect(repairBody.messages[0].content).toContain('B999');
+    expect(repairBody.messages[0].content).toContain('不存在');
+  });
+
+  it('repair 后仍失败时返回 AI_INVALID_RESPONSE，最多两次请求', async () => {
+    const badAnchor = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B999', sourceQuote: '不存在' }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(okContent(JSON.stringify(badAnchor)));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(analyzeContentV2(V2_INPUT, SETTINGS)).rejects.toMatchObject({ code: 'AI_INVALID_RESPONSE' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

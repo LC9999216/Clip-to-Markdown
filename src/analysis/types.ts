@@ -14,6 +14,8 @@ export interface AnalysisInput {
   sourceUrl: string;
   body: string;
   truncated: boolean;
+  /** V2: 实际发送给 AI 的 Source Block（纯文本 Tweet 为 []）。 */
+  sourceBlocks: AnalysisSourceBlock[];
 }
 
 // ---------- Source Blocks（V2 原文定位） ----------
@@ -23,6 +25,47 @@ export interface AnalysisSourceBlock {
   id: string;
   kind: 'heading' | 'paragraph' | 'list-item' | 'quote' | 'code' | 'table';
   text: string;
+}
+
+// ---------- VisualSummary V2（source-linked） ----------
+
+/**
+ * 内容结构条目：Article 必须同时带 sourceBlockId + sourceQuote；
+ * Tweet 必须同时缺省两者（判别联合保证成对）。
+ */
+export type VisualStructureItem =
+  | {
+      title: string;
+      sourceBlockId: string;
+      sourceQuote: string;
+    }
+  | {
+      title: string;
+      sourceBlockId?: never;
+      sourceQuote?: never;
+    };
+
+/** V2 一图速览：两句总结 + 核心观点 + 可定位结构条目。 */
+export interface VisualSummaryV2 {
+  schemaVersion: 2;
+  /** 恰好两条，每条非空且不超过 90 字 */
+  summary: [string, string];
+  /** 2 ~ 5 个核心观点 */
+  keyPoints: VisualKeyPoint[];
+  /** 1 ~ 10 条内容结构，title 非空且不超过 40 字 */
+  structure: VisualStructureItem[];
+}
+
+/** V2 文章来源（结构化作者/平台/类型）。 */
+export interface VisualAnalysisSourceV2 {
+  url: string;
+  title: string;
+  author: {
+    name: string;
+    handle?: string;
+  };
+  platform: PlatformId;
+  contentType: PlatformContentType;
 }
 
 // ---------- VisualSummary（Phase 4） ----------

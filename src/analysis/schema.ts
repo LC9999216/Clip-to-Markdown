@@ -12,7 +12,15 @@
  * - takeaways 1~3 条，各 ≤ 80 字；confidence 0~1。
  */
 
-import type { ArticleType, VisualKeyPoint, VisualSummary, VisualTreeNode } from './types';
+import type {
+  AnalysisInput,
+  ArticleType,
+  VisualKeyPoint,
+  VisualStructureItem,
+  VisualSummary,
+  VisualSummaryV2,
+  VisualTreeNode,
+} from './types';
 
 export const ARTICLE_TYPES: readonly ArticleType[] = [
   'opinion',
@@ -179,4 +187,159 @@ export function parseVisualSummary(raw: unknown): VisualSummary {
     structure,
     takeaways,
   };
+}
+
+// ============================================================
+// V2：source-linked Visual Summary
+// ============================================================
+
+const V2_SUMMARY_COUNT = 2;
+const V2_MAX_SUMMARY_CHARS = 90;
+const MIN_STRUCTURE_ITEMS = 1;
+const MAX_STRUCTURE_ITEMS = 10;
+const MAX_STRUCTURE_TITLE_CHARS = 40;
+const SOURCE_BLOCK_ID_RE = /^B\d{3,}$/;
+const MAX_SOURCE_QUOTE_CHARS = 140;
+
+function isStructureItem(raw: unknown): raw is { title: unknown; sourceBlockId?: unknown; sourceQuote?: unknown } {
+  return isRecord(raw) && 'title' in raw;
+}
+
+/**
+ * V2 结构校验（只检查形状，不检查语义 Anchor 是否属于输入块）。
+ * 超长文本由 parse 阶段安全截断（与 V1 一致），不在此拒绝。
+ * 返回问题列表；空数组表示通过。
+ */
+export function validateVisualSummaryV2(raw: unknown): string[] {
+  const problems: string[] = [];
+  if (!isRecord(raw)) return ['visual summary v2 must be an object'];
+
+  if (raw.schemaVersion !== 2) problems.push('schemaVersion must be 2');
+
+  if (!Array.isArray(raw.summary) || raw.summary.length !== V2_SUMMARY_COUNT) {
+    problems.push(`summary must be an array of exactly ${V2_SUMMARY_COUNT} strings`);
+  } else {
+    raw.summary.forEach((s, i) => {
+      if (!isString(s) || s.trim() === '') problems.push(`summary[${i}] must be a non-empty string`);
+    });
+  }
+
+  if (!Array.isArray(raw.keyPoints) || raw.keyPoints.length < MIN_KEY_POINTS || raw.keyPoints.length > MAX_KEY_POINTS) {
+    problems.push(`keyPoints must be an array of ${MIN_KEY_POINTS} to ${MAX_KEY_POINTS} items`);
+  } else {
+    raw.keyPoints.forEach((point, i) => {
+      if (!isRecord(point)) {
+        problems.push(`keyPoints[${i}] must be an object`);
+        return;
+      }
+      if (!isString(point.title)) problems.push(`keyPoints[${i}].title must be a string`);
+      if (!isString(point.description)) problems.push(`keyPoints[${i}].description must be a string`);
+    });
+  }
+
+  if (!Array.isArray(raw.structure) || raw.structure.length < MIN_STRUCTURE_ITEMS || raw.structure.length > MAX_STRUCTURE_ITEMS) {
+    problems.push(`structure must be an array of ${MIN_STRUCTURE_ITEMS} to ${MAX_STRUCTURE_ITEMS} items`);
+  } else {
+    raw.structure.forEach((item, i) => {
+      if (!isStructureItem(item)) {
+        problems.push(`structure[${i}] must be an object with a string title`);
+        return;
+      }
+      if (!isString(item.title) || item.title.trim() === '') {
+        problems.push(`structure[${i}].title must be a non-empty string`);
+      }
+      const hasId = item.sourceBlockId !== undefined;
+      const hasQuote = item.sourceQuote !== undefined;
+      if (hasId !== hasQuote) {
+        problems.push(`structure[${i}] must have both sourceBlockId and sourceQuote, or neither`);
+      }
+      if (hasId) {
+        if (typeof item.sourceBlockId !== 'string' || !SOURCE_BLOCK_ID_RE.test(item.sourceBlockId)) {
+          problems.push(`structure[${i}].sourceBlockId must match ^B\\d{3,}$`);
+        }
+        if (typeof item.sourceQuote !== 'string' || item.sourceQuote.trim() === '') {
+          problems.push(`structure[${i}].sourceQuote must be a non-empty string`);
+        }
+      }
+    });
+  }
+
+  return problems;
+}
+
+function parseStructureItemV2(raw: unknown, i: number): VisualStructureItem {
+  if (!isStructureItem(raw) || !isString(raw.title)) {
+    throw new VisualSummaryValidationError([`structure[${i}] must be an object with a string title`]);
+  }
+  const title = truncate(raw.title.trim(), MAX_STRUCTURE_TITLE_CHARS);
+  if (raw.sourceBlockId !== undefined || raw.sourceQuote !== undefined) {
+    if (!isString(raw.sourceBlockId) || !isString(raw.sourceQuote)) {
+      throw new VisualSummaryValidationError([`structure[${i}] sourceBlockId/sourceQuote must be strings`]);
+    }
+    return {
+      title,
+      sourceBlockId: raw.sourceBlockId,
+      sourceQuote: truncate(raw.sourceQuote.trim(), MAX_SOURCE_QUOTE_CHARS),
+    };
+  }
+  return { title };
+}
+
+/** 严格解析 V2：结构错误抛错，文本超长安全截断。 */
+export function parseVisualSummaryV2(raw: unknown): VisualSummaryV2 {
+  const problems = validateVisualSummaryV2(raw);
+  if (problems.length > 0) throw new VisualSummaryValidationError(problems);
+
+  const record = raw as UnknownRecord;
+  const keyPoints = (record.keyPoints as unknown[]).map((point, i) => parseKeyPoint(point, i));
+  const summary = (record.summary as unknown[]).map((s) => truncate(String(s).trim(), V2_MAX_SUMMARY_CHARS)) as [
+    string,
+    string,
+  ];
+  const structure = (record.structure as unknown[]).map((item, i) => parseStructureItemV2(item, i));
+
+  return { schemaVersion: 2, summary, keyPoints, structure };
+}
+
+/**
+ * 语义 Anchor 校验：Quote 必须属于对应 Block，且在本次输入 Blocks 中唯一。
+ * Article 每个 Structure Item 必须带 Anchor；Tweet 必须全部无 Anchor。
+ * 返回问题列表；空数组表示通过。
+ */
+export function validateVisualSummaryAnchors(summary: VisualSummaryV2, input: AnalysisInput): string[] {
+  const problems: string[] = [];
+  const isArticle = input.contentType === 'x-article';
+  const blocksById = new Map(input.sourceBlocks.map((b) => [b.id, b]));
+
+  summary.structure.forEach((item, i) => {
+    const hasAnchor = item.sourceBlockId !== undefined;
+
+    if (isArticle && !hasAnchor) {
+      problems.push(`structure[${i}] must have sourceBlockId + sourceQuote for x-article`);
+      return;
+    }
+    if (!isArticle && hasAnchor) {
+      problems.push(`structure[${i}] must not have anchors for ${input.contentType}`);
+      return;
+    }
+    if (!hasAnchor) return;
+
+    const block = blocksById.get(item.sourceBlockId!);
+    if (!block) {
+      problems.push(`structure[${i}].sourceBlockId ${item.sourceBlockId} not present in sent blocks`);
+      return;
+    }
+
+    if (!block.text.includes(item.sourceQuote!)) {
+      problems.push(`structure[${i}].sourceQuote not found in block ${item.sourceBlockId}`);
+      return;
+    }
+
+    const matching = input.sourceBlocks.filter((b) => b.text.includes(item.sourceQuote!));
+    if (matching.length !== 1) {
+      problems.push(`structure[${i}].sourceQuote is not unique across sent blocks`);
+    }
+  });
+
+  return problems;
 }

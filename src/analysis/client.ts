@@ -2,7 +2,7 @@
  * OpenAI-Compatible Chat Completions 客户端（仅 Background 使用）。
  *
  * 约束：
- * - 不使用 SDK / response_format（部分兼容服务不支持）；
+ * - 不使用 SDK；仅对官方 DeepSeek V4 结构化分析启用 response_format；
  * - AbortController 30 秒超时；
  * - HTTP 错误映射为稳定错误码，不把第三方 API 完整错误正文展示给用户；
  * - 最多一次 repair（JSON 解析或 Schema 校验失败时重试）；
@@ -62,6 +62,19 @@ interface ChatMessage {
   content: string;
 }
 
+interface CompletionRequestOptions {
+  structuredOutput?: boolean;
+}
+
+function isOfficialDeepSeekV4(settings: AiSettings): boolean {
+  if (settings.model !== 'deepseek-v4-flash' && settings.model !== 'deepseek-v4-pro') return false;
+  try {
+    return new URL(settings.endpoint).hostname === 'api.deepseek.com';
+  } catch {
+    return false;
+  }
+}
+
 function mapHttpError(status: number): VisualAnalysisRequestError {
   if (status === 401 || status === 403) {
     return new VisualAnalysisRequestError('AI_AUTH_FAILED', 'API Key 无效或没有访问权限，请检查设置。');
@@ -85,7 +98,10 @@ async function requestCompletion(
   settings: AiSettings,
   messages: ChatMessage[],
   signal: AbortSignal,
+  options: CompletionRequestOptions = {},
 ): Promise<string> {
+  const isDeepSeekV4 = isOfficialDeepSeekV4(settings);
+  const useDeepSeekJsonMode = isDeepSeekV4 && options.structuredOutput === true;
   let response: Response;
   try {
     response = await fetch(settings.endpoint, {
@@ -98,7 +114,9 @@ async function requestCompletion(
         model: settings.model,
         messages,
         temperature: 0.2,
-        max_tokens: 1400,
+        max_tokens: useDeepSeekJsonMode ? 4096 : 1400,
+        ...(isDeepSeekV4 ? { thinking: { type: 'disabled' } } : {}),
+        ...(useDeepSeekJsonMode ? { response_format: { type: 'json_object' } } : {}),
       }),
       signal,
     });
@@ -156,7 +174,7 @@ export async function analyzeContent(input: AnalysisInput, settings: AiSettings)
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ];
-    let content = await requestCompletion(settings, firstMessages, controller.signal);
+    let content = await requestCompletion(settings, firstMessages, controller.signal, { structuredOutput: true });
 
     for (let attempt = 0; attempt <= 1; attempt++) {
       try {
@@ -171,7 +189,7 @@ export async function analyzeContent(input: AnalysisInput, settings: AiSettings)
             { role: 'system', content: `${prompt.system}\n\n${REPAIR_SYSTEM_PROMPT}` },
             { role: 'user', content: prompt.user },
           ];
-          content = await requestCompletion(settings, repairMessages, controller.signal);
+          content = await requestCompletion(settings, repairMessages, controller.signal, { structuredOutput: true });
           continue;
         }
         throw new VisualAnalysisRequestError(
@@ -230,7 +248,7 @@ export async function analyzeContentV2(input: AnalysisInput, settings: AiSetting
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ];
-    let content = await requestCompletion(settings, firstMessages, controller.signal);
+    let content = await requestCompletion(settings, firstMessages, controller.signal, { structuredOutput: true });
 
     for (let attempt = 0; attempt <= 1; attempt++) {
       try {
@@ -252,7 +270,7 @@ export async function analyzeContentV2(input: AnalysisInput, settings: AiSetting
             { role: 'system', content: `${prompt.system}\n\n${buildRepairPromptV2(problems, content)}` },
             { role: 'user', content: prompt.user },
           ];
-          content = await requestCompletion(settings, repairMessages, controller.signal);
+          content = await requestCompletion(settings, repairMessages, controller.signal, { structuredOutput: true });
           continue;
         }
         throw new VisualAnalysisRequestError(

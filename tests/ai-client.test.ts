@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { analyzeContent } from '../src/analysis/client';
+import { analyzeContent, testAiConnection } from '../src/analysis/client';
 import { buildAnalysisPrompt } from '../src/analysis/prompt';
 import type { AnalysisInput, VisualSummary } from '../src/analysis/types';
 import type { AiSettings } from '../src/core/ai-settings';
@@ -99,6 +99,49 @@ describe('analyzeContent 成功路径', () => {
     expect(body.messages).toHaveLength(2);
     expect(body.messages[0].role).toBe('system');
     expect(body.messages[1].role).toBe('user');
+  });
+
+  it.each(['deepseek-v4-flash', 'deepseek-v4-pro'] as const)(
+    '官方 DeepSeek V4 模型 %s 使用非思考 JSON 模式与充足输出额度',
+    async (model) => {
+      const fetchMock = vi.fn().mockResolvedValue(okContent(JSON.stringify(VALID)));
+      vi.stubGlobal('fetch', fetchMock);
+      await analyzeContent(INPUT, { ...SETTINGS, model });
+
+      const [, init] = fetchMock.mock.calls[0]!;
+      const body = JSON.parse(init?.body as string);
+      expect(body.thinking).toEqual({ type: 'disabled' });
+      expect(body.response_format).toEqual({ type: 'json_object' });
+      expect(body.max_tokens).toBe(4096);
+    },
+  );
+
+  it('其他 OpenAI 兼容服务不携带 DeepSeek 专用参数', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okContent(JSON.stringify(VALID)));
+    vi.stubGlobal('fetch', fetchMock);
+    await analyzeContent(INPUT, {
+      ...SETTINGS,
+      endpoint: 'https://api.example.com/chat/completions',
+      model: 'deepseek-v4-flash',
+    });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(init?.body as string);
+    expect(body).not.toHaveProperty('thinking');
+    expect(body).not.toHaveProperty('response_format');
+    expect(body.max_tokens).toBe(1400);
+  });
+
+  it('DeepSeek V4 连接测试保持轻量文本请求', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okContent('OK'));
+    vi.stubGlobal('fetch', fetchMock);
+    await testAiConnection({ ...SETTINGS, model: 'deepseek-v4-flash' });
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse(init?.body as string);
+    expect(body.thinking).toEqual({ type: 'disabled' });
+    expect(body).not.toHaveProperty('response_format');
+    expect(body.max_tokens).toBe(1400);
   });
 
   it('兼容 ```json 代码块围栏', async () => {
@@ -272,6 +315,26 @@ describe('analyzeContentV2 成功路径', () => {
     const result = await analyzeContentV2(V2_INPUT, SETTINGS);
     expect(result).toEqual(V2_VALID);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('DeepSeek V4 的 V2 首次与 repair 请求都使用 JSON 模式和 4096 输出额度', async () => {
+    const badAnchor = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B999', sourceQuote: '不存在' }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okContent(JSON.stringify(badAnchor)))
+      .mockResolvedValueOnce(okContent(JSON.stringify(V2_VALID)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await analyzeContentV2(V2_INPUT, { ...SETTINGS, model: 'deepseek-v4-flash' });
+
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(init?.body as string));
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) {
+      expect(body.response_format).toEqual({ type: 'json_object' });
+      expect(body.max_tokens).toBe(4096);
+    }
   });
 
   it('repair 请求携带具体错误列表与上次输出', async () => {

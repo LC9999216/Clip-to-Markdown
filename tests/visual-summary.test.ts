@@ -111,6 +111,12 @@ describe('visual summary phase 1 shell', () => {
     expect(existsSync(resolve(root, 'docs/design/visual-summary-v2-reference.png'))).toBe(true);
   });
 
+  it('does not ellipsize V2 structure titles', () => {
+    const css = read('src/sidepanel/sidepanel.css');
+    expect(css).toContain('.structure-title { min-width: 0; overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; white-space: normal; }');
+    expect(css).not.toMatch(/\.structure-title\s*\{[^}]*text-overflow\s*:/);
+  });
+
   it('real background wiring opens exactly once against the supplied command tab', async () => {
     dispatchCommand('visual-summary', { id: 42 } as chrome.tabs.Tab);
 

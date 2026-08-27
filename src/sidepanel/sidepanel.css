@@ -133,7 +133,7 @@ body { overflow-x: hidden; }
 .structure-item { display: flex; min-width: 0; align-items: center; gap: 15px; min-height: 45px; padding: 5px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; text-align: left; }
 button.structure-item { width: 100%; cursor: pointer; }
 .structure-item:hover { color: var(--green); }
-.structure-title { min-width: 0; overflow: hidden; font-size: 15px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.structure-title { min-width: 0; overflow-wrap: anywhere; font-size: 15px; line-height: 1.45; white-space: normal; }
 .structure-index { min-width: 56px; }
 
 .result-actions { display: flex; gap: 24px; padding-top: 21px; }

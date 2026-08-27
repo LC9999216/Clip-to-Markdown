@@ -23,7 +23,7 @@ export const X_SELECTORS = {
     '[data-testid="quote-tweet"]',
   ],
   /** 推广标记 */
-  promotedIndicators: '[data-testid="promotedIndicator"], [data-testid="placementTracking"]',
+  promotedIndicators: '[data-testid="promotedIndicator"]',
   /** 登录墙提示 */
   loginIndicators: '[data-testid="loginButton"], [href="/login"], [data-testid="signupButton"]',
   /** 正文清洗时移除的干扰节点 */

@@ -160,6 +160,28 @@ describe('X adapter 路由与错误', () => {
 });
 
 describe('X 长文章路由与错误', () => {
+  it('普通长文章中的 placementTracking 不会被误判为推广内容', () => {
+    document.body.innerHTML = `
+      <article role="article">
+        <div data-testid="User-Name"><a href="/alice">Alice</a><span>@alice</span></div>
+        <a href="/alice/status/1"><time datetime="2026-08-27T00:00:00Z"></time></a>
+        <div data-testid="twitter-article-title">普通长文章</div>
+        <div data-testid="twitterArticleRichTextView">
+          <div data-testid="longformRichTextComponent">
+            <div data-contents="true">
+              <div data-block="true"><span>这是真实正文。</span></div>
+              <div data-testid="placementTracking"></div>
+            </div>
+          </div>
+        </div>
+      </article>`;
+
+    const doc = xAdapter.extract(document, new URL('https://x.com/alice/status/1'));
+
+    expect(doc.metadata.contentType).toBe('x-article');
+    expect(renderDocument(doc)).toContain('这是真实正文。');
+  });
+
   it('同一 /status/ URL 根据 DOM 区分 tweet 与 x-article', () => {
     mountFixture('x', 'article');
     expect(xAdapter.detectType(new URL(URLS.article!), document)).toBe('x-article');

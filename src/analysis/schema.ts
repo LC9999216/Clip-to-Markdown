@@ -285,12 +285,16 @@ function parseStructureItemV2(raw: unknown, i: number): VisualStructureItem {
   return { title };
 }
 
-/** 严格解析 V2：结构错误抛错，文本超长安全截断。 */
+/** 严格解析 V2：结构错误抛错，文本超长及 structure 超限安全截断。 */
 export function parseVisualSummaryV2(raw: unknown): VisualSummaryV2 {
-  const problems = validateVisualSummaryV2(raw);
+  const normalizedRaw =
+    isRecord(raw) && Array.isArray(raw.structure) && raw.structure.length > MAX_STRUCTURE_ITEMS
+      ? { ...raw, structure: raw.structure.slice(0, MAX_STRUCTURE_ITEMS) }
+      : raw;
+  const problems = validateVisualSummaryV2(normalizedRaw);
   if (problems.length > 0) throw new VisualSummaryValidationError(problems);
 
-  const record = raw as UnknownRecord;
+  const record = normalizedRaw as UnknownRecord;
   const keyPoints = (record.keyPoints as unknown[]).map((point, i) => parseKeyPoint(point, i));
   const summary = (record.summary as unknown[]).map((s) => truncate(String(s).trim(), V2_MAX_SUMMARY_CHARS)) as [
     string,

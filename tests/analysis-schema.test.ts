@@ -341,6 +341,22 @@ describe('parseVisualSummaryV2', () => {
     });
     expect(parsed.structure[0]!.title.length).toBe(40);
   });
+
+  it('structure 超过 10 条时安全保留前 10 条', () => {
+    const eleven = Array.from({ length: 11 }, (_, i) => ({
+      title: `第 ${i + 1} 条`,
+      sourceBlockId: `B${String(i + 1).padStart(3, '0')}`,
+      sourceQuote: `引用 ${i + 1}`,
+    }));
+    const raw = { ...V2_VALID, structure: eleven };
+
+    const parsed = parseVisualSummaryV2(raw);
+
+    expect(parsed.structure).toHaveLength(10);
+    expect(parsed.structure.map((item) => item.title)).toEqual(eleven.slice(0, 10).map((item) => item.title));
+    expect(raw.structure).toHaveLength(11);
+    expect(raw.structure[10]?.title).toBe('第 11 条');
+  });
 });
 
 describe('validateVisualSummaryAnchors', () => {

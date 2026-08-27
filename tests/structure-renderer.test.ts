@@ -42,4 +42,18 @@ describe('V2 structure renderer', () => {
     expect(container.querySelector('.structure-title')?.textContent).toBe('<img src=x onerror=alert(1)>');
     expect(container.textContent).not.toContain('旧内容');
   });
+
+  it('sets the wide-layout row count for column-major filling', () => {
+    const container = document.createElement('div');
+
+    renderStructure(container, [
+      { title: '01' },
+      { title: '02' },
+      { title: '03' },
+      { title: '04' },
+      { title: '05' },
+    ], vi.fn());
+
+    expect(container.querySelector('.structure-list')?.getAttribute('data-structure-rows')).toBe('3');
+  });
 });

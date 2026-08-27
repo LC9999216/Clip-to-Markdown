@@ -16,6 +16,9 @@ export function renderStructure(
   container.replaceChildren();
   const list = document.createElement('div');
   list.className = 'structure-list';
+  const rows = Math.ceil(items.length / 2);
+  list.setAttribute('data-structure-rows', String(rows));
+  list.style.setProperty('--structure-rows', String(rows));
 
   items.forEach((item, index) => {
     const anchored = hasAnchor(item);

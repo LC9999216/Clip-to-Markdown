@@ -145,7 +145,11 @@ button.structure-item { width: 100%; cursor: pointer; }
 .live-status { min-height: 1.3em; margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 
 @media (min-width: 600px) {
-  .structure-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .structure-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(var(--structure-rows, 1), auto);
+    grid-auto-flow: column;
+  }
 }
 
 @media (max-width: 420px) {

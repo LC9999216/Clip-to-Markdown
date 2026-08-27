@@ -117,6 +117,12 @@ describe('visual summary phase 1 shell', () => {
     expect(css).not.toMatch(/\.structure-title\s*\{[^}]*text-overflow\s*:/);
   });
 
+  it('fills the wide structure grid down the left column before the right column', () => {
+    const css = read('src/sidepanel/sidepanel.css');
+    expect(css).toContain('grid-template-rows: repeat(var(--structure-rows, 1), auto);');
+    expect(css).toContain('grid-auto-flow: column;');
+  });
+
   it('real background wiring opens exactly once against the supplied command tab', async () => {
     dispatchCommand('visual-summary', { id: 42 } as chrome.tabs.Tab);
 

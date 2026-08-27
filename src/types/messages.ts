@@ -4,13 +4,36 @@
  */
 
 import type { ContentDocument, PlatformContentType, PlatformId } from '../core/schema';
-import type { VisualAnalysisState } from '../analysis/types';
+import type { AnalysisSourceBlock, VisualAnalysisState } from '../analysis/types';
 
 // ---------- 请求 ----------
 
 export type StatusRequest = { type: 'GET_STATUS' };
 export type ExtractRequest = { type: 'EXTRACT' };
+
+/**
+ * 一次读取返回 ContentDocument + Source Blocks（X Article 原文定位用）。
+ * X Article 返回 DOM Blocks；Tweet 及其他平台返回空 Blocks。
+ */
+export type ExtractVisualSourceRequest = { type: 'EXTRACT_VISUAL_SOURCE' };
 export type DownloadRequest = { type: 'DOWNLOAD'; payload: { markdown: string; filename: string } };
+
+/** 请求 Content Script 将当前 X Article 滚动到经过校验的原文块。 */
+export type NavigateToSourceRequest = {
+  type: 'NAVIGATE_TO_SOURCE';
+  payload: {
+    expectedSourceUrl: string;
+    sourceBlockId: string;
+    sourceQuote: string;
+  };
+};
+
+export type NavigationErrorCode =
+  | 'SOURCE_CHANGED'
+  | 'UNSUPPORTED_PAGE'
+  | 'TARGET_NOT_FOUND'
+  | 'AMBIGUOUS_TARGET'
+  | 'INVALID_REQUEST';
 
 /**
  * content script 请求 background 代理抓取 JSON（仅限 B 站相关域名）。
@@ -69,7 +92,7 @@ export type SaveCurrentTabResponse =
   | { success: true; filename: string }
   | { success: false; error: string };
 
-export type ContentRequest = StatusRequest | ExtractRequest;
+export type ContentRequest = StatusRequest | ExtractRequest | ExtractVisualSourceRequest | NavigateToSourceRequest;
 export type RuntimeMessage =
   | ContentRequest
   | DownloadRequest
@@ -109,6 +132,14 @@ export type ExtractResponse =
   | { success: true; document: ContentDocument }
   | { success: false; error: { code: string; message: string } };
 
+export type ExtractVisualSourceResponse =
+  | { success: true; document: ContentDocument; sourceBlocks: AnalysisSourceBlock[] }
+  | { success: false; error: { code: string; message: string } };
+
+export type NavigateToSourceResponse =
+  | { success: true }
+  | { success: false; error: { code: NavigationErrorCode; message: string } };
+
 export type DownloadResponse = { success: true; filename: string } | { success: false; error: string };
 
 // ---------- 类型守卫 ----------
@@ -136,6 +167,35 @@ export function isWriteCustomRequest(m: unknown): m is WriteCustomRequest {
   if (typeof markdown !== 'string' || markdown === '') return false;
   if (/[/\\]/.test(filename)) return false;
   return true;
+}
+
+export function isExtractVisualSourceRequest(m: unknown): m is ExtractVisualSourceRequest {
+  return isRecord(m) && m.type === 'EXTRACT_VISUAL_SOURCE';
+}
+
+const SOURCE_BLOCK_ID_RE = /^B\d{3,}$/;
+
+function isXStatusUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.trim() === '') return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    return (host === 'x.com' || host === 'twitter.com') && /\/status\/\d+(?:\/|$)/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function isNavigateToSourceRequest(m: unknown): m is NavigateToSourceRequest {
+  if (!isRecord(m) || m.type !== 'NAVIGATE_TO_SOURCE' || !isRecord(m.payload)) return false;
+  const { expectedSourceUrl, sourceBlockId, sourceQuote } = m.payload;
+  return isXStatusUrl(expectedSourceUrl)
+    && typeof sourceBlockId === 'string'
+    && SOURCE_BLOCK_ID_RE.test(sourceBlockId)
+    && typeof sourceQuote === 'string'
+    && sourceQuote.trim() !== ''
+    && Array.from(sourceQuote).length <= 140;
 }
 
 export function isFetchJsonRequest(m: unknown): m is FetchJsonRequest {

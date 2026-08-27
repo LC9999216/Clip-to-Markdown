@@ -188,3 +188,223 @@ describe('parseVisualSummary', () => {
     expect(parsed.structure.label.length).toBeLessThanOrEqual(100);
   });
 });
+
+// ============================================================
+// V2：source-linked Visual Summary
+// ============================================================
+
+import {
+  parseVisualSummaryV2,
+  validateVisualSummaryAnchors,
+  validateVisualSummaryV2,
+} from '../src/analysis/schema';
+import type { AnalysisInput, AnalysisSourceBlock, VisualSummaryV2 } from '../src/analysis/types';
+
+const V2_VALID: VisualSummaryV2 = {
+  schemaVersion: 2,
+  summary: ['这是第一句总结。', '这是第二句总结。'],
+  keyPoints: [
+    { title: '完成度', description: 'DeepSeek Harness 完成度更高。' },
+    { title: '成本', description: 'DeepSeek Harness 调用成本更低。' },
+  ],
+  structure: [
+    { title: '引言', sourceBlockId: 'B001', sourceQuote: '第一段正文内容。' },
+    { title: '第二章', sourceBlockId: 'B002', sourceQuote: '第二部分' },
+  ],
+};
+
+const V2_INPUT_BLOCKS: AnalysisSourceBlock[] = [
+  { id: 'B001', kind: 'paragraph', text: '第一段正文内容。' },
+  { id: 'B002', kind: 'heading', text: '第二部分' },
+  { id: 'B003', kind: 'paragraph', text: '第三段详细论述。' },
+];
+
+const V2_ARTICLE_INPUT: AnalysisInput = {
+  platform: 'x',
+  contentType: 'x-article',
+  title: '测试文章',
+  author: '作者',
+  sourceUrl: 'https://x.com/a/status/1',
+  body: '',
+  truncated: false,
+  sourceBlocks: V2_INPUT_BLOCKS,
+};
+
+const V2_TWEET_INPUT: AnalysisInput = {
+  platform: 'x',
+  contentType: 'tweet',
+  title: '',
+  author: '作者',
+  sourceUrl: 'https://x.com/a/status/2',
+  body: '',
+  truncated: false,
+  sourceBlocks: [],
+};
+
+describe('validateVisualSummaryV2', () => {
+  it('接受合法 V2 示例', () => {
+    expect(validateVisualSummaryV2(V2_VALID)).toEqual([]);
+  });
+
+  it('拒绝非 schemaVersion 2', () => {
+    expect(validateVisualSummaryV2({ ...V2_VALID, schemaVersion: 1 }).some((e) => e.includes('schemaVersion'))).toBe(
+      true,
+    );
+  });
+
+  it('拒绝 summary 非恰好两条', () => {
+    expect(validateVisualSummaryV2({ ...V2_VALID, summary: ['一条'] }).some((e) => e.includes('summary'))).toBe(true);
+    expect(
+      validateVisualSummaryV2({ ...V2_VALID, summary: ['一', '二', '三'] }).some((e) => e.includes('summary')),
+    ).toBe(true);
+  });
+
+  it('拒绝 summary 为空', () => {
+    expect(validateVisualSummaryV2({ ...V2_VALID, summary: ['', '二'] }).some((e) => e.includes('summary'))).toBe(true);
+  });
+
+  it('summary 超长由 parse 截断（校验不拒绝）', () => {
+    const long = '长'.repeat(91);
+    expect(validateVisualSummaryV2({ ...V2_VALID, summary: [long, '二'] })).toEqual([]);
+  });
+
+  it('拒绝 keyPoints 数量越界', () => {
+    const one = { ...V2_VALID, keyPoints: V2_VALID.keyPoints.slice(0, 1) };
+    expect(validateVisualSummaryV2(one).some((e) => e.includes('keyPoints'))).toBe(true);
+    const six = [
+      ...V2_VALID.keyPoints,
+      { title: 'a', description: 'b' },
+      { title: 'c', description: 'd' },
+      { title: 'e', description: 'f' },
+      { title: 'g', description: 'h' },
+    ];
+    expect(validateVisualSummaryV2({ ...V2_VALID, keyPoints: six }).some((e) => e.includes('keyPoints'))).toBe(true);
+  });
+
+  it('拒绝 structure 数量越界（0 或 11）', () => {
+    const empty = { ...V2_VALID, structure: [] };
+    expect(validateVisualSummaryV2(empty).some((e) => e.includes('structure'))).toBe(true);
+    const eleven = Array.from({ length: 11 }, (_, i) => ({
+      title: 't' + i,
+      sourceBlockId: 'B' + String(i + 1).padStart(3, '0'),
+      sourceQuote: 'q' + i,
+    }));
+    expect(validateVisualSummaryV2({ ...V2_VALID, structure: eleven }).some((e) => e.includes('structure'))).toBe(true);
+  });
+
+  it('拒绝 sourceBlockId 格式错误', () => {
+    expect(
+      validateVisualSummaryV2({
+        ...V2_VALID,
+        structure: [{ title: 'x', sourceBlockId: 'B01', sourceQuote: 'q' }],
+      }).some((e) => e.includes('sourceBlockId')),
+    ).toBe(true);
+  });
+
+  it('拒绝 sourceBlockId 与 sourceQuote 不成对', () => {
+    expect(
+      validateVisualSummaryV2({
+        ...V2_VALID,
+        structure: [{ title: 'x', sourceBlockId: 'B001' }],
+      }).some((e) => e.includes('sourceBlockId')),
+    ).toBe(true);
+    expect(
+      validateVisualSummaryV2({
+        ...V2_VALID,
+        structure: [{ title: 'x', sourceQuote: 'q' }],
+      }).some((e) => e.includes('sourceBlockId')),
+    ).toBe(true);
+  });
+});
+
+describe('parseVisualSummaryV2', () => {
+  it('原样返回合法输入', () => {
+    expect(parseVisualSummaryV2(V2_VALID)).toEqual(V2_VALID);
+  });
+
+  it('结构错误时抛错', () => {
+    expect(() => parseVisualSummaryV2({ ...V2_VALID, schemaVersion: 1 })).toThrow();
+    expect(() => parseVisualSummaryV2(null)).toThrow();
+  });
+
+  it('summary 超长时截断到 90 字', () => {
+    const long = '长'.repeat(100);
+    const parsed = parseVisualSummaryV2({ ...V2_VALID, summary: [long, '二'] });
+    expect(parsed.summary[0].length).toBe(90);
+  });
+
+  it('structure title 超长 40 字时截断', () => {
+    const long = '标'.repeat(50);
+    const parsed = parseVisualSummaryV2({
+      ...V2_VALID,
+      structure: [{ title: long, sourceBlockId: 'B001', sourceQuote: 'q' }],
+    });
+    expect(parsed.structure[0]!.title.length).toBe(40);
+  });
+
+  it('structure 超过 10 条时安全保留前 10 条', () => {
+    const eleven = Array.from({ length: 11 }, (_, i) => ({
+      title: `第 ${i + 1} 条`,
+      sourceBlockId: `B${String(i + 1).padStart(3, '0')}`,
+      sourceQuote: `引用 ${i + 1}`,
+    }));
+    const raw = { ...V2_VALID, structure: eleven };
+
+    const parsed = parseVisualSummaryV2(raw);
+
+    expect(parsed.structure).toHaveLength(10);
+    expect(parsed.structure.map((item) => item.title)).toEqual(eleven.slice(0, 10).map((item) => item.title));
+    expect(raw.structure).toHaveLength(11);
+    expect(raw.structure[10]?.title).toBe('第 11 条');
+  });
+});
+
+describe('validateVisualSummaryAnchors', () => {
+  it('Article: 合法 anchor 通过', () => {
+    expect(validateVisualSummaryAnchors(V2_VALID, V2_ARTICLE_INPUT)).toEqual([]);
+  });
+
+  it('Article: 缺少 anchor 被拒绝', () => {
+    const noAnchor = {
+      ...V2_VALID,
+      structure: [{ title: '无引用' }],
+    };
+    const problems = validateVisualSummaryAnchors(noAnchor, V2_ARTICLE_INPUT);
+    expect(problems.some((p) => p.includes('sourceBlockId'))).toBe(true);
+  });
+
+  it('Article: 引用了不存在的 ID 被拒绝', () => {
+    const badId = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B999', sourceQuote: '不存在' }],
+    };
+    const problems = validateVisualSummaryAnchors(badId, V2_ARTICLE_INPUT);
+    expect(problems.some((p) => p.includes('B999'))).toBe(true);
+  });
+
+  it('Article: Quote 不在 Block 中时被拒绝', () => {
+    const badQuote = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B001', sourceQuote: '不存在这段文字' }],
+    };
+    const problems = validateVisualSummaryAnchors(badQuote, V2_ARTICLE_INPUT);
+    expect(problems.some((p) => p.includes('not found'))).toBe(true);
+  });
+
+  it('Tweet: 带 anchor 被拒绝', () => {
+    const withAnchor = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B001', sourceQuote: 'q' }],
+    };
+    const problems = validateVisualSummaryAnchors(withAnchor, V2_TWEET_INPUT);
+    expect(problems.some((p) => p.includes('not have'))).toBe(true);
+  });
+
+  it('Tweet: 无 anchor 通过', () => {
+    const noAnchor = {
+      ...V2_VALID,
+      structure: [{ title: '一条结构' }, { title: '另一条' }],
+    };
+    expect(validateVisualSummaryAnchors(noAnchor, V2_TWEET_INPUT)).toEqual([]);
+  });
+});

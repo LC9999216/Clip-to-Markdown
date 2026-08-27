@@ -2,7 +2,7 @@
  * OpenAI-Compatible Chat Completions 客户端（仅 Background 使用）。
  *
  * 约束：
- * - 不使用 SDK / response_format（部分兼容服务不支持）；
+ * - 不使用 SDK；仅对官方 DeepSeek V4 结构化分析启用 response_format；
  * - AbortController 30 秒超时；
  * - HTTP 错误映射为稳定错误码，不把第三方 API 完整错误正文展示给用户；
  * - 最多一次 repair（JSON 解析或 Schema 校验失败时重试）；
@@ -10,9 +10,14 @@
  */
 
 import type { AiSettings } from '../core/ai-settings';
-import { buildAnalysisPrompt } from './prompt';
-import { parseVisualSummary, VisualSummaryValidationError } from './schema';
-import type { AnalysisInput, VisualSummary } from './types';
+import { buildAnalysisPrompt, buildAnalysisPromptV2 } from './prompt';
+import {
+  parseVisualSummary,
+  parseVisualSummaryV2,
+  validateVisualSummaryAnchors,
+  VisualSummaryValidationError,
+} from './schema';
+import type { AnalysisInput, VisualSummary, VisualSummaryV2 } from './types';
 
 export const AI_TIMEOUT_MS = 30_000;
 
@@ -38,9 +43,36 @@ export class VisualAnalysisRequestError extends Error {
 const REPAIR_SYSTEM_PROMPT =
   '你上一次返回的数据不符合要求。\n请修复格式，只返回合法 JSON。\n不要解释。\n不要 Markdown。\n不要代码块。';
 
+/** V2 修复提示：携带具体错误列表与上次输出，帮助模型修正。 */
+function buildRepairPromptV2(problems: string[], lastOutput: string): string {
+  return `你上一次返回的数据不符合要求，具体错误如下：
+${problems.map((p) => `- ${p}`).join('\n')}
+
+你上次的输出：
+${lastOutput.slice(0, 3000)}
+
+请修复格式，只返回合法 JSON。
+不要解释。
+不要 Markdown。
+不要代码块。`;
+}
+
 interface ChatMessage {
   role: 'system' | 'user';
   content: string;
+}
+
+interface CompletionRequestOptions {
+  structuredOutput?: boolean;
+}
+
+function isOfficialDeepSeekV4(settings: AiSettings): boolean {
+  if (settings.model !== 'deepseek-v4-flash' && settings.model !== 'deepseek-v4-pro') return false;
+  try {
+    return new URL(settings.endpoint).hostname === 'api.deepseek.com';
+  } catch {
+    return false;
+  }
 }
 
 function mapHttpError(status: number): VisualAnalysisRequestError {
@@ -66,7 +98,10 @@ async function requestCompletion(
   settings: AiSettings,
   messages: ChatMessage[],
   signal: AbortSignal,
+  options: CompletionRequestOptions = {},
 ): Promise<string> {
+  const isDeepSeekV4 = isOfficialDeepSeekV4(settings);
+  const useDeepSeekJsonMode = isDeepSeekV4 && options.structuredOutput === true;
   let response: Response;
   try {
     response = await fetch(settings.endpoint, {
@@ -79,7 +114,9 @@ async function requestCompletion(
         model: settings.model,
         messages,
         temperature: 0.2,
-        max_tokens: 1400,
+        max_tokens: useDeepSeekJsonMode ? 4096 : 1400,
+        ...(isDeepSeekV4 ? { thinking: { type: 'disabled' } } : {}),
+        ...(useDeepSeekJsonMode ? { response_format: { type: 'json_object' } } : {}),
       }),
       signal,
     });
@@ -137,7 +174,7 @@ export async function analyzeContent(input: AnalysisInput, settings: AiSettings)
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ];
-    let content = await requestCompletion(settings, firstMessages, controller.signal);
+    let content = await requestCompletion(settings, firstMessages, controller.signal, { structuredOutput: true });
 
     for (let attempt = 0; attempt <= 1; attempt++) {
       try {
@@ -152,7 +189,7 @@ export async function analyzeContent(input: AnalysisInput, settings: AiSettings)
             { role: 'system', content: `${prompt.system}\n\n${REPAIR_SYSTEM_PROMPT}` },
             { role: 'user', content: prompt.user },
           ];
-          content = await requestCompletion(settings, repairMessages, controller.signal);
+          content = await requestCompletion(settings, repairMessages, controller.signal, { structuredOutput: true });
           continue;
         }
         throw new VisualAnalysisRequestError(
@@ -182,6 +219,67 @@ export async function testAiConnection(settings: AiSettings): Promise<{ model: s
     ];
     await requestCompletion(settings, messages, controller.signal);
     return { model: settings.model };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ============================================================
+// V2：source-linked Visual Summary
+// ============================================================
+
+function parseContentV2(content: string): VisualSummaryV2 {
+  const cleaned = stripJsonFence(content);
+  const parsed: unknown = JSON.parse(cleaned);
+  return parseVisualSummaryV2(parsed);
+}
+
+/**
+ * V2 分析内容：结构校验 + 语义 Anchor 校验。
+ * 解析或校验失败时携带错误列表做一次 repair；再失败抛 AI_INVALID_RESPONSE。
+ */
+export async function analyzeContentV2(input: AnalysisInput, settings: AiSettings): Promise<VisualSummaryV2> {
+  const prompt = buildAnalysisPromptV2(input);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
+  try {
+    const firstMessages: ChatMessage[] = [
+      { role: 'system', content: prompt.system },
+      { role: 'user', content: prompt.user },
+    ];
+    let content = await requestCompletion(settings, firstMessages, controller.signal, { structuredOutput: true });
+
+    for (let attempt = 0; attempt <= 1; attempt++) {
+      try {
+        const summary = parseContentV2(content);
+        const anchorProblems = validateVisualSummaryAnchors(summary, input);
+        if (anchorProblems.length > 0) throw new VisualSummaryValidationError(anchorProblems);
+        return summary;
+      } catch (error) {
+        const isRepairable =
+          error instanceof VisualSummaryValidationError ||
+          error instanceof SyntaxError ||
+          (error instanceof Error && error.name === 'SyntaxError');
+        if (attempt === 0 && isRepairable) {
+          const problems =
+            error instanceof VisualSummaryValidationError
+              ? error.problems
+              : ['JSON 解析失败，请返回合法 JSON 对象'];
+          const repairMessages: ChatMessage[] = [
+            { role: 'system', content: `${prompt.system}\n\n${buildRepairPromptV2(problems, content)}` },
+            { role: 'user', content: prompt.user },
+          ];
+          content = await requestCompletion(settings, repairMessages, controller.signal, { structuredOutput: true });
+          continue;
+        }
+        throw new VisualAnalysisRequestError(
+          'AI_INVALID_RESPONSE',
+          'AI 返回的分析结果无法解析或原文引用不符，请重新生成。',
+        );
+      }
+    }
+    throw new VisualAnalysisRequestError('AI_INVALID_RESPONSE', 'AI 返回的分析结果无法解析，请重新生成。');
   } finally {
     clearTimeout(timer);
   }

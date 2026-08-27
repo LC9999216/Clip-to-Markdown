@@ -99,6 +99,18 @@ describe('visual summary phase 1 shell', () => {
     expect(css).toContain('min-width: 280px');
   });
 
+  it('keeps the V2 reading-view contract and removes the legacy visual shell', () => {
+    const html = read('src/sidepanel/sidepanel.html');
+    const css = read('src/sidepanel/sidepanel.css');
+    expect(html).toContain('action-open-source');
+    expect(html).toContain('navigation-status');
+    expect(html).toContain('summary-lines');
+    expect(html).not.toMatch(/orbit|takeaways|confidence|article-type|<footer|快捷键/);
+    expect(css).toContain('@media (min-width: 600px)');
+    expect(css).toContain('body { overflow-x: hidden; }');
+    expect(existsSync(resolve(root, 'docs/design/visual-summary-v2-reference.png'))).toBe(true);
+  });
+
   it('real background wiring opens exactly once against the supplied command tab', async () => {
     dispatchCommand('visual-summary', { id: 42 } as chrome.tabs.Tab);
 

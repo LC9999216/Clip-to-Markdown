@@ -7,73 +7,69 @@
   <title>视觉概览 - Clip to Markdown</title>
 </head>
 <body>
-  <main class="shell" aria-labelledby="page-title">
-    <header class="brand">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" role="img">
-          <path d="M4 6.5 12 3l8 3.5v11L12 21l-8-3.5z" />
-          <path d="m4 6.5 8 4 8-4M12 10.5V21" />
+  <main class="shell" aria-labelledby="preview-title">
+    <header class="brand-bar">
+      <div class="brand-lockup">
+        <span class="brand-logo" aria-hidden="true"><span></span></span>
+        <span class="brand-name">Clip to Markdown</span>
+      </div>
+      <button class="icon-button" id="action-settings" type="button" aria-label="打开设置" title="打开设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z" />
+          <path d="m19.4 13.5 1.5 1.2-1.8 3.1-1.8-.7a7.7 7.7 0 0 1-1.7 1l-.3 1.9h-3.6l-.3-1.9a7.7 7.7 0 0 1-1.7-1l-1.8.7-1.8-3.1 1.5-1.2a7 7 0 0 1 0-2l-1.5-1.2 1.8-3.1 1.8.7a7.7 7.7 0 0 1 1.7-1l.3-1.9h3.6l.3 1.9a7.7 7.7 0 0 1 1.7 1l1.8-.7 1.8 3.1-1.5 1.2a7 7 0 0 1 0 2Z" />
         </svg>
-      </span>
-      <span>Clip to Markdown</span>
+      </button>
     </header>
 
-    <section class="intro">
-      <p class="eyebrow">视觉概览</p>
-      <h1 id="page-title">把当前页面<br />变成一张清晰地图</h1>
-      <p class="summary">这里将展示页面要点、信息关系与内容脉络。</p>
+    <section class="status-card" id="status-card" aria-live="polite">
+      <p class="status-label" id="status-label">等待开始</p>
+      <p class="status-copy" id="status-copy">打开侧栏后，当前 X 内容将在此显示。</p>
+      <div class="status-actions" id="status-actions" hidden>
+        <button class="button button-outline" id="status-action" type="button"></button>
+      </div>
     </section>
 
-    <section class="idle-card" aria-live="polite">
-      <div class="orbit" aria-hidden="true">
-        <span></span><span></span><span></span>
-      </div>
-      <div>
-        <p class="status-label" id="status-label">等待开始</p>
-        <p class="status-copy" id="status-copy">使用快捷键打开后，当前 X 内容将在此显示。</p>
-        <div class="card-actions" id="status-actions" hidden>
-          <button class="btn" id="status-action" type="button"></button>
+    <article class="preview" id="preview" hidden>
+      <header class="source-header">
+        <span class="source-icon" aria-hidden="true">
+          <svg viewBox="0 0 32 32">
+            <path d="M9 4h10l6 6v18H9z" />
+            <path d="M19 4v7h6M13 17h8M13 22h8" />
+          </svg>
+        </span>
+        <div class="source-meta">
+          <h1 id="preview-title"></h1>
+          <div class="source-byline">
+            <span id="preview-author"></span>
+            <span id="preview-handle"></span>
+            <span class="platform-badge" id="preview-platform"></span>
+          </div>
         </div>
-      </div>
-    </section>
+      </header>
 
-    <article class="preview-card" id="preview" hidden>
-      <div class="preview-meta">
-        <span class="preview-type" id="preview-type"></span>
-        <span class="preview-confidence" id="preview-confidence"></span>
-        <a id="preview-link" target="_blank" rel="noreferrer">查看原文</a>
-      </div>
-      <h2 id="preview-title"></h2>
-      <p class="preview-author" id="preview-author"></p>
-      <p class="preview-body" id="preview-body"></p>
+      <section class="result-section summary-section" aria-labelledby="summary-heading">
+        <h2 class="result-heading" id="summary-heading"><span class="heading-icon" aria-hidden="true">✦</span>两句话看懂</h2>
+        <div id="summary-lines"></div>
+      </section>
 
-      <section class="result-section">
-        <h3 class="result-heading">核心观点</h3>
+      <section class="result-section keypoints-section" aria-labelledby="keypoints-heading">
+        <h2 class="result-heading" id="keypoints-heading"><span class="heading-icon" aria-hidden="true">◎</span>核心观点</h2>
         <div id="keypoints"></div>
       </section>
 
-      <section class="result-section">
-        <h3 class="result-heading">内容结构</h3>
+      <section class="result-section structure-section" aria-labelledby="structure-heading">
+        <h2 class="result-heading" id="structure-heading"><span class="heading-icon" aria-hidden="true">▱</span>内容结构</h2>
         <div id="structure"></div>
       </section>
 
-      <section class="result-section">
-        <h3 class="result-heading">结论</h3>
-        <div id="takeaways"></div>
-      </section>
-
       <div class="result-actions">
-        <button class="btn btn-primary" id="action-regenerate" type="button">重新生成</button>
-        <button class="btn" id="action-settings" type="button">AI 设置</button>
-        <button class="btn btn-primary" id="action-save" type="button">保存 Markdown</button>
+        <button class="button button-outline" id="action-open-source" type="button"><span aria-hidden="true">↗</span>查看原文</button>
+        <button class="button button-outline" id="action-regenerate" type="button"><span aria-hidden="true">↻</span>重新生成</button>
+        <button class="button button-primary" id="action-save" type="button"><span aria-hidden="true">⇩</span>保存 Markdown</button>
       </div>
-      <p class="save-status" id="save-status" role="status" aria-live="polite"></p>
+      <p class="live-status" id="navigation-status" role="status" aria-live="polite"></p>
+      <p class="live-status" id="save-status" role="status" aria-live="polite"></p>
     </article>
-
-    <footer>
-      <span>快捷键</span>
-      <kbd>Ctrl / ⌘</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>Y</kbd>
-    </footer>
   </main>
   <script src="sidepanel.js"></script>
 </body>

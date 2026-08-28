@@ -8,8 +8,6 @@
 import '../adapters/index';
 import { registry } from '../core/platform-registry';
 import { ExtractionError } from '../core/error';
-import { collectArticleSourceBlocks } from '../adapters/x/article-source';
-import { navigateToSource } from '../adapters/x/navigation';
 import type {
   ExtractResponse,
   ExtractVisualSourceResponse,
@@ -19,6 +17,7 @@ import type {
 import { isNavigateToSourceRequest } from '../types/messages';
 import type { PlatformAdapter } from '../adapters/types';
 import type { PlatformContentType } from '../core/schema';
+import type { VisualSourceExtraction } from '../types/visual-source';
 
 function currentUrl(): URL {
   return new URL(window.location.href);
@@ -75,7 +74,7 @@ function handleExtract(): ExtractResponse | Promise<ExtractResponse> {
   }
 }
 
-/** EXTRACT_VISUAL_SOURCE：X Article 附带 DOM Source Blocks，其余返回空 Blocks */
+/** EXTRACT_VISUAL_SOURCE：由平台适配器返回文档与可定位来源块 */
 function handleExtractVisualSource(): ExtractVisualSourceResponse | Promise<ExtractVisualSourceResponse> {
   try {
     const url = currentUrl();
@@ -84,17 +83,24 @@ function handleExtractVisualSource(): ExtractVisualSourceResponse | Promise<Extr
       throw new ExtractionError('UNSUPPORTED_PAGE', '当前页面不是受支持的帖子/文章页面。');
     }
 
-    const contentType = adapter.detectType(url, document);
-    const sourceBlocks =
-      adapter.platform === 'x' && contentType === 'x-article' ? collectArticleSourceBlocks(document) : [];
+    const custom = adapter.extractVisualSource?.(document, url);
+    if (custom) {
+      const resolveCustom = (value: VisualSourceExtraction): ExtractVisualSourceResponse => ({
+        success: true,
+        document: value.document,
+        sourceBlocks: Array.isArray(value.sourceBlocks) ? value.sourceBlocks : [],
+      });
+      if (custom instanceof Promise) return custom.then(resolveCustom).catch((e) => toExtractError(e) as ExtractVisualSourceResponse);
+      return resolveCustom(custom);
+    }
 
     if (adapter.extractAsync) {
       return adapter
         .extractAsync(document, url)
-        .then((contentDoc): ExtractVisualSourceResponse => ({ success: true, document: contentDoc, sourceBlocks }))
+        .then((contentDoc): ExtractVisualSourceResponse => ({ success: true, document: contentDoc, sourceBlocks: [] }))
         .catch((e) => toExtractError(e) as ExtractVisualSourceResponse);
     }
-    return { success: true, document: adapter.extract(document, url), sourceBlocks };
+    return { success: true, document: adapter.extract(document, url), sourceBlocks: [] };
   } catch (e) {
     return toExtractError(e) as ExtractVisualSourceResponse;
   }
@@ -133,7 +139,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         } satisfies NavigateToSourceResponse);
         return false;
       }
-      sendResponse(navigateToSource(msg.payload));
+      const adapter = registry.match(currentUrl());
+      if (!adapter?.navigateToVisualSource) {
+        sendResponse({ success: false, error: { code: 'UNSUPPORTED_PAGE', message: '当前页面暂不支持原文定位。' } });
+        return false;
+      }
+      try {
+        const result = adapter.navigateToVisualSource(document, currentUrl(), msg.payload);
+        if (result instanceof Promise) {
+          result.then(sendResponse).catch((error) => sendResponse({
+            success: false,
+            error: { code: 'TARGET_NOT_FOUND', message: String(error) },
+          }));
+          return true;
+        }
+        sendResponse(result);
+      } catch (error) {
+        sendResponse({ success: false, error: { code: 'TARGET_NOT_FOUND', message: String(error) } });
+      }
       return false;
     }
   }

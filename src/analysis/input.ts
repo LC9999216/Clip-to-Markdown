@@ -91,17 +91,15 @@ function truncateBlocks(blocks: AnalysisSourceBlock[]): {
 }
 
 /**
- * V2 输入构建：X Article 使用 Source Block 格式（[Bxxx]\n文本），
- * Tweet 继续使用纯正文格式且无 Block。
+ * V2 输入构建：有来源块的平台使用 Source Block 格式（[Bxxx]\n文本），
+ * 没有可定位来源的平台继续使用纯正文格式。
  * AnalysisInput.sourceBlocks 只保留实际发送给 AI 的块。
  */
 export function buildAnalysisInputV2(
   document: ContentDocument,
   sourceBlocks: AnalysisSourceBlock[],
 ): AnalysisInput {
-  const isArticle = document.metadata.contentType === 'x-article';
-
-  if (isArticle && sourceBlocks.length > 0) {
+  if (sourceBlocks.length > 0) {
     const { body, kept, truncated } = truncateBlocks(sourceBlocks);
     return {
       platform: document.metadata.platform,
@@ -115,7 +113,7 @@ export function buildAnalysisInputV2(
     };
   }
 
-  // Tweet 或缺失块：沿用纯正文输入
+  // 缺失来源块：沿用纯正文输入
   const renderedBody = renderBody(document);
   const truncated = renderedBody.length > MAX_ANALYSIS_CHARS;
   const body = truncated

@@ -45,7 +45,14 @@ function openSettings(): void {
 
 function formatPlatform(source: VisualAnalysisState['source']): string {
   if (!source || !('platform' in source) || typeof source.platform !== 'string') return '';
-  return source.platform === 'x' ? 'X / Twitter' : source.platform;
+  const labels: Record<string, string> = {
+    x: 'X / Twitter',
+    zhihu: '知乎',
+    heybox: '小黑盒',
+    chatgpt: 'ChatGPT',
+    bilibili: '哔哩哔哩',
+  };
+  return labels[source.platform] ?? source.platform;
 }
 
 function formatAuthor(source: VisualAnalysisState['source']): { name: string; handle: string } {
@@ -247,7 +254,7 @@ function renderState(
   saveButton.textContent = '保存 Markdown';
   if (!state) {
     element<HTMLElement>('status-label').textContent = '等待开始';
-    element<HTMLElement>('status-copy').textContent = '打开侧栏后，当前 X 内容将在此显示。';
+    element<HTMLElement>('status-copy').textContent = '打开侧栏后，当前受支持页面内容将在此显示。';
     return;
   }
   if (state.status === 'extracting') {

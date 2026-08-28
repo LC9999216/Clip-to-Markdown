@@ -307,23 +307,23 @@ export function parseVisualSummaryV2(raw: unknown): VisualSummaryV2 {
 
 /**
  * 语义 Anchor 校验：Quote 必须属于对应 Block，且在本次输入 Blocks 中唯一。
- * Article 每个 Structure Item 必须带 Anchor；Tweet 必须全部无 Anchor。
+ * 有来源块时每个 Structure Item 必须带 Anchor；无来源块时全部无 Anchor。
  * 返回问题列表；空数组表示通过。
  */
 export function validateVisualSummaryAnchors(summary: VisualSummaryV2, input: AnalysisInput): string[] {
   const problems: string[] = [];
-  const isArticle = input.contentType === 'x-article';
+  const hasSourceBlocks = input.sourceBlocks.length > 0;
   const blocksById = new Map(input.sourceBlocks.map((b) => [b.id, b]));
 
   summary.structure.forEach((item, i) => {
     const hasAnchor = item.sourceBlockId !== undefined;
 
-    if (isArticle && !hasAnchor) {
-      problems.push(`structure[${i}] must have sourceBlockId + sourceQuote for x-article`);
+    if (hasSourceBlocks && !hasAnchor) {
+      problems.push(`structure[${i}] must have sourceBlockId + sourceQuote when source blocks are present`);
       return;
     }
-    if (!isArticle && hasAnchor) {
-      problems.push(`structure[${i}] must not have anchors for ${input.contentType}`);
+    if (!hasSourceBlocks && hasAnchor) {
+      problems.push(`structure[${i}] must not have anchors without source blocks for ${input.contentType}`);
       return;
     }
     if (!hasAnchor) return;

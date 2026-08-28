@@ -241,6 +241,17 @@ const V2_TWEET_INPUT: AnalysisInput = {
   sourceBlocks: [],
 };
 
+const V2_ZHIHU_INPUT: AnalysisInput = {
+  platform: 'zhihu',
+  contentType: 'zhihu-article',
+  title: '知乎文章',
+  author: '知乎作者',
+  sourceUrl: 'https://zhuanlan.zhihu.com/p/12345',
+  body: '',
+  truncated: false,
+  sourceBlocks: V2_INPUT_BLOCKS,
+};
+
 describe('validateVisualSummaryV2', () => {
   it('接受合法 V2 示例', () => {
     expect(validateVisualSummaryV2(V2_VALID)).toEqual([]);
@@ -406,5 +417,18 @@ describe('validateVisualSummaryAnchors', () => {
       structure: [{ title: '一条结构' }, { title: '另一条' }],
     };
     expect(validateVisualSummaryAnchors(noAnchor, V2_TWEET_INPUT)).toEqual([]);
+  });
+
+  it('知乎文章：带 anchor 通过', () => {
+    expect(validateVisualSummaryAnchors(V2_VALID, V2_ZHIHU_INPUT)).toEqual([]);
+  });
+
+  it('知乎文章：缺少 anchor 被拒绝', () => {
+    const noAnchor = {
+      ...V2_VALID,
+      structure: [{ title: '无引用' }],
+    };
+    const problems = validateVisualSummaryAnchors(noAnchor, V2_ZHIHU_INPUT);
+    expect(problems.some((p) => p.includes('sourceBlockId'))).toBe(true);
   });
 });

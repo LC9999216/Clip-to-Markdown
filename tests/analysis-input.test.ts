@@ -42,6 +42,24 @@ function articleDocument(text: string): ContentDocument {
   };
 }
 
+function zhihuArticleDocument(text: string): ContentDocument {
+  return {
+    version: 1,
+    metadata: {
+      platform: 'zhihu',
+      contentType: 'zhihu-article',
+      sourceUrl: 'https://zhuanlan.zhihu.com/p/12345',
+      author: { name: '知乎作者' },
+      published: '',
+      title: '知乎文章',
+    },
+    body: {
+      type: 'article',
+      children: [{ type: 'paragraph', children: [{ type: 'text', value: text }] }],
+    },
+  };
+}
+
 const BLOCKS: AnalysisSourceBlock[] = [
   { id: 'B001', kind: 'paragraph', text: '第一段正文内容。' },
   { id: 'B002', kind: 'heading', text: '第二部分' },
@@ -119,6 +137,12 @@ describe('buildAnalysisInputV2', () => {
   it('Article: 短文章不截断', () => {
     const input = buildAnalysisInputV2(articleDocument('忽略'), BLOCKS);
     expect(input.truncated).toBe(false);
+    expect(input.sourceBlocks).toEqual(BLOCKS);
+  });
+
+  it('知乎文章：有来源块时使用同一套带 ID 的输入格式', () => {
+    const input = buildAnalysisInputV2(zhihuArticleDocument('忽略'), BLOCKS);
+    expect(input.body).toBe('[B001]\n第一段正文内容。\n\n[B002]\n第二部分\n\n[B003]\n第三段详细论述。');
     expect(input.sourceBlocks).toEqual(BLOCKS);
   });
 

@@ -7,7 +7,7 @@ import {
 } from '../../src/adapters/bilibili/extractor';
 import { navigateBilibiliSource, rememberBilibiliSource } from '../../src/adapters/bilibili/source';
 import { bilibiliAdapter } from '../../src/adapters/bilibili';
-import { runtimeSendMessageMock } from '../setup';
+import { mockSessionStorage, runtimeSendMessageMock } from '../setup';
 import { renderDocument } from '../../src/core/markdown-renderer';
 
 describe('bilibili URL 解析', () => {
@@ -142,6 +142,7 @@ describe('B 站时间定位', () => {
       body: [{ from: 13, to: 15, content: '开场白' }],
     });
     rememberBilibiliSource(url, entries);
+    expect(mockSessionStorage['clip2md.visualSummary.timeline.BV1xx411c7mD:p1']).toEqual(entries);
     document.body.innerHTML = '<video></video>';
     const video = document.querySelector('video') as HTMLVideoElement;
     Object.defineProperty(video, 'readyState', { configurable: true, value: 1 });
@@ -165,6 +166,19 @@ describe('B 站时间定位', () => {
       sourceBlockId: 'B001',
       sourceQuote: '开场白',
     })).toMatchObject({ success: false, error: { code: 'SOURCE_CHANGED' } });
+  });
+
+  it('简介来源块不伪装成可跳转时间点', async () => {
+    const url = new URL('https://www.bilibili.com/video/BV1xx411c7mD/');
+    const entries = buildBilibiliSourceBlocks({ description: '视频简介', chapters: [], body: [] });
+    rememberBilibiliSource(url, entries);
+    document.body.innerHTML = '<video></video>';
+    const response = await navigateBilibiliSource(document, url, {
+      expectedSourceUrl: url.href,
+      sourceBlockId: 'B001',
+      sourceQuote: '视频简介',
+    });
+    expect(response).toMatchObject({ success: false, error: { code: 'TARGET_NOT_FOUND' } });
   });
 });
 

@@ -189,6 +189,7 @@ describe('ChatGPT 视觉来源块', () => {
     expect(blocks.length).toBeGreaterThan(4);
     expect(blocks.map((b) => b.id)).toEqual(blocks.map((_, i) => `B${String(i + 1).padStart(3, '0')}`));
     expect(blocks.map((b) => b.text).join('\n')).not.toContain('系统提示');
+    expect(blocks.map((b) => b.text).join('\n')).not.toContain('复制');
     expect(blocks.map((b) => b.text).join('\n')).toContain('有没有什么方法');
     expect(blocks.map((b) => b.text).join('\n')).toContain('不要盲操作');
   });

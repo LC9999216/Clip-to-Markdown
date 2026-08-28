@@ -20,10 +20,16 @@ function bodyContainer(doc: Document, url: URL): Element | null {
   return null;
 }
 
+function removeSelector(url: URL): string {
+  return ANSWER_RE.test(url.pathname)
+    ? ZHIHU_SELECTORS.answer.remove.join(',')
+    : ZHIHU_SELECTORS.article.remove.join(',');
+}
+
 export function collectZhihuSourceEntries(doc: Document, url: URL) {
   const body = bodyContainer(doc, url);
   if (!body) return [];
-  return collectDomSourceBlocksWithElements(body, { includeRootText: true });
+  return collectDomSourceBlocksWithElements(body, { includeRootText: true, removeSelector: removeSelector(url) });
 }
 
 export function collectZhihuSourceBlocks(doc: Document, url: URL): AnalysisSourceBlock[] {

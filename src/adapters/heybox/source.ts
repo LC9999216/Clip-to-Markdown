@@ -29,7 +29,10 @@ function body(doc: Document, url: URL): Element | null {
 export function collectHeyboxSourceEntries(doc: Document, url: URL) {
   const root = body(doc, url);
   if (!root) return [];
-  return collectDomSourceBlocksWithElements(root, { includeRootText: true });
+  return collectDomSourceBlocksWithElements(root, {
+    includeRootText: true,
+    removeSelector: HEYBOX_SELECTORS.remove.join(','),
+  });
 }
 
 export function collectHeyboxSourceBlocks(doc: Document, url: URL): AnalysisSourceBlock[] {

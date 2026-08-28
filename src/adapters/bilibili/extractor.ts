@@ -86,7 +86,7 @@ export function buildBilibiliSourceBlocks(args: {
 
   if (chapters.length > 0) {
     if (body.length === 0 && String(args.description || '').trim()) {
-      push('paragraph', String(args.description).trim(), 0, 0);
+      push('paragraph', String(args.description).trim(), -1, -1);
     }
     chapters.forEach((chapter, chapterIndex) => {
       const next = chapters[chapterIndex + 1];
@@ -114,7 +114,7 @@ export function buildBilibiliSourceBlocks(args: {
     return entries;
   }
 
-  if (String(args.description || '').trim()) push('paragraph', String(args.description).trim(), 0, 0);
+  if (String(args.description || '').trim()) push('paragraph', String(args.description).trim(), -1, -1);
   return entries;
 }
 

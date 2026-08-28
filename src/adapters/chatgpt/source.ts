@@ -23,7 +23,10 @@ export function collectChatgptSourceEntries(doc: Document, _url: URL): DomSource
       continue;
     }
     const content = message.querySelector(CHATGPT_SELECTORS.assistantContent) ?? message;
-    const nested = collectDomSourceBlocksWithElements(content, { includeRootText: true });
+    const nested = collectDomSourceBlocksWithElements(content, {
+      includeRootText: true,
+      removeSelector: CHATGPT_SELECTORS.remove.join(','),
+    });
     for (const entry of nested) {
       entries.push({ block: { ...entry.block, id: sourceBlockId(index++) }, element: entry.element });
     }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { heyboxAdapter } from '../../src/adapters/heybox';
+import { collectHeyboxSourceBlocks, navigateHeyboxSource } from '../../src/adapters/heybox/source';
 import { renderDocument } from '../../src/core/markdown-renderer';
 import { checkJsonRoundTrip, validateDocument, type ContentDocument } from '../../src/core/schema';
 import { mountFixture, readExpectedMd } from '../helpers';
@@ -103,5 +104,36 @@ describe('小黑盒 图文帖（image-text）', () => {
     expect(heyboxAdapter.detectTitle?.(new URL(IMAGE_TEXT_URL), document, 'heybox-post')).toBe(
       '美国豆包站起来了吗',
     );
+  });
+});
+
+describe('小黑盒视觉来源块', () => {
+  it('只收集长文正文并排除评论、标签与链接数据', () => {
+    mountFixture('heybox', 'normal-post');
+    const blocks = collectHeyboxSourceBlocks(document, new URL(POST_URL));
+    expect(blocks.map((b) => b.text)).toEqual([
+      '背景介绍：',
+      '本人是大二升大三的一名双非计算机学生，今年四月在Boss上乱投，在宁波找到一份大模型实习。',
+      '项目做到现在，我觉得最值得记录的不是功能本身，而是它的开发过程。',
+      '第一阶段：先找现成工具',
+      '刚接到需求时，我先去 GitHub 找已有项目。',
+      '就是这个项目',
+      '第二段正文内容，包含链接 示例链接。',
+    ]);
+  });
+
+  it('图文帖正文直接文本也生成来源块', () => {
+    mountFixture('heybox', 'image-text');
+    const blocks = collectHeyboxSourceBlocks(document, new URL(IMAGE_TEXT_URL));
+    expect(blocks.map((b) => b.text)).toEqual(['谷歌 3.7 flash 把梁子的 v4pro 超了，现在价格还有优惠，梁子还涨价']);
+  });
+
+  it('帖子 ID 变化时拒绝定位', () => {
+    mountFixture('heybox', 'normal-post');
+    expect(navigateHeyboxSource(document, new URL(POST_URL), {
+      expectedSourceUrl: 'https://www.xiaoheihe.cn/app/bbs/link/999',
+      sourceBlockId: 'B001',
+      sourceQuote: '背景介绍：',
+    })).toMatchObject({ success: false, error: { code: 'SOURCE_CHANGED' } });
   });
 });

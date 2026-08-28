@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { chatgptAdapter } from '../../src/adapters/chatgpt';
+import { collectChatgptSourceBlocks, navigateChatgptSource } from '../../src/adapters/chatgpt/source';
 import { renderDocument } from '../../src/core/markdown-renderer';
 import { checkJsonRoundTrip, validateDocument, type ContentDocument } from '../../src/core/schema';
 import { mountFixture, readExpectedMd } from '../helpers';
@@ -178,5 +179,26 @@ describe('ChatGPT adapter：页面类型判定（路由表）', () => {
   it('空 user/assistant 容器（无有效正文）→ 不支持', () => {
     setDom(`${USER_MSG('')}${ASSISTANT_MSG('')}`);
     expect(detect('https://chatgpt.com/')).toBeNull();
+  });
+});
+
+describe('ChatGPT 视觉来源块', () => {
+  it('只收集 user/assistant 消息，忽略 system 与空占位', () => {
+    mountFixture('chatgpt', 'chat');
+    const blocks = collectChatgptSourceBlocks(document, new URL(CHAT_URL));
+    expect(blocks.length).toBeGreaterThan(4);
+    expect(blocks.map((b) => b.id)).toEqual(blocks.map((_, i) => `B${String(i + 1).padStart(3, '0')}`));
+    expect(blocks.map((b) => b.text).join('\n')).not.toContain('系统提示');
+    expect(blocks.map((b) => b.text).join('\n')).toContain('有没有什么方法');
+    expect(blocks.map((b) => b.text).join('\n')).toContain('不要盲操作');
+  });
+
+  it('对话 ID 变化时拒绝定位', () => {
+    mountFixture('chatgpt', 'chat');
+    expect(navigateChatgptSource(document, new URL(CHAT_URL), {
+      expectedSourceUrl: 'https://chatgpt.com/c/other-conversation-id',
+      sourceBlockId: 'B001',
+      sourceQuote: '有没有什么方法可以将D盘的剩余空间一部分转移到C盘当中吗?',
+    })).toMatchObject({ success: false, error: { code: 'SOURCE_CHANGED' } });
   });
 });

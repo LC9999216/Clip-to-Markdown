@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { zhihuAdapter } from '../../src/adapters/zhihu';
+import { collectZhihuSourceBlocks, navigateZhihuSource } from '../../src/adapters/zhihu/source';
 import { renderDocument } from '../../src/core/markdown-renderer';
 import { checkJsonRoundTrip, validateDocument, type ContentDocument } from '../../src/core/schema';
 import { mountFixture, readExpectedMd } from '../helpers';
@@ -123,5 +124,39 @@ describe('知乎 adapter 路由与错误', () => {
     expect(zhihuAdapter.detectTitle?.(new URL(URLS.answer!), document, 'zhihu-answer')).toBe('如何评价一部电影？');
     mountFixture('zhihu', 'article');
     expect(zhihuAdapter.detectTitle?.(new URL(URLS.article!), document, 'zhihu-article')).toBe('深入理解 React 的渲染机制');
+  });
+});
+
+describe('知乎视觉来源块', () => {
+  it('只收集焦点文章正文并排除评论/推荐', () => {
+    mountFixture('zhihu', 'article');
+    const blocks = collectZhihuSourceBlocks(document, new URL(URLS.article!));
+    expect(blocks.map((b) => b.text)).toEqual([
+      '这是一篇关于 React 渲染机制的文章。',
+      '引言',
+      '虚拟 DOM',
+      '协调算法',
+    ]);
+    expect(blocks.map((b) => b.id)).toEqual(['B001', 'B002', 'B003', 'B004']);
+  });
+
+  it('回答只收集焦点回答正文', () => {
+    mountFixture('zhihu', 'answer');
+    const blocks = collectZhihuSourceBlocks(document, new URL(URLS.answer!));
+    expect(blocks.map((b) => b.text)).toEqual([
+      '这是我的回答正文。',
+      '第二段引用：参考资料',
+      '引用内容',
+    ]);
+    expect(blocks.map((b) => b.id)).toEqual(['B001', 'B002', 'B003']);
+  });
+
+  it('页面 ID 变化时拒绝定位', () => {
+    mountFixture('zhihu', 'article');
+    expect(navigateZhihuSource(document, new URL(URLS.article!), {
+      expectedSourceUrl: 'https://zhuanlan.zhihu.com/p/other',
+      sourceBlockId: 'B001',
+      sourceQuote: '这是一篇关于 React 渲染机制的文章。',
+    })).toMatchObject({ success: false, error: { code: 'SOURCE_CHANGED' } });
   });
 });

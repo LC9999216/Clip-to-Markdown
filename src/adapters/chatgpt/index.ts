@@ -4,6 +4,7 @@
 
 import { registry } from '../../core/platform-registry';
 import { detectChatgptTitle, detectChatgptType, extractChatgpt, isChatgptHost } from './extractor';
+import { collectChatgptSourceBlocks, navigateChatgptSource } from './source';
 import type { PlatformAdapter } from '../types';
 
 export const chatgptAdapter: PlatformAdapter = {
@@ -23,6 +24,14 @@ export const chatgptAdapter: PlatformAdapter = {
 
   detectTitle(_url: URL, doc: Document): string | undefined {
     return detectChatgptTitle(doc);
+  },
+
+  extractVisualSource(doc: Document, url: URL) {
+    return { document: extractChatgpt(doc, url), sourceBlocks: collectChatgptSourceBlocks(doc, url) };
+  },
+
+  navigateToVisualSource(doc, url, anchor) {
+    return navigateChatgptSource(doc, url, anchor);
   },
 };
 

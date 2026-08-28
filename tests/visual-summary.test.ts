@@ -319,7 +319,7 @@ describe('visual summary phase 5 background orchestration', () => {
     vi.unstubAllGlobals();
   });
 
-  it('persists an actionable UNSUPPORTED_VISUAL_PLATFORM error for non-X content', async () => {
+  it('runs the same visual-summary pipeline for non-X content', async () => {
     const nonXDocument: ContentDocument = {
       version: 1,
       metadata: {
@@ -336,17 +336,21 @@ describe('visual summary phase 5 background orchestration', () => {
       },
     };
     mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
     tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
-      callback?.({ success: true, document: nonXDocument });
+      callback?.({ success: true, document: nonXDocument, sourceBlocks: [{ id: 'B001', kind: 'paragraph', text: '正文' }] });
     });
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(VALID_SUMMARY)));
+    vi.stubGlobal('fetch', fetchMock);
 
     const { requestId } = await startVisualAnalysis(6);
 
     const state = stateFor(6);
-    expect(state?.status).toBe('error');
-    expect(state?.error?.code).toBe('UNSUPPORTED_VISUAL_PLATFORM');
-    expect(state?.error?.message).toMatch(/仅支持 X/);
+    expect(state?.status).toBe('done');
+    expect(state?.result).toEqual(VALID_SUMMARY);
     expect(state?.requestId).toBe(requestId);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
   });
 
   it('persists an actionable AI_NOT_CONFIGURED error when AI settings are missing', async () => {

@@ -4,6 +4,7 @@
 
 import { registry } from '../../core/platform-registry';
 import { detectZhihuTitle, detectZhihuType, extractZhihu } from './extractor';
+import { collectZhihuSourceBlocks, navigateZhihuSource } from './source';
 import type { PlatformAdapter } from '../types';
 
 export const zhihuAdapter: PlatformAdapter = {
@@ -23,6 +24,14 @@ export const zhihuAdapter: PlatformAdapter = {
 
   detectTitle(url: URL, doc: Document): string | undefined {
     return detectZhihuTitle(url, doc);
+  },
+
+  extractVisualSource(doc: Document, url: URL) {
+    return { document: extractZhihu(doc, url), sourceBlocks: collectZhihuSourceBlocks(doc, url) };
+  },
+
+  navigateToVisualSource(doc, url, anchor) {
+    return navigateZhihuSource(doc, url, anchor);
   },
 };
 

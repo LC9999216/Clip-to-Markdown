@@ -103,10 +103,6 @@ function extractSource(document: ContentDocument): VisualAnalysisSourceV2 {
   };
 }
 
-function isXDocument(document: ContentDocument): boolean {
-  return document.metadata.platform === 'x';
-}
-
 /** 检查运行时 Host 权限是否已授予 AI Endpoint 的 origin。 */
 function hasAiHostPermission(endpoint: string): Promise<boolean> {
   const pattern = getAiOriginPattern(endpoint);
@@ -155,7 +151,7 @@ export async function startVisualAnalysis(
       requestId,
       {
         code: 'EXTRACT_FAILED',
-        message: '无法读取当前页面。当前版本仅支持 X 推文和 X Article；若已在 X 页面，请确认内容加载完成，刷新后重试。',
+        message: '无法读取当前页面。请确认当前页面属于受支持的平台且内容已加载完成。',
       },
     ));
     return { requestId };
@@ -172,19 +168,6 @@ export async function startVisualAnalysis(
   }
 
   const { document, sourceBlocks } = extracted;
-  if (!isXDocument(document)) {
-    await writeState(errorState(
-      tabId,
-      requestId,
-      {
-        code: 'UNSUPPORTED_VISUAL_PLATFORM',
-        message: '一图速览 V1 仅支持 X / Twitter。当前页面仍然可以继续使用原有 Markdown 保存功能。',
-      },
-      extractSource(document),
-    ));
-    return { requestId };
-  }
-
   const source = extractSource(document);
 
   const settings = await loadSettings();

@@ -15,6 +15,8 @@ import {
 } from './extractor';
 import type { PlatformAdapter } from '../types';
 import type { PlatformContentType } from '../../core/schema';
+import { collectArticleSourceBlocks } from './article-source';
+import { navigateToSource } from './navigation';
 
 export const xAdapter: PlatformAdapter = {
   platform: 'x',
@@ -30,6 +32,15 @@ export const xAdapter: PlatformAdapter = {
 
   extract(doc: Document, url: URL) {
     return isXArticlePage(doc) ? extractXArticle(doc, url) : extractTweet(doc, url);
+  },
+
+  extractVisualSource(doc: Document, url: URL) {
+    const document = isXArticlePage(doc) ? extractXArticle(doc, url) : extractTweet(doc, url);
+    return { document, sourceBlocks: isXArticlePage(doc) ? collectArticleSourceBlocks(doc) : [] };
+  },
+
+  navigateToVisualSource(_doc, _url, anchor) {
+    return navigateToSource(anchor);
   },
 
   detectTitle(url: URL, doc: Document, contentType: PlatformContentType): string | undefined {

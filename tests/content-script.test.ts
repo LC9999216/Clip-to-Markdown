@@ -206,4 +206,85 @@ describe('content script NAVIGATE_TO_SOURCE', () => {
       error: { code: 'INVALID_REQUEST', message: '原文导航请求无效。' },
     });
   });
+
+  it('知乎文章返回带来源块的 V2 提取结果', async () => {
+    setLocation('https://zhuanlan.zhihu.com/p/889');
+    mountFixture('zhihu', 'article');
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT_VISUAL_SOURCE' })) as ExtractVisualSourceResponse;
+    expect(resp.success).toBe(true);
+    if (resp.success) {
+      expect(resp.sourceBlocks[0]?.id).toBe('B001');
+      expect(resp.sourceBlocks.map((b) => b.text)).not.toContain('评论区内容，绝不能保存。');
+    }
+  });
+
+  it('小黑盒帖子返回带来源块的 V2 提取结果', async () => {
+    setLocation('https://www.xiaoheihe.cn/app/bbs/link/187550351');
+    mountFixture('heybox', 'normal-post');
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT_VISUAL_SOURCE' })) as ExtractVisualSourceResponse;
+    expect(resp.success).toBe(true);
+    if (resp.success) expect(resp.sourceBlocks.length).toBeGreaterThan(4);
+  });
+
+  it('ChatGPT 对话返回带来源块的 V2 提取结果', async () => {
+    setLocation('https://chatgpt.com/c/test-conversation-id');
+    mountFixture('chatgpt', 'chat');
+    const resp = (await dispatchRuntimeMessage({ type: 'EXTRACT_VISUAL_SOURCE' })) as ExtractVisualSourceResponse;
+    expect(resp.success).toBe(true);
+    if (resp.success) {
+      expect(resp.sourceBlocks.length).toBeGreaterThan(4);
+      expect(resp.sourceBlocks.map((b) => b.text).join('\n')).not.toContain('系统提示');
+    }
+  });
+
+  it('routes a valid Zhihu source anchor to the platform adapter', async () => {
+    setLocation('https://zhuanlan.zhihu.com/p/889');
+    mountFixture('zhihu', 'article');
+    const target = document.querySelector('.RichText p') as HTMLElement;
+    target.scrollIntoView = vi.fn();
+    const response = await dispatchRuntimeMessage({
+      type: 'NAVIGATE_TO_SOURCE',
+      payload: {
+        expectedSourceUrl: 'https://zhuanlan.zhihu.com/p/889',
+        sourceBlockId: 'B001',
+        sourceQuote: '这是一篇关于 React 渲染机制的文章。',
+      },
+    });
+    expect(response).toEqual({ success: true });
+    expect(target.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('routes a valid Xiaoheihe source anchor to the platform adapter', async () => {
+    setLocation('https://www.xiaoheihe.cn/app/bbs/link/187550351');
+    mountFixture('heybox', 'normal-post');
+    const target = document.querySelector('.hb-article p') as HTMLElement;
+    target.scrollIntoView = vi.fn();
+    const response = await dispatchRuntimeMessage({
+      type: 'NAVIGATE_TO_SOURCE',
+      payload: {
+        expectedSourceUrl: 'https://www.xiaoheihe.cn/app/bbs/link/187550351',
+        sourceBlockId: 'B002',
+        sourceQuote: '本人是大二升大三的一名双非计算机学生',
+      },
+    });
+    expect(response).toEqual({ success: true });
+    expect(target.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('routes a valid ChatGPT source anchor to the platform adapter', async () => {
+    setLocation('https://chatgpt.com/c/test-conversation-id');
+    mountFixture('chatgpt', 'chat');
+    const target = document.querySelector('[data-message-id="u1"]') as HTMLElement;
+    target.scrollIntoView = vi.fn();
+    const response = await dispatchRuntimeMessage({
+      type: 'NAVIGATE_TO_SOURCE',
+      payload: {
+        expectedSourceUrl: 'https://chatgpt.com/c/test-conversation-id',
+        sourceBlockId: 'B001',
+        sourceQuote: '有没有什么方法可以将D盘的剩余空间一部分转移到C盘当中吗?',
+      },
+    });
+    expect(response).toEqual({ success: true });
+    expect(target.scrollIntoView).toHaveBeenCalled();
+  });
 });

@@ -14,7 +14,7 @@ export interface AnalysisInput {
   sourceUrl: string;
   body: string;
   truncated: boolean;
-  /** V2: 实际发送给 AI 的 Source Block（纯文本 Tweet 为 []）。 */
+  /** V2: 实际发送给 AI 的 Source Block（没有可确定定位来源时为 []）。 */
   sourceBlocks: AnalysisSourceBlock[];
 }
 

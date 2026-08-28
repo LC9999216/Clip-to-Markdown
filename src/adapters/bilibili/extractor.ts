@@ -8,6 +8,8 @@
 import { ExtractionError, ERROR_MESSAGES } from '../../core/error';
 import { BVID_RE } from './selectors';
 import type { ContentDocument } from '../../core/schema';
+import { sourceBlockId, splitLongBlockText } from '../../analysis/source-blocks';
+import type { AnalysisSourceBlock } from '../../analysis/types';
 import type { FetchJsonResponse } from '../../types/messages';
 
 // ---------- B 站 API 返回结构（仅声明用到的字段） ----------
@@ -48,16 +50,72 @@ interface BiliPlayerData {
   view_points?: Array<{ content?: string; from?: number; to?: number }>;
 }
 
-interface BiliSubtitleBodyItem {
+export interface BiliSubtitleBodyItem {
   from: number;
   to: number;
   content: string;
 }
 
-interface BiliChapter {
+export interface BiliChapter {
   title: string;
   from: number;
   to: number;
+}
+
+export interface BilibiliSourceEntry {
+  block: AnalysisSourceBlock;
+  start: number;
+  end: number;
+}
+
+/** Build source-linked timeline blocks without depending on the B 站 DOM. */
+export function buildBilibiliSourceBlocks(args: {
+  description: string;
+  chapters: BiliChapter[];
+  body: BiliSubtitleBodyItem[];
+}): BilibiliSourceEntry[] {
+  const body = (args.body || []).filter((item) => String(item?.content ?? '').trim());
+  const chapters = (args.chapters || []).filter((chapter) => chapter.title && chapter.from >= 0).sort((a, b) => a.from - b.from);
+  const entries: BilibiliSourceEntry[] = [];
+  let index = 0;
+  const push = (kind: AnalysisSourceBlock['kind'], text: string, start: number, end: number) => {
+    for (const chunk of splitLongBlockText(text)) {
+      entries.push({ block: { id: sourceBlockId(index++), kind, text: chunk }, start, end });
+    }
+  };
+
+  if (chapters.length > 0) {
+    if (body.length === 0 && String(args.description || '').trim()) {
+      push('paragraph', String(args.description).trim(), -1, -1);
+    }
+    chapters.forEach((chapter, chapterIndex) => {
+      const next = chapters[chapterIndex + 1];
+      const end = next && next.from > chapter.from ? next.from : chapter.to > chapter.from ? chapter.to : Infinity;
+      const transcript = body
+        .filter((item) => Number(item.from) >= chapter.from && (end === Infinity || Number(item.from) < end))
+        .map((item) => String(item.content).trim())
+        .join(' ');
+      push('heading', [chapter.title, transcript].filter(Boolean).join(' '), chapter.from, end);
+    });
+    return entries;
+  }
+
+  if (body.length > 0) {
+    const windows = new Map<number, BiliSubtitleBodyItem[]>();
+    body.forEach((item) => {
+      const bucket = Math.floor(Math.max(0, Number(item.from) || 0) / 60);
+      const current = windows.get(bucket) ?? [];
+      current.push(item);
+      windows.set(bucket, current);
+    });
+    for (const [, items] of windows) {
+      push('paragraph', items.map((item) => String(item.content).trim()).join(' '), Number(items[0]!.from) || 0, Number(items[items.length - 1]!.to) || Number(items[0]!.from) || 0);
+    }
+    return entries;
+  }
+
+  if (String(args.description || '').trim()) push('paragraph', String(args.description).trim(), -1, -1);
+  return entries;
 }
 
 // ---------- URL 解析 ----------
@@ -317,7 +375,12 @@ function trimTrailingBlank(lines: string[]): string {
 
 // ---------- 主入口 ----------
 
-export async function extractBilibiliAsync(doc: Document, url: URL): Promise<ContentDocument> {
+export interface BilibiliVisualExtraction {
+  document: ContentDocument;
+  sourceEntries: BilibiliSourceEntry[];
+}
+
+export async function extractBilibiliVisualSourceAsync(doc: Document, url: URL): Promise<BilibiliVisualExtraction> {
   const bvid = extractBvid(url);
   if (!bvid) {
     throw new ExtractionError('UNSUPPORTED_PAGE', ERROR_MESSAGES.UNSUPPORTED_PAGE);
@@ -331,28 +394,29 @@ export async function extractBilibiliAsync(doc: Document, url: URL): Promise<Con
   }
 
   const bundle = await fetchSubtitleBundle(bvid, page.cid, meta.aid);
-  if (bundle.tracks.length === 0) {
-    throw new ExtractionError('NOT_FOUND_BODY', '这个视频暂时没有可用字幕');
-  }
-
-  const track = bundle.tracks[0]!; // normalizeTracks 已按中文优先排序；length 已校验非 0
-  const body = await fetchSubtitleBody(track.subtitle_url);
-  if (body.length === 0) {
-    throw new ExtractionError('NOT_FOUND_BODY', '字幕文件为空');
+  let body: BiliSubtitleBodyItem[] = [];
+  const track = bundle.tracks[0];
+  if (track) {
+    try {
+      body = await fetchSubtitleBody(track.subtitle_url);
+    } catch {
+      body = [];
+    }
   }
 
   const published = meta.pubdate > 0 ? formatLocalDate(meta.pubdate * 1000) : '';
   const author = String(meta.owner?.name ?? readAuthorFromDom(doc)).trim() || '未知 UP 主';
   const title = String(meta.title ?? readTitleFromDom(doc)).trim() || bvid;
 
+  const description = String(meta.desc ?? readDescriptionFromDom(doc)).trim();
   const bodyMarkdown = buildBodyMarkdown({
-    description: String(meta.desc ?? readDescriptionFromDom(doc)).trim(),
+    description,
     chapters: bundle.chapters,
     body,
     includeTimestamp: true,
   });
 
-  return {
+  const document: ContentDocument = {
     version: 1,
     metadata: {
       platform: 'bilibili',
@@ -368,6 +432,11 @@ export async function extractBilibiliAsync(doc: Document, url: URL): Promise<Con
       children: [{ type: 'markdown', value: bodyMarkdown }],
     },
   };
+  return { document, sourceEntries: buildBilibiliSourceBlocks({ description, chapters: bundle.chapters, body }) };
+}
+
+export async function extractBilibiliAsync(doc: Document, url: URL): Promise<ContentDocument> {
+  return (await extractBilibiliVisualSourceAsync(doc, url)).document;
 }
 
 // ---------- DOM 兜底读取（B 站 API 取不到时用） ----------

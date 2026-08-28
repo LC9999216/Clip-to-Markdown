@@ -4,6 +4,7 @@
 
 import { registry } from '../../core/platform-registry';
 import { detectHeyboxTitle, detectHeyboxType, extractHeybox } from './extractor';
+import { collectHeyboxSourceBlocks, navigateHeyboxSource } from './source';
 import type { PlatformAdapter } from '../types';
 
 export const heyboxAdapter: PlatformAdapter = {
@@ -23,6 +24,14 @@ export const heyboxAdapter: PlatformAdapter = {
 
   detectTitle(_url: URL, doc: Document): string | undefined {
     return detectHeyboxTitle(doc);
+  },
+
+  extractVisualSource(doc: Document, url: URL) {
+    return { document: extractHeybox(doc, url), sourceBlocks: collectHeyboxSourceBlocks(doc, url) };
+  },
+
+  navigateToVisualSource(doc, url, anchor) {
+    return navigateHeyboxSource(doc, url, anchor);
   },
 };
 

@@ -105,8 +105,18 @@ JSON 结构：
 
 export function buildAnalysisPromptV2(input: AnalysisInput): AnalysisPrompt {
   const note = input.truncated ? TRUNCATION_NOTE : '';
+  const platformGuidance = input.platform === 'bilibili'
+    ? 'B 站内容可能包含章节、字幕时间线或“暂无字幕”提示；只依据实际提供的内容。'
+    : input.platform === 'chatgpt'
+      ? 'ChatGPT 内容按用户与助手消息组织；不要把系统、工具或空占位当作正文。'
+      : input.platform === 'zhihu'
+        ? '知乎内容只分析当前文章或当前回答，不要扩展到其他回答、评论或推荐。'
+        : input.platform === 'heybox'
+          ? '小黑盒内容只分析当前帖子正文，不要扩展到评论、标签、推荐或操作栏。'
+          : '只分析当前 X 内容。';
   const user = `平台：${input.platform}
 类型：${input.contentType}
+平台处理提示：${platformGuidance}
 标题：${input.title}
 作者：${input.author}
 来源：${input.sourceUrl}

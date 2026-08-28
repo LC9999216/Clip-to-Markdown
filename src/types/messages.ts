@@ -5,6 +5,7 @@
 
 import type { ContentDocument, PlatformContentType, PlatformId } from '../core/schema';
 import type { AnalysisSourceBlock, VisualAnalysisState } from '../analysis/types';
+import type { VisualNavigationErrorCode, VisualSourceAnchor } from './visual-source';
 
 // ---------- 请求 ----------
 
@@ -12,28 +13,18 @@ export type StatusRequest = { type: 'GET_STATUS' };
 export type ExtractRequest = { type: 'EXTRACT' };
 
 /**
- * 一次读取返回 ContentDocument + Source Blocks（X Article 原文定位用）。
- * X Article 返回 DOM Blocks；Tweet 及其他平台返回空 Blocks。
+ * 一次读取返回 ContentDocument + Source Blocks（平台适配器可选提供）。
  */
 export type ExtractVisualSourceRequest = { type: 'EXTRACT_VISUAL_SOURCE' };
 export type DownloadRequest = { type: 'DOWNLOAD'; payload: { markdown: string; filename: string } };
 
-/** 请求 Content Script 将当前 X Article 滚动到经过校验的原文块。 */
+/** 请求 Content Script 将当前页面滚动或跳转到经过校验的原文块。 */
 export type NavigateToSourceRequest = {
   type: 'NAVIGATE_TO_SOURCE';
-  payload: {
-    expectedSourceUrl: string;
-    sourceBlockId: string;
-    sourceQuote: string;
-  };
+  payload: VisualSourceAnchor;
 };
 
-export type NavigationErrorCode =
-  | 'SOURCE_CHANGED'
-  | 'UNSUPPORTED_PAGE'
-  | 'TARGET_NOT_FOUND'
-  | 'AMBIGUOUS_TARGET'
-  | 'INVALID_REQUEST';
+export type NavigationErrorCode = VisualNavigationErrorCode;
 
 /**
  * content script 请求 background 代理抓取 JSON（仅限 B 站相关域名）。
@@ -175,13 +166,21 @@ export function isExtractVisualSourceRequest(m: unknown): m is ExtractVisualSour
 
 const SOURCE_BLOCK_ID_RE = /^B\d{3,}$/;
 
-function isXStatusUrl(value: unknown): value is string {
+function isNavigableSourceUrl(value: unknown): value is string {
   if (typeof value !== 'string' || value.trim() === '') return false;
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
     const host = url.hostname.toLowerCase().replace(/^www\./, '');
-    return (host === 'x.com' || host === 'twitter.com') && /\/status\/\d+(?:\/|$)/.test(url.pathname);
+    return host === 'x.com'
+      || host === 'twitter.com'
+      || host === 'zhihu.com'
+      || host.endsWith('.zhihu.com')
+      || host === 'xiaoheihe.cn'
+      || host.endsWith('.xiaoheihe.cn')
+      || host === 'chatgpt.com'
+      || host === 'chat.openai.com'
+      || host === 'bilibili.com';
   } catch {
     return false;
   }
@@ -190,7 +189,7 @@ function isXStatusUrl(value: unknown): value is string {
 export function isNavigateToSourceRequest(m: unknown): m is NavigateToSourceRequest {
   if (!isRecord(m) || m.type !== 'NAVIGATE_TO_SOURCE' || !isRecord(m.payload)) return false;
   const { expectedSourceUrl, sourceBlockId, sourceQuote } = m.payload;
-  return isXStatusUrl(expectedSourceUrl)
+  return isNavigableSourceUrl(expectedSourceUrl)
     && typeof sourceBlockId === 'string'
     && SOURCE_BLOCK_ID_RE.test(sourceBlockId)
     && typeof sourceQuote === 'string'

@@ -96,7 +96,7 @@ async function init(): Promise<void> {
   }
 
   if (!status.supported) {
-    setStatus('当前页面暂不支持。\n请打开 X、知乎、小黑盒或 ChatGPT 的内容页面。', 'error');
+    setStatus('当前页面暂不支持。\n请打开 X、知乎、小黑盒、ChatGPT 或 B 站的内容页面。', 'error');
     return;
   }
 

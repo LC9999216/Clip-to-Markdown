@@ -7,7 +7,8 @@
 import { registry } from '../../core/platform-registry';
 import { ExtractionError, ERROR_MESSAGES } from '../../core/error';
 import { BVID_RE } from './selectors';
-import { detectBilibiliTitle, extractBilibiliAsync } from './extractor';
+import { detectBilibiliTitle, extractBilibiliAsync, extractBilibiliVisualSourceAsync } from './extractor';
+import { navigateBilibiliSource, rememberBilibiliSource } from './source';
 import type { PlatformAdapter } from '../types';
 import type { PlatformContentType } from '../../core/schema';
 
@@ -35,6 +36,19 @@ export const bilibiliAdapter: PlatformAdapter = {
 
   detectTitle(_url: URL, doc: Document): string | undefined {
     return detectBilibiliTitle(doc);
+  },
+
+  async extractVisualSource(doc: Document, url: URL) {
+    const extracted = await extractBilibiliVisualSourceAsync(doc, url);
+    rememberBilibiliSource(url, extracted.sourceEntries);
+    return {
+      document: extracted.document,
+      sourceBlocks: extracted.sourceEntries.map((entry) => entry.block),
+    };
+  },
+
+  navigateToVisualSource(doc, url, anchor) {
+    return navigateBilibiliSource(doc, url, anchor);
   },
 };
 

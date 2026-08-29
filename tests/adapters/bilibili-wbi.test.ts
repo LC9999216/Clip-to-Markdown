@@ -12,6 +12,12 @@ describe('B站 WBI 签名', () => {
     });
   });
 
+  it('缺少任一图片 URL 时抛出明确错误', () => {
+    expect(() => extractWbiKeys({
+      sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+    })).toThrow('无法取得 WBI 密钥');
+  });
+
   it('匹配公开 WBI 签名向量', () => {
     expect(signWbiParams(
       { foo: '114', bar: '514', zab: 1919810 },

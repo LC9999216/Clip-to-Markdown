@@ -9,6 +9,7 @@ import {
   type VisualStructureItem,
 } from '../analysis/types';
 import { renderStructure } from './structure-renderer';
+import type { StatusResponse } from '../types/messages';
 
 const CONFIG_ERROR_CODES = new Set(['AI_NOT_CONFIGURED', 'AI_HOST_NOT_GRANTED', 'AI_AUTH_FAILED']);
 
@@ -23,6 +24,34 @@ function queryActiveTabId(): Promise<number | undefined> {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       resolve(chrome.runtime.lastError ? undefined : tabs[0]?.id);
     });
+  });
+}
+
+/** 字幕入口仅对 B 站视频页（含分 P）显示 */
+function isBilibiliVideoStatus(status: StatusResponse | undefined): boolean {
+  return status?.supported === true
+    && status.platform === 'bilibili'
+    && status.contentType === 'bilibili-video';
+}
+
+function readTabStatus(tabId: number): Promise<StatusResponse | undefined> {
+  return new Promise((resolve) => {
+    const sendMessage = chrome.tabs.sendMessage as unknown as (
+      tab: number,
+      message: unknown,
+      callback?: (response: unknown) => void,
+    ) => unknown;
+    const finish = (response: unknown): void => {
+      resolve(chrome.runtime.lastError ? undefined : response as StatusResponse | undefined);
+    };
+    try {
+      const result = sendMessage(tabId, { type: 'GET_STATUS' }, finish);
+      if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+        void Promise.resolve(result).then(finish, () => resolve(undefined));
+      }
+    } catch {
+      resolve(undefined);
+    }
   });
 }
 
@@ -280,6 +309,21 @@ export async function initializeSidePanel(): Promise<() => void> {
   let currentTabId = await queryActiveTabId();
   let stateVersion = 0;
 
+  // 字幕入口可见性：初始化与标签切换时探测活动 tab；代次检查保证旧标签响应不作用于新标签。
+  let subtitleEntryGeneration = 0;
+  const syncSubtitleEntry = (tabId: number | undefined): void => {
+    const link = element<HTMLAnchorElement>('action-subtitles');
+    link.hidden = true;
+    subtitleEntryGeneration += 1;
+    if (tabId === undefined) return;
+    const generation = subtitleEntryGeneration;
+    void readTabStatus(tabId).then((status) => {
+      if (generation !== subtitleEntryGeneration) return;
+      link.hidden = !isBilibiliVideoStatus(status);
+    });
+  };
+  syncSubtitleEntry(currentTabId);
+
   const onStorageChanged = (
     changes: Record<string, chrome.storage.StorageChange>,
     areaName: chrome.storage.AreaName,
@@ -296,6 +340,7 @@ export async function initializeSidePanel(): Promise<() => void> {
   const onTabActivated = ({ tabId }: chrome.tabs.OnActivatedInfo): void => {
     currentTabId = tabId;
     stateVersion += 1;
+    syncSubtitleEntry(tabId);
     const versionAtRead = stateVersion;
     renderState(undefined, tabId, () => currentTabId === tabId);
     void readState(tabId).then((state) => {

@@ -24,7 +24,11 @@ function mountPanel(): void {
   document.body.innerHTML = `
     <main class="shell">
       <header class="brand-bar">
-        <button id="action-settings" type="button" aria-label="打开设置"></button>
+        <div class="brand-lockup"><span class="brand-name">Clip to Markdown</span></div>
+        <div class="brand-actions">
+          <a id="action-subtitles" href="subtitle.html" hidden>字幕</a>
+          <button id="action-settings" type="button" aria-label="打开设置"></button>
+        </div>
       </header>
       <section id="status-card" aria-live="polite">
         <p id="status-label"></p>
@@ -290,5 +294,70 @@ describe('Side Panel V2 result rendering', () => {
     finishInitialRead?.({ 'clip2md.visualSummary.state.7': { status: 'extracting', tabId: 7, updatedAt: 1 } });
     dispose = await initialization;
     expect(document.querySelector('#preview-title')?.textContent).toBe('最新页面');
+  });
+});
+
+describe('B站字幕入口', () => {
+  let dispose: (() => void) | undefined;
+  const link = (): HTMLAnchorElement => document.querySelector('#action-subtitles') as HTMLAnchorElement;
+
+  function respondGetStatus(status: unknown): void {
+    tabsSendMessageMock.mockImplementation((_tabId, message, callback) => {
+      if ((message as { type?: string }).type === 'GET_STATUS') callback?.(status);
+    });
+  }
+
+  beforeEach(() => {
+    mountPanel();
+    tabsQueryMock.mockImplementation((_query, callback) => {
+      callback?.([{ id: 7, active: true }] as chrome.tabs.Tab[]);
+    });
+  });
+
+  afterEach(() => dispose?.());
+
+  it('入口默认隐藏且指向独立字幕页', async () => {
+    respondGetStatus({ supported: true, platform: 'bilibili', contentType: 'bilibili-video', url: 'https://www.bilibili.com/video/BV1xx411c7mD/' });
+    dispose = await initializeSidePanel();
+    expect(link().getAttribute('href')).toBe('subtitle.html');
+    await vi.waitFor(() => expect(link().hidden).toBe(false));
+  });
+
+  it('非 B 站页面字幕入口保持隐藏', async () => {
+    respondGetStatus({ supported: true, platform: 'x', contentType: 'tweet', url: 'https://x.com/alice/status/123' });
+    dispose = await initializeSidePanel();
+    await vi.waitFor(() => expect(tabsSendMessageMock).toHaveBeenCalled());
+    expect(link().hidden).toBe(true);
+  });
+
+  it('GET_STATUS 无响应时字幕入口保持隐藏', async () => {
+    // 不配置 responder：默认 tabs.sendMessage 走「Receiving end does not exist」路径
+    dispose = await initializeSidePanel();
+    await vi.waitFor(() => expect(tabsSendMessageMock).toHaveBeenCalled());
+    expect(link().hidden).toBe(true);
+  });
+
+  it('切换标签后入口先隐藏，旧标签迟到响应不得复活', async () => {
+    const pending: Array<(status: unknown) => void> = [];
+    tabsSendMessageMock.mockImplementation((_tabId, message, callback) => {
+      if ((message as { type?: string }).type === 'GET_STATUS') {
+        pending.push((status) => callback?.(status));
+      }
+    });
+    const bilibili = { supported: true, platform: 'bilibili', contentType: 'bilibili-video', url: 'https://www.bilibili.com/video/BV1xx411c7mD/' };
+    const tweet = { supported: true, platform: 'x', contentType: 'tweet', url: 'https://x.com/alice/status/1' };
+
+    dispose = await initializeSidePanel();
+    expect(pending).toHaveLength(1);
+    pending[0]?.(bilibili);
+    await vi.waitFor(() => expect(link().hidden).toBe(false));
+
+    dispatchTabActivated(8);
+    expect(link().hidden).toBe(true);
+    pending[1]?.(tweet);
+    await vi.waitFor(() => expect(tabsSendMessageMock).toHaveBeenCalledTimes(2));
+    pending[0]?.(bilibili);
+    await Promise.resolve();
+    expect(link().hidden).toBe(true);
   });
 });

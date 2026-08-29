@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="subtitle.css" />
+  <title>字幕 - Clip to Markdown</title>
+</head>
+<body>
+  <main class="shell" aria-labelledby="subtitle-title">
+    <header class="brand-bar">
+      <a class="text-button" id="action-back" href="sidepanel.html">← 返回一图速览</a>
+      <div class="brand-actions">
+        <button class="icon-button" id="action-refresh" type="button" aria-label="刷新字幕" title="刷新字幕">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+            <path d="M20 4v4h-4" />
+          </svg>
+        </button>
+        <button class="icon-button" id="action-settings" type="button" aria-label="打开设置" title="打开设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Z" />
+            <path d="m19.4 13.5 1.5 1.2-1.8 3.1-1.8-.7a7.7 7.7 0 0 1-1.7 1l-.3 1.9h-3.6l-.3-1.9a7.7 7.7 0 0 1-1.7-1l-1.8.7-1.8-3.1 1.5-1.2a7 7 0 0 1 0-2l-1.5-1.2 1.8-3.1 1.8.7a7.7 7.7 0 0 1 1.7-1l.3-1.9h3.6l.3 1.9a7.7 7.7 0 0 1 1.7 1l1.8-.7 1.8 3.1-1.5 1.2a7 7 0 0 1 0 2Z" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <h1 class="subtitle-heading" id="subtitle-title"></h1>
+
+    <div class="track-row">
+      <label class="track-label" for="subtitle-track">字幕轨</label>
+      <select class="track-select" id="subtitle-track" disabled></select>
+    </div>
+
+    <p class="subtitle-status" id="subtitle-status" role="status" aria-live="polite"></p>
+
+    <div class="subtitle-list" id="subtitle-list" tabindex="0"></div>
+
+    <button class="return-current" id="return-current" type="button" hidden>回到当前句</button>
+  </main>
+  <script src="subtitle.js"></script>
+</body>
+</html>

@@ -45,6 +45,7 @@ const entryPoints = [
   { entryPoints: ['src/options/options.ts'], outfile: 'dist/options.js', format: 'iife' },
   { entryPoints: ['src/offscreen/offscreen.ts'], outfile: 'dist/offscreen.js', format: 'iife' },
   { entryPoints: ['src/sidepanel/sidepanel.ts'], outfile: 'dist/sidepanel.js', format: 'iife' },
+  { entryPoints: ['src/subtitle/subtitle.ts'], outfile: 'dist/subtitle.js', format: 'iife' },
   { entryPoints: ['src/background/background.ts'], outfile: 'dist/background.js', format: 'esm' },
 ];
 
@@ -58,6 +59,8 @@ for (const [from, to] of [
   ['src/offscreen/offscreen.html', 'dist/offscreen.html'],
   ['src/sidepanel/sidepanel.html', 'dist/sidepanel.html'],
   ['src/sidepanel/sidepanel.css', 'dist/sidepanel.css'],
+  ['src/subtitle/subtitle.html', 'dist/subtitle.html'],
+  ['src/subtitle/subtitle.css', 'dist/subtitle.css'],
 ]) {
   copyFileSync(join(root, from), join(root, to));
 }

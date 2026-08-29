@@ -199,6 +199,38 @@ describe('visual summary phase 1 shell', () => {
   });
 });
 
+describe('B站独立字幕页构建与入口', () => {
+  it('品牌栏声明默认隐藏、指向 subtitle.html 的字幕入口', () => {
+    const html = read('src/sidepanel/sidepanel.html');
+    expect(html).toMatch(/<a[^>]*id="action-subtitles"[^>]*href="subtitle\.html"[^>]*hidden/);
+    expect(html).toContain('class="brand-actions"');
+    expect(html).toMatch(/id="action-settings"[\s\S]*?<svg/);
+  });
+
+  it('构建字幕页三项产物且不改默认侧栏路径', () => {
+    const build = read('build.mjs');
+    expect(build).toContain("entryPoints: ['src/subtitle/subtitle.ts']");
+    expect(build).toContain("outfile: 'dist/subtitle.js'");
+    expect(build).toContain("['src/subtitle/subtitle.html', 'dist/subtitle.html']");
+    expect(build).toContain("['src/subtitle/subtitle.css', 'dist/subtitle.css']");
+
+    const manifest = JSON.parse(read('src/manifest.json')) as { side_panel?: { default_path?: string } };
+    expect(manifest.side_panel).toEqual({ default_path: 'sidepanel.html' });
+  });
+
+  it('字幕页外壳只包含设计内控件', () => {
+    const html = read('src/subtitle/subtitle.html');
+    for (const id of ['action-back', 'action-refresh', 'action-settings', 'subtitle-title', 'subtitle-track', 'subtitle-status', 'subtitle-list', 'return-current']) {
+      expect(html).toContain(`id="${id}"`);
+    }
+    expect(html).toMatch(/id="action-back"[^>]*href="sidepanel\.html"/);
+    expect(html).toContain('subtitle.js');
+    expect(html).toContain('subtitle.css');
+    // 明确排除越界控件：搜索、段数、复制、导出、翻译、双语、顺句、ASR
+    expect(html).not.toMatch(/搜索|段数|复制|导出|翻译|双语|顺句|语音识别|ASR|search|export/i);
+  });
+});
+
 function extractedDocument(text: string, contentType: 'tweet' | 'x-article' = 'tweet'): ContentDocument {
   return {
     version: 1,

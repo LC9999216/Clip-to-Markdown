@@ -92,6 +92,25 @@ body { overflow-x: hidden; }
 }
 .icon-button svg { width: 28px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
 
+.brand-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+
+.text-icon-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: #26303a;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.text-icon-button:hover { background: var(--green-soft); color: var(--green); }
+.text-icon-button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.text-icon-button[hidden] { display: none; }
+
 .status-card {
   margin: 24px 0;
   padding: 18px 20px;
@@ -178,7 +197,7 @@ button.structure-item { width: 100%; cursor: pointer; }
 
 @media (prefers-color-scheme: dark) {
   :root { --background: #121916; --surface: #1b2722; --ink: #edf5f1; --muted: #adbbb5; --green: #6bd0ad; --green-dark: #56b895; --green-soft: #23483b; --line: #385047; }
-  .brand-name, .icon-button, .source-meta h1 { color: var(--ink); }
+  .brand-name, .icon-button, .text-icon-button, .source-meta h1 { color: var(--ink); }
   .summary-line { color: var(--ink); }
   .button-primary { color: #102019; }
 }

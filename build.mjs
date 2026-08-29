@@ -61,6 +61,7 @@ for (const [from, to] of [
   ['src/sidepanel/sidepanel.css', 'dist/sidepanel.css'],
   ['src/subtitle/subtitle.html', 'dist/subtitle.html'],
   ['src/subtitle/subtitle.css', 'dist/subtitle.css'],
+  ['THIRD_PARTY_NOTICES.md', 'dist/THIRD_PARTY_NOTICES.md'],
 ]) {
   copyFileSync(join(root, from), join(root, to));
 }

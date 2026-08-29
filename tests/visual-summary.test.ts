@@ -229,6 +229,30 @@ describe('B站独立字幕页构建与入口', () => {
     // 明确排除越界控件：搜索、段数、复制、导出、翻译、双语、顺句、ASR
     expect(html).not.toMatch(/搜索|段数|复制|导出|翻译|双语|顺句|语音识别|ASR|search|export/i);
   });
+
+  it('构建复制第三方许可声明到 dist', () => {
+    const build = read('build.mjs');
+    expect(build).toContain("['THIRD_PARTY_NOTICES.md', 'dist/THIRD_PARTY_NOTICES.md']");
+    expect(existsSync(resolve(root, 'THIRD_PARTY_NOTICES.md'))).toBe(true);
+  });
+
+  it('THIRD_PARTY_NOTICES 包含 @noble/hashes 的完整 MIT 许可', () => {
+    const notices = read('THIRD_PARTY_NOTICES.md');
+    expect(notices).toContain('@noble/hashes');
+    expect(notices).toContain('2.3.0');
+    expect(notices).toContain('https://github.com/paulmillr/noble-hashes');
+    expect(notices).toContain('Copyright (c) 2022 Paul Miller');
+    expect(notices).toContain('Permission is hereby granted');
+    expect(notices).toContain('THE SOFTWARE IS PROVIDED');
+  });
+
+  it('README 记录独立字幕页、仅官方字幕、无 ASR 与参考来源', () => {
+    const readme = read('README.md');
+    expect(readme).toContain('B站独立字幕页');
+    expect(readme).toContain('仅官方字幕');
+    expect(readme).toContain('无ASR');
+    expect(readme).toContain('https://github.com/biuworks/bilibili-digest');
+  });
 });
 
 function extractedDocument(text: string, contentType: 'tweet' | 'x-article' = 'tweet'): ContentDocument {

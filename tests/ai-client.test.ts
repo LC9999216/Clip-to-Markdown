@@ -352,14 +352,69 @@ describe('analyzeContentV2 成功路径', () => {
     expect(repairBody.messages[0].content).toContain('不存在');
   });
 
-  it('repair 后仍失败时返回 AI_INVALID_RESPONSE，最多两次请求', async () => {
-    const badAnchor = {
+  it('repair 后仍失败时返回两次校验的精确诊断，最多两次请求', async () => {
+    const firstBadAnchor = {
       ...V2_VALID,
       structure: [{ title: 'x', sourceBlockId: 'B999', sourceQuote: '不存在' }],
     };
-    const fetchMock = vi.fn().mockResolvedValue(okContent(JSON.stringify(badAnchor)));
+    const repairedBadAnchor = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B001', sourceQuote: '仍然不存在' }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okContent(JSON.stringify(firstBadAnchor)))
+      .mockResolvedValueOnce(okContent(JSON.stringify(repairedBadAnchor)));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(analyzeContentV2(V2_INPUT, SETTINGS)).rejects.toMatchObject({ code: 'AI_INVALID_RESPONSE' });
+    const error = await analyzeContentV2(V2_INPUT, SETTINGS).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+
+    expect(error).toMatchObject({ code: 'AI_INVALID_RESPONSE' });
+    expect((error as Error).message).toContain('首次校验：structure[0].sourceBlockId not present in sent blocks');
+    expect((error as Error).message).toContain('自动修复后：structure[0].sourceQuote not found in block B001');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('精确诊断不会原样展示模型生成的超长 sourceBlockId', async () => {
+    const untrustedBlockId = `B${'9'.repeat(1000)}`;
+    const badAnchor = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: untrustedBlockId, sourceQuote: '不存在' }],
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okContent(JSON.stringify(badAnchor))));
+
+    const error = await analyzeContentV2(V2_INPUT, SETTINGS).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+
+    expect((error as Error).message).toContain('structure[0].sourceBlockId not present in sent blocks');
+    expect((error as Error).message).not.toContain(untrustedBlockId);
+    expect((error as Error).message.length).toBeLessThan(1000);
+  });
+
+  it('单条精确诊断截断后严格不超过 240 个字符', async () => {
+    const longKnownBlockId = `B${'8'.repeat(300)}`;
+    const input = {
+      ...V2_INPUT,
+      body: `[${longKnownBlockId}]\n真实原文`,
+      sourceBlocks: [{ id: longKnownBlockId, kind: 'paragraph' as const, text: '真实原文' }],
+    };
+    const badQuote = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: longKnownBlockId, sourceQuote: '不存在' }],
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okContent(JSON.stringify(badQuote))));
+
+    const error = await analyzeContentV2(input, SETTINGS).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+    const message = (error as Error).message;
+    const firstDiagnostic = message.match(/首次校验：(.*?)。自动修复后：/)?.[1] ?? '';
+
+    expect(firstDiagnostic.endsWith('…')).toBe(true);
+    expect(Array.from(firstDiagnostic)).toHaveLength(240);
   });
 });

@@ -57,6 +57,33 @@ ${lastOutput.slice(0, 3000)}
 不要代码块。`;
 }
 
+function validationProblems(error: unknown): string[] | null {
+  if (error instanceof VisualSummaryValidationError) return error.problems;
+  if (error instanceof SyntaxError || (error instanceof Error && error.name === 'SyntaxError')) {
+    return ['JSON 解析失败'];
+  }
+  return null;
+}
+
+const MAX_DIAGNOSTIC_PROBLEM_CHARS = 240;
+
+function safeDiagnosticProblem(problem: string): string {
+  const redacted = problem.replace(
+    /(\.sourceBlockId) B\d+ not present in sent blocks/g,
+    '$1 not present in sent blocks',
+  );
+  const chars = Array.from(redacted);
+  return chars.length > MAX_DIAGNOSTIC_PROBLEM_CHARS
+    ? `${chars.slice(0, MAX_DIAGNOSTIC_PROBLEM_CHARS - 1).join('')}…`
+    : redacted;
+}
+
+function invalidResponseMessage(firstProblems: string[], repairedProblems: string[]): string {
+  const first = firstProblems.map(safeDiagnosticProblem).join('；');
+  const repaired = repairedProblems.map(safeDiagnosticProblem).join('；');
+  return `AI 返回的分析结果未通过校验。首次校验：${first}。自动修复后：${repaired}。请重新生成。`;
+}
+
 interface ChatMessage {
   role: 'system' | 'user';
   content: string;
@@ -249,6 +276,7 @@ export async function analyzeContentV2(input: AnalysisInput, settings: AiSetting
       { role: 'user', content: prompt.user },
     ];
     let content = await requestCompletion(settings, firstMessages, controller.signal, { structuredOutput: true });
+    let firstProblems: string[] | null = null;
 
     for (let attempt = 0; attempt <= 1; attempt++) {
       try {
@@ -257,21 +285,21 @@ export async function analyzeContentV2(input: AnalysisInput, settings: AiSetting
         if (anchorProblems.length > 0) throw new VisualSummaryValidationError(anchorProblems);
         return summary;
       } catch (error) {
-        const isRepairable =
-          error instanceof VisualSummaryValidationError ||
-          error instanceof SyntaxError ||
-          (error instanceof Error && error.name === 'SyntaxError');
-        if (attempt === 0 && isRepairable) {
-          const problems =
-            error instanceof VisualSummaryValidationError
-              ? error.problems
-              : ['JSON 解析失败，请返回合法 JSON 对象'];
+        const problems = validationProblems(error);
+        if (attempt === 0 && problems) {
+          firstProblems = problems;
           const repairMessages: ChatMessage[] = [
             { role: 'system', content: `${prompt.system}\n\n${buildRepairPromptV2(problems, content)}` },
             { role: 'user', content: prompt.user },
           ];
           content = await requestCompletion(settings, repairMessages, controller.signal, { structuredOutput: true });
           continue;
+        }
+        if (attempt === 1 && firstProblems && problems) {
+          throw new VisualAnalysisRequestError(
+            'AI_INVALID_RESPONSE',
+            invalidResponseMessage(firstProblems, problems),
+          );
         }
         throw new VisualAnalysisRequestError(
           'AI_INVALID_RESPONSE',

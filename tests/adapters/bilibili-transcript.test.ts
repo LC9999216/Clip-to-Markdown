@@ -104,4 +104,28 @@ describe('B站字幕分段', () => {
     expect(result.map((item) => item.id)).toEqual(['S0001', 'S0002', 'S0003']);
     expect(result.every((item, index) => index === 0 || item.start >= result[index - 1]!.end)).toBe(true);
   });
+
+  it('稀疏长时间轴用尾部纯时间段补齐但不重复字幕字符', () => {
+    const result = groupTranscript([{ from: 0, to: 25, content: '甲' }]);
+
+    expect(result).toEqual([
+      { id: 'S0001', start: 0, end: 20, text: '甲' },
+      { id: 'S0002', start: 20, end: 25, text: '' },
+    ]);
+    expect(result.map((item) => item.text).join('')).toBe('甲');
+    expect(result.every((item) => item.end - item.start <= 20)).toBe(true);
+  });
+
+  it('识别 U+20000 以上的扩展汉字并使用中文阈值', () => {
+    const han = String.fromCodePoint(0x20000);
+    const raw: BiliSubtitleLine[] = [
+      { from: 0, to: 1, content: han.repeat(100) },
+      { from: 1, to: 2, content: han.repeat(100) },
+    ];
+
+    const result = groupTranscript(raw);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((item) => item.text)).toEqual(raw.map((item) => item.content));
+  });
 });

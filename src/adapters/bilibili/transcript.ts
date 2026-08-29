@@ -1,7 +1,7 @@
 import type { BiliSubtitleLine, BiliTranscriptSegment } from './subtitle-types';
 
 const MAX_DURATION_SECONDS = 20;
-const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u;
+const CJK_RE = /\p{Script=Han}/u;
 const NATURAL_END_RE = /[。！？!?；;，,、:：.!?]/u;
 
 interface GroupLimits {
@@ -69,6 +69,20 @@ function splitLongLine(line: BiliSubtitleLine, limits: GroupLimits): TimedChunk[
     : characterCount;
   const hardLimit = Math.max(1, Math.min(limits.max, durationCharacterLimit));
   const needsHardSplit = characterCount > limits.max || duration > MAX_DURATION_SECONDS;
+
+  // If the span has fewer characters than 20-second windows, keep the
+  // characters in leading windows and represent the trailing remainder with
+  // empty timing-only chunks. This preserves the full source time range
+  // without duplicating or dropping sparse subtitle text.
+  const timedWindowCount = Math.ceil(duration / MAX_DURATION_SECONDS);
+  if (duration > MAX_DURATION_SECONDS && characterCount < timedWindowCount) {
+    return Array.from({ length: timedWindowCount }, (_, index) => ({
+      text: index < characterCount ? chars[index]! : '',
+      start: line.from + Math.min(index * MAX_DURATION_SECONDS, duration),
+      end: line.from + Math.min((index + 1) * MAX_DURATION_SECONDS, duration),
+      forceBoundary: true,
+    }));
+  }
 
   if (!needsHardSplit && characterCount <= limits.ideal) {
     return [makeChunk(chars, line.from, line.to, characterCount, 0, characterCount, false)];

@@ -75,10 +75,10 @@ function splitLongLine(line: BiliSubtitleLine, limits: GroupLimits): TimedChunk[
   }
 
   // A line that fits below the hard limit only needs an internal cut when a
-  // natural boundary occurs before the ideal length. Otherwise keep its
+  // natural boundary occurs before the hard maximum. Otherwise keep its
   // original line boundary intact.
   if (!needsHardSplit) {
-    const naturalCut = findNaturalCut(chars, 0, limits.ideal, limits.min);
+    const naturalCut = findNaturalCut(chars, 0, limits.max, limits.min);
     if (!naturalCut || naturalCut >= characterCount) {
       return [makeChunk(chars, line.from, line.to, characterCount, 0, characterCount, false)];
     }

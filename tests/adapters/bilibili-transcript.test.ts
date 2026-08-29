@@ -34,6 +34,14 @@ describe('B站字幕分段', () => {
     expect(result.map((item) => item.id)).toEqual(['S0001', 'S0002']);
   });
 
+  it('理想长度之后但硬上限之前仍优先使用句末标点', () => {
+    const firstSentence = '甲'.repeat(110) + '。';
+    const secondSentence = '乙'.repeat(29);
+    const result = groupTranscript([{ from: 0, to: 10, content: firstSentence + secondSentence }]);
+
+    expect(result.map((item) => item.text)).toEqual([firstSentence, secondSentence]);
+  });
+
   it('拉丁文字使用较大的长度阈值并保持字符', () => {
     const raw: BiliSubtitleLine[] = Array.from({ length: 4 }, (_, index) => ({
       from: index * 3,

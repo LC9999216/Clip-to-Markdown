@@ -11,7 +11,8 @@ import type { ContentDocument } from '../../core/schema';
 import { sourceBlockId, splitLongBlockText } from '../../analysis/source-blocks';
 import type { AnalysisSourceBlock } from '../../analysis/types';
 import type { FetchJsonCredentials, FetchJsonResponse } from '../../types/messages';
-import { fetchBilibiliSubtitleResource } from './subtitle-service';
+import { fetchBilibiliSubtitleResource, type BiliSubtitleResource } from './subtitle-service';
+import { BiliSubtitleError } from './subtitle-types';
 import type { BiliSubtitleLine } from './subtitle-types';
 
 export type BiliSubtitleBodyItem = BiliSubtitleLine;
@@ -234,17 +235,42 @@ export interface BilibiliVisualExtraction {
   sourceEntries: BilibiliSourceEntry[];
 }
 
+interface BiliSubtitleErrorContext {
+  phase?: 'cdn';
+  resource?: BiliSubtitleResource;
+}
+
+function mapBiliSubtitleError(error: BiliSubtitleError): ExtractionError {
+  return new ExtractionError(
+    error.code === 'NEED_LOGIN' ? 'LOGIN_REQUIRED' : 'UNKNOWN',
+    error.message,
+  );
+}
+
 export async function extractBilibiliVisualSourceAsync(doc: Document, url: URL): Promise<BilibiliVisualExtraction> {
   const bvid = extractBvid(url);
   if (!bvid) {
     throw new ExtractionError('UNSUPPORTED_PAGE', ERROR_MESSAGES.UNSUPPORTED_PAGE);
   }
 
-  const resource = await fetchBilibiliSubtitleResource({
-    url,
-    requestJson: fetchJson,
-    allowEmpty: true,
-  });
+  let resource: BiliSubtitleResource;
+  try {
+    resource = await fetchBilibiliSubtitleResource({
+      url,
+      requestJson: fetchJson,
+      allowEmpty: true,
+    });
+  } catch (error) {
+    if (!(error instanceof BiliSubtitleError)) throw error;
+    const context = error as BiliSubtitleError & BiliSubtitleErrorContext;
+    if ((error.code === 'EMPTY_TRANSCRIPT' || error.code === 'FETCH_FAILED')
+      && context.phase === 'cdn'
+      && context.resource) {
+      resource = context.resource;
+    } else {
+      throw mapBiliSubtitleError(error);
+    }
+  }
   const { identity, chapters, lines: body } = resource;
   const published = resource.publishedAt > 0 ? formatLocalDate(resource.publishedAt * 1000) : '';
   const author = resource.author || readAuthorFromDom(doc) || '未知 UP 主';

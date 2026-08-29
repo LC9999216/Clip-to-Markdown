@@ -218,6 +218,127 @@ describe('B 站无字幕降级', () => {
     expect(result.sourceBlocks.map((b) => b.text)).toEqual(['视频简介', '开场']);
     expect(renderDocument(result.document)).toContain('（暂无字幕）');
   });
+
+  it('字幕服务错误在提取器边界映射为 ExtractionError', async () => {
+    runtimeSendMessageMock.mockImplementation((_message: { url: string }, callback: (response: unknown) => void) => {
+      callback({ success: true, data: { code: -412, message: '风控' } });
+    });
+
+    await expect(bilibiliAdapter.extractVisualSource!(
+      document,
+      new URL('https://www.bilibili.com/video/BV1xx411c7mD/'),
+    )).rejects.toMatchObject({ name: 'ExtractionError', code: 'UNKNOWN' });
+  });
+
+  it('字幕 CDN 返回空正文时保留元数据/章节并输出暂无字幕', async () => {
+    runtimeSendMessageMock.mockImplementation((message: { url: string }, callback: (response: unknown) => void) => {
+      if (message.url.includes('/x/web-interface/view')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            aid: 10,
+            title: '正文为空视频',
+            desc: '视频简介',
+            pubdate: 0,
+            cid: 20,
+            owner: { name: 'UP 主' },
+            pages: [{ cid: 20, page: 1, part: '', duration: 60 }],
+          },
+        } });
+        return;
+      }
+      if (message.url.includes('/x/web-interface/nav')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            isLogin: true,
+            img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+            sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+          },
+        } });
+        return;
+      }
+      if (message.url.includes('/x/player/wbi/v2')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            subtitle: { subtitles: [{
+              id: 1,
+              lan: 'zh-CN',
+              lan_doc: '中文',
+              ai_type: 0,
+              subtitle_url: 'https://subtitle.hdslb.com/empty.json',
+            }] },
+            view_points: [{ content: '开场', from: 0, to: 20 }],
+          },
+        } });
+        return;
+      }
+      callback({ success: true, data: { body: [] } });
+    });
+
+    const result = await bilibiliAdapter.extractVisualSource!(
+      document,
+      new URL('https://www.bilibili.com/video/BV1xx411c7mD/'),
+    );
+    expect(result.sourceBlocks.map((block) => block.text)).toEqual(['视频简介', '开场']);
+    expect(renderDocument(result.document)).toContain('（暂无字幕）');
+  });
+
+  it('字幕 CDN 请求失败时保留元数据/章节并输出暂无字幕', async () => {
+    runtimeSendMessageMock.mockImplementation((message: { url: string }, callback: (response: unknown) => void) => {
+      if (message.url.includes('/x/web-interface/view')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            aid: 10,
+            title: '请求失败视频',
+            desc: '视频简介',
+            pubdate: 0,
+            cid: 20,
+            owner: { name: 'UP 主' },
+            pages: [{ cid: 20, page: 1, part: '', duration: 60 }],
+          },
+        } });
+        return;
+      }
+      if (message.url.includes('/x/web-interface/nav')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            isLogin: true,
+            img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+            sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+          },
+        } });
+        return;
+      }
+      if (message.url.includes('/x/player/wbi/v2')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            subtitle: { subtitles: [{
+              id: 1,
+              lan: 'zh-CN',
+              lan_doc: '中文',
+              ai_type: 0,
+              subtitle_url: 'https://subtitle.hdslb.com/failed.json',
+            }] },
+            view_points: [{ content: '开场', from: 0, to: 20 }],
+          },
+        } });
+        return;
+      }
+      callback({ success: false, error: 'CDN 不可用' });
+    });
+
+    const result = await bilibiliAdapter.extractVisualSource!(
+      document,
+      new URL('https://www.bilibili.com/video/BV1xx411c7mD/'),
+    );
+    expect(result.sourceBlocks.map((block) => block.text)).toEqual(['视频简介', '开场']);
+    expect(renderDocument(result.document)).toContain('（暂无字幕）');
+  });
 });
 
 describe('B 站字幕请求凭据', () => {

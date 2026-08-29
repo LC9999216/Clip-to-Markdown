@@ -64,6 +64,13 @@ interface BiliViewPage {
   part?: unknown;
 }
 
+type SubtitleMetadata = Omit<BiliSubtitleResource, 'tracks' | 'selectedTrackId' | 'lines'>;
+
+interface BiliSubtitleErrorContext {
+  phase?: 'cdn';
+  resource?: BiliSubtitleResource;
+}
+
 const API_BASE = 'https://api.bilibili.com';
 
 function fail(message: string): never {
@@ -212,8 +219,19 @@ function normalizeBody(value: unknown): BiliSubtitleLine[] {
     .filter((line) => line.content.length > 0);
 }
 
-function emptyResource(metadata: Omit<BiliSubtitleResource, 'tracks' | 'selectedTrackId' | 'lines'>): BiliSubtitleResource {
+function emptyResource(metadata: SubtitleMetadata): BiliSubtitleResource {
   return { ...metadata, tracks: [], selectedTrackId: null, lines: [] };
+}
+
+function markCdnFailure(error: unknown, metadata: SubtitleMetadata): BiliSubtitleError {
+  const failure = error instanceof BiliSubtitleError
+    ? error
+    : new BiliSubtitleError('FETCH_FAILED', error instanceof Error ? error.message : '字幕正文请求失败');
+  Object.assign(failure as BiliSubtitleError & BiliSubtitleErrorContext, {
+    phase: 'cdn',
+    resource: emptyResource(metadata),
+  });
+  return failure;
 }
 
 export async function fetchBilibiliSubtitleResource(args: {
@@ -259,8 +277,12 @@ export async function fetchBilibiliSubtitleResource(args: {
     if (error instanceof BiliSubtitleError) throw error;
     fail(error instanceof Error ? error.message : '字幕轨列表请求失败');
   }
-  if (!isRecord(player.data) || !isRecord(player.data.subtitle)) fail('字幕轨列表响应格式错误');
-  const tracks = normalizeTracks(player.data.subtitle.subtitles);
+  if (!isRecord(player.data)) fail('字幕轨列表响应格式错误');
+  const subtitle = player.data.subtitle;
+  if (subtitle !== undefined && subtitle !== null && !isRecord(subtitle)) fail('字幕轨列表响应格式错误');
+  const tracks = subtitle === undefined || subtitle === null
+    ? []
+    : normalizeTracks(subtitle.subtitles);
   const chapters = normalizeChapters(player.data.view_points);
   const metadata = {
     identity: { bvid, pageIndex, cid: page.cid },
@@ -285,9 +307,10 @@ export async function fetchBilibiliSubtitleResource(args: {
   try {
     lines = normalizeBody(await args.requestJson(selected.url, 'omit'));
   } catch (error) {
-    if (error instanceof BiliSubtitleError) throw error;
-    fail(error instanceof Error ? error.message : '字幕正文请求失败');
+    throw markCdnFailure(error, metadata);
   }
-  if (lines.length === 0) throw new BiliSubtitleError('EMPTY_TRANSCRIPT', '字幕正文为空');
+  if (lines.length === 0) {
+    throw markCdnFailure(new BiliSubtitleError('EMPTY_TRANSCRIPT', '字幕正文为空'), metadata);
+  }
   return { ...metadata, tracks, selectedTrackId: selected.id, lines };
 }

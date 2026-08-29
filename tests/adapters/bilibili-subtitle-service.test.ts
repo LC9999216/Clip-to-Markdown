@@ -185,6 +185,22 @@ describe('B站官方字幕服务', () => {
     });
   });
 
+  it('播放器缺少或显式为 null 的 subtitle 视为无字幕', async () => {
+    for (const player of [
+      { code: 0, data: { view_points: [{ content: '开场', from: 0, to: 1 }] } },
+      { code: 0, data: { subtitle: null, view_points: [{ content: '开场', from: 0, to: 1 }] } },
+    ]) {
+      const resource = await fetchBilibiliSubtitleResource({
+        url: videoUrl,
+        requestJson: makeRequestJson({ nav: makeNav(false), player }),
+        allowEmpty: true,
+      });
+      expect(resource.tracks).toEqual([]);
+      expect(resource.lines).toEqual([]);
+      expect(resource.chapters).toEqual([{ title: '开场', from: 0, to: 1 }]);
+    }
+  });
+
   it('空字幕正文抛出 EMPTY_TRANSCRIPT', async () => {
     await expect(fetchBilibiliSubtitleResource({
       url: videoUrl,
@@ -196,7 +212,7 @@ describe('B站官方字幕服务', () => {
     for (const requestJson of [
       makeRequestJson({ player: { code: -412, message: '风控' } }),
       async () => { throw new Error('network down'); },
-      makeRequestJson({ player: { code: 0, data: { subtitle: {} } } }),
+      makeRequestJson({ player: { code: 0, data: null } }),
     ]) {
       await expect(fetchBilibiliSubtitleResource({ url: videoUrl, requestJson }))
         .rejects.toMatchObject({ code: 'FETCH_FAILED' });

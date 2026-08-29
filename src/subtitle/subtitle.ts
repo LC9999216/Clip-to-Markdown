@@ -1,6 +1,5 @@
 /**
- * 字幕页控制器：加载 B 站官方字幕、轨道切换、会话缓存与错误状态。
- * Task 7 范围：状态探测、缓存、渲染与错误；播放跟随与时间跳转由 Task 8 实现。
+ * 字幕页控制器：加载 B 站官方字幕、轨道切换、会话缓存、错误状态与播放跟随。
  */
 
 import { parseBilibiliVideoIdentity } from '../adapters/bilibili/playback';
@@ -12,14 +11,24 @@ import type {
 } from '../adapters/bilibili/subtitle-service';
 import { groupTranscript } from '../adapters/bilibili/transcript';
 import type { BiliTranscriptSegment } from '../adapters/bilibili/subtitle-types';
-import type { FetchJsonCredentials, StatusResponse } from '../types/messages';
+import type {
+  FetchJsonCredentials,
+  GetBilibiliPlaybackStateResponse,
+  SeekBilibiliVideoResponse,
+  StatusResponse,
+} from '../types/messages';
 
 const CACHE_PREFIX = 'clip2md.bilibiliSubtitle.cache.v1.';
 const UI_PREFIX = 'clip2md.bilibiliSubtitle.ui.v1.';
 
+const POLL_INTERVAL_MS = 500;
+/** scrollIntoView 触发的滚动事件在该时间窗内视为程序滚动 */
+const PROGRAMMATIC_SCROLL_WINDOW_MS = 150;
+
 const MSG_UNSUPPORTED = '字幕功能仅支持B站视频页';
 const MSG_FETCH_FAILED = '字幕获取失败，请稍后刷新';
 const MSG_LOADING = '正在加载字幕…';
+const MSG_PLAYER_NOT_READY = '播放器尚未加载，请稍后重试';
 
 interface SubtitlePageUiState {
   trackId: string | null;
@@ -46,18 +55,18 @@ function isBilibiliVideoStatus(status: StatusResponse | undefined): status is St
     && status.contentType === 'bilibili-video';
 }
 
-function readTabStatus(tabId: number): Promise<StatusResponse | undefined> {
+function sendTabMessage<T>(tabId: number, message: unknown): Promise<T | undefined> {
   return new Promise((resolve) => {
     const sendMessage = chrome.tabs.sendMessage as unknown as (
       tab: number,
-      message: unknown,
+      msg: unknown,
       callback?: (response: unknown) => void,
     ) => unknown;
     const finish = (response: unknown): void => {
-      resolve(chrome.runtime.lastError ? undefined : response as StatusResponse | undefined);
+      resolve(chrome.runtime.lastError ? undefined : response as T | undefined);
     };
     try {
-      const result = sendMessage(tabId, { type: 'GET_STATUS' }, finish);
+      const result = sendMessage(tabId, message, finish);
       if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
         void Promise.resolve(result).then(finish, () => resolve(undefined));
       }
@@ -65,6 +74,25 @@ function readTabStatus(tabId: number): Promise<StatusResponse | undefined> {
       resolve(undefined);
     }
   });
+}
+
+function readTabStatus(tabId: number): Promise<StatusResponse | undefined> {
+  return sendTabMessage<StatusResponse>(tabId, { type: 'GET_STATUS' });
+}
+
+/** 二分查找 start <= t < end 的段落下标，间隙返回 -1 */
+function findActiveSegment(segments: BiliTranscriptSegment[], t: number): number {
+  let lo = 0;
+  let hi = segments.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const segment = segments[mid];
+    if (!segment) return -1;
+    if (t < segment.start) hi = mid - 1;
+    else if (t >= segment.end) lo = mid + 1;
+    else return mid;
+  }
+  return -1;
 }
 
 const requestJson: BiliJsonRequest = (url, credentials) =>
@@ -113,7 +141,11 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
-function renderSegments(list: HTMLElement, segments: BiliTranscriptSegment[]): void {
+function renderSegments(
+  list: HTMLElement,
+  segments: BiliTranscriptSegment[],
+  onSeek: (seconds: number) => void,
+): void {
   const fragment = document.createDocumentFragment();
   for (const segment of segments) {
     const row = document.createElement('button');
@@ -126,6 +158,7 @@ function renderSegments(list: HTMLElement, segments: BiliTranscriptSegment[]): v
     const text = document.createElement('span');
     text.className = 'subtitle-text';
     text.textContent = segment.text;
+    row.onclick = () => onSeek(segment.start);
     row.append(time, text);
     fragment.appendChild(row);
   }
@@ -152,6 +185,7 @@ export async function initializeSubtitlePage(): Promise<() => void> {
   const list = element<HTMLElement>('subtitle-list');
   const refresh = element<HTMLButtonElement>('action-refresh');
   const settings = element<HTMLButtonElement>('action-settings');
+  const returnCurrent = element<HTMLButtonElement>('return-current');
 
   let disposed = false;
   let generation = 0;
@@ -160,6 +194,13 @@ export async function initializeSubtitlePage(): Promise<() => void> {
   let currentIdentity: string | null = null;
   let currentResource: BiliSubtitleResource | null = null;
   let uiState: SubtitlePageUiState = { trackId: null, scrollTop: 0 };
+
+  // 播放同步状态
+  let stopPlaybackSync: (() => void) | null = null;
+  let syncSegments: BiliTranscriptSegment[] = [];
+  let activeIndex = -1;
+  let followEnabled = true;
+  let lastProgrammaticScrollAt = 0;
 
   const identityKeyOf = (identity: string): string | null => {
     const parts = splitIdentity(identity);
@@ -207,12 +248,92 @@ export async function initializeSubtitlePage(): Promise<() => void> {
     return resource as BiliSubtitleResource;
   }
 
+  function markProgrammaticScroll(): void {
+    lastProgrammaticScrollAt = Date.now();
+  }
+
+  function enableFollow(): void {
+    followEnabled = true;
+    returnCurrent.hidden = true;
+  }
+
+  function disableFollow(): void {
+    if (!followEnabled) return;
+    followEnabled = false;
+    returnCurrent.hidden = false;
+  }
+
+  function stopSync(): void {
+    stopPlaybackSync?.();
+    stopPlaybackSync = null;
+    syncSegments = [];
+    activeIndex = -1;
+    enableFollow();
+  }
+
+  /** 只更新变化的前后两个高亮节点，跟随启用时滚动到当前句 */
+  function applyPlaybackTime(currentTime: number): void {
+    const next = findActiveSegment(syncSegments, currentTime);
+    if (next === activeIndex) return;
+    const rows = list.querySelectorAll('.subtitle-row');
+    const previous = activeIndex >= 0 ? rows[activeIndex] : null;
+    const current = next >= 0 ? rows[next] : null;
+    previous?.classList.remove('active');
+    current?.classList.add('active');
+    activeIndex = next;
+    if (current && followEnabled) {
+      markProgrammaticScroll();
+      (current as HTMLElement).scrollIntoView({ block: 'center' });
+    }
+  }
+
+  /** 可释放的播放循环：仅页面可见时按 500ms 读取播放状态 */
+  function startPlaybackSync(tabId: number, identity: string, segments: BiliTranscriptSegment[]): () => void {
+    syncSegments = segments;
+    activeIndex = -1;
+    const tick = async (): Promise<void> => {
+      if (disposed || document.visibilityState !== 'visible') return;
+      const response = await sendTabMessage<GetBilibiliPlaybackStateResponse>(
+        tabId,
+        { type: 'GET_BILIBILI_PLAYBACK_STATE' },
+      );
+      if (disposed || identity !== currentIdentity || tabId !== currentTabId) return;
+      if (!response || !response.success) return;
+      applyPlaybackTime(response.currentTime);
+    };
+    void tick();
+    const timer = window.setInterval(() => { void tick(); }, POLL_INTERVAL_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }
+
+  async function seekTo(seconds: number): Promise<void> {
+    if (disposed || currentTabId === undefined || !currentIdentity) return;
+    const tabId = currentTabId;
+    const identity = currentIdentity;
+    const response = await sendTabMessage<SeekBilibiliVideoResponse>(tabId, {
+      type: 'SEEK_BILIBILI_VIDEO',
+      payload: { expectedIdentity: identity, seconds },
+    });
+    if (disposed || identity !== currentIdentity || tabId !== currentTabId) return;
+    if (!response || response.success) return;
+    if (response.error.code === 'PLAYER_NOT_READY') {
+      status.textContent = MSG_PLAYER_NOT_READY;
+      return;
+    }
+    // 身份已变化（如用户在同一标签页切换了视频）：重新探测恢复
+    void probeTabId(tabId);
+  }
+
   function renderLoading(): void {
+    stopSync();
     status.textContent = MSG_LOADING;
     list.replaceChildren();
   }
 
   function renderError(message: string): void {
+    stopSync();
     status.textContent = message;
     list.replaceChildren();
     select.replaceChildren();
@@ -224,8 +345,14 @@ export async function initializeSubtitlePage(): Promise<() => void> {
     status.textContent = '';
     title.textContent = resource.title;
     renderTrackOptions(select, resource);
-    renderSegments(list, groupTranscript(resource.lines));
+    const segments = groupTranscript(resource.lines);
+    renderSegments(list, segments, (seconds) => { void seekTo(seconds); });
     if (uiState.scrollTop > 0) list.scrollTop = uiState.scrollTop;
+    stopPlaybackSync?.();
+    enableFollow();
+    if (currentTabId !== undefined && currentIdentity) {
+      stopPlaybackSync = startPlaybackSync(currentTabId, currentIdentity, segments);
+    }
   }
 
   async function loadFor(args: {
@@ -331,11 +458,28 @@ export async function initializeSubtitlePage(): Promise<() => void> {
     });
   };
 
-  const onScroll = (): void => {
+  const onUserScroll = (): void => {
+    if (Date.now() - lastProgrammaticScrollAt < PROGRAMMATIC_SCROLL_WINDOW_MS) return;
+    disableFollow();
     if (disposed || !currentIdentity) return;
     writeUiState({ scrollTop: list.scrollTop });
   };
-  list.addEventListener('scroll', onScroll);
+  const onWheel = (): void => { disableFollow(); };
+  const onTouchMove = (): void => { disableFollow(); };
+  const onReturnCurrent = (): void => {
+    const rows = list.querySelectorAll<HTMLElement>('.subtitle-row');
+    const current = activeIndex >= 0 ? rows[activeIndex] : undefined;
+    if (current) {
+      markProgrammaticScroll();
+      current.scrollIntoView({ block: 'center' });
+    }
+    enableFollow();
+    if (currentIdentity) writeUiState({ scrollTop: list.scrollTop });
+  };
+  list.addEventListener('scroll', onUserScroll);
+  list.addEventListener('wheel', onWheel, { passive: true });
+  list.addEventListener('touchmove', onTouchMove, { passive: true });
+  returnCurrent.addEventListener('click', onReturnCurrent);
 
   const onTabActivated = ({ tabId }: chrome.tabs.OnActivatedInfo): void => {
     void probeTabId(tabId);
@@ -355,8 +499,12 @@ export async function initializeSubtitlePage(): Promise<() => void> {
 
   return () => {
     disposed = true;
+    stopSync();
     chrome.tabs.onActivated.removeListener(onTabActivated);
-    list.removeEventListener('scroll', onScroll);
+    list.removeEventListener('scroll', onUserScroll);
+    list.removeEventListener('wheel', onWheel);
+    list.removeEventListener('touchmove', onTouchMove);
+    returnCurrent.removeEventListener('click', onReturnCurrent);
   };
 }
 

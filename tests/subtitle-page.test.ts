@@ -356,3 +356,207 @@ describe('字幕页安全渲染', () => {
     expect(document.querySelector('#subtitle-list script')).toBeNull();
   });
 });
+
+describe('字幕页播放联动', () => {
+  let dispose: (() => void) | undefined;
+  const scrollIntoViewMock = Element.prototype.scrollIntoView as unknown as ReturnType<typeof vi.fn>;
+
+  const MULTI_SEGMENT_CDN: Record<string, unknown> = {
+    [HUMAN_ZH_URL]: {
+      body: [
+        { from: 0, to: 2, content: '第一句。' },
+        { from: 30, to: 32, content: '第二句。' },
+        { from: 60, to: 62, content: '第三句。' },
+      ],
+    },
+  };
+
+  function setVisibility(value: 'visible' | 'hidden'): void {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value });
+  }
+
+  function countPlaybackCalls(): number {
+    return tabsSendMessageMock.mock.calls.filter((call) => (call[1] as { type?: string }).type === 'GET_BILIBILI_PLAYBACK_STATE').length;
+  }
+
+  function seekMessages(): Array<{ payload: { expectedIdentity: string; seconds: number } }> {
+    return tabsSendMessageMock.mock.calls
+      .filter((call) => (call[1] as { type?: string }).type === 'SEEK_BILIBILI_VIDEO')
+      .map((call) => call[1] as { payload: { expectedIdentity: string; seconds: number } });
+  }
+
+  function activeRow(): Element | null {
+    return document.querySelector('#subtitle-list .subtitle-row.active');
+  }
+
+  interface PlaybackControls {
+    setTime: (value: number) => void;
+    setSeekResponse: (value: unknown) => void;
+  }
+
+  function mountPlaybackPage(options: { currentTime: number; paused?: boolean }): PlaybackControls {
+    let currentTime = options.currentTime;
+    let paused = options.paused ?? false;
+    let seekResponse: unknown = { success: true };
+    tabsSendMessageMock.mockImplementation((_tabId, message, callback) => {
+      const type = (message as { type?: string }).type;
+      if (type === 'GET_STATUS') {
+        callback?.(BILIBILI_STATUS);
+        return;
+      }
+      if (type === 'GET_BILIBILI_PLAYBACK_STATE') {
+        callback?.({ success: true, identity: 'BV1xx411c7mD:p2', currentTime, paused });
+        return;
+      }
+      if (type === 'SEEK_BILIBILI_VIDEO') {
+        callback?.(seekResponse);
+        return;
+      }
+    });
+    respondFetchJson({ cdn: MULTI_SEGMENT_CDN });
+    return {
+      setTime: (value) => { currentTime = value; },
+      setSeekResponse: (value) => { seekResponse = value; },
+    };
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    setVisibility('visible');
+    scrollIntoViewMock.mockClear();
+    mountSubtitlePage();
+    tabsQueryMock.mockImplementation((_query, callback) => {
+      callback?.([{ id: 7, active: true }] as chrome.tabs.Tab[]);
+    });
+  });
+
+  afterEach(() => {
+    dispose?.();
+    dispose = undefined;
+    vi.useRealTimers();
+  });
+
+  it('页面可见时每 500ms 读取一次播放状态', async () => {
+    mountPlaybackPage({ currentTime: 1 });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+    const afterStart = countPlaybackCalls();
+    expect(afterStart).toBeGreaterThanOrEqual(1);
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(countPlaybackCalls()).toBe(afterStart + 1);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(countPlaybackCalls()).toBe(afterStart + 2);
+  });
+
+  it('页面隐藏时停止读取播放状态', async () => {
+    setVisibility('hidden');
+    mountPlaybackPage({ currentTime: 1 });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(countPlaybackCalls()).toBe(0);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(countPlaybackCalls()).toBe(0);
+  });
+
+  it('当前时间只切换前后两个高亮元素且不重建列表', async () => {
+    const playback = mountPlaybackPage({ currentTime: 1 });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(activeRow()?.getAttribute('data-start')).toBe('0');
+    const activeNode = activeRow();
+
+    playback.setTime(31);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()?.getAttribute('data-start')).toBe('30');
+    expect(activeRow()).not.toBe(activeNode);
+    // 列表未被重建：旧行元素仍然在 DOM 中
+    expect(activeNode?.parentElement).toBe(document.querySelector('#subtitle-list'));
+
+    playback.setTime(61);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()?.getAttribute('data-start')).toBe('60');
+
+    // 时间落在段落间隙时不显示高亮
+    playback.setTime(10);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()).toBeNull();
+  });
+
+  it('点击行发送 SEEK_BILIBILI_VIDEO 并携带当前身份', async () => {
+    mountPlaybackPage({ currentTime: 1 });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const row = document.querySelectorAll('#subtitle-list .subtitle-row')[1] as HTMLButtonElement;
+    row.click();
+
+    expect(seekMessages()).toEqual([
+      { type: 'SEEK_BILIBILI_VIDEO', payload: { expectedIdentity: 'BV1xx411c7mD:p2', seconds: 30 } },
+    ]);
+    expect(document.querySelector('#subtitle-status')?.textContent).toBe('');
+  });
+
+  it('播放器未加载时点击行只显示轻量提示', async () => {
+    const playback = mountPlaybackPage({ currentTime: 1 });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+
+    playback.setSeekResponse({ success: false, error: { code: 'PLAYER_NOT_READY', message: '播放器尚未加载' } });
+    const row = document.querySelectorAll('#subtitle-list .subtitle-row')[0] as HTMLButtonElement;
+    row.click();
+    await Promise.resolve();
+
+    expect(document.querySelector('#subtitle-status')?.textContent).toBe('播放器尚未加载，请稍后重试');
+    // 字幕列表保持可读
+    expect(document.querySelectorAll('#subtitle-list .subtitle-row')).toHaveLength(3);
+  });
+
+  it('手动滚动暂停自动跟随并显示回到当前句，点击后恢复', async () => {
+    const playback = mountPlaybackPage({ currentTime: 1 });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(activeRow()?.getAttribute('data-start')).toBe('0');
+    scrollIntoViewMock.mockClear(); // 丢弃页面打开时初次定位的调用
+    const returnCurrent = document.querySelector('#return-current') as HTMLButtonElement;
+    expect(returnCurrent.hidden).toBe(true);
+
+    // 用户滚轮：暂停跟随并显示按钮
+    (document.querySelector('#subtitle-list') as HTMLElement).dispatchEvent(new WheelEvent('wheel'));
+    expect(returnCurrent.hidden).toBe(false);
+
+    // 播放推进到第二句：高亮切换，但不自动滚动
+    playback.setTime(31);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()?.getAttribute('data-start')).toBe('30');
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
+
+    // 点击「回到当前句」：滚动到当前行并恢复跟随
+    returnCurrent.click();
+    expect(scrollIntoViewMock).toHaveBeenCalledTimes(1);
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ block: 'center' });
+    expect(returnCurrent.hidden).toBe(true);
+
+    playback.setTime(61);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()?.getAttribute('data-start')).toBe('60');
+    expect(scrollIntoViewMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('触摸滚动同样暂停跟随', async () => {
+    const playback = mountPlaybackPage({ currentTime: 1 });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+    scrollIntoViewMock.mockClear(); // 丢弃页面打开时初次定位的调用
+    const returnCurrent = document.querySelector('#return-current') as HTMLButtonElement;
+
+    (document.querySelector('#subtitle-list') as HTMLElement).dispatchEvent(new Event('touchmove'));
+    expect(returnCurrent.hidden).toBe(false);
+
+    playback.setTime(31);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()?.getAttribute('data-start')).toBe('30');
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
+  });
+});

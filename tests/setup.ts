@@ -8,6 +8,8 @@ import { vi, beforeEach } from 'vitest';
 // ---- window 补丁 ----
 window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
 window.scrollBy = vi.fn() as unknown as typeof window.scrollBy;
+// jsdom 未实现 Element.scrollIntoView
+Element.prototype.scrollIntoView = vi.fn();
 
 // ---- chrome.* shim ----
 // 暴露可断言的数据结构，供各测试引用

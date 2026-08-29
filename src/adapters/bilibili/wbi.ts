@@ -16,8 +16,12 @@ export interface WbiKeys {
 export function extractWbiKeys(nav: { img_url?: string; sub_url?: string }): WbiKeys {
   const extract = (url: string | undefined): string | undefined => {
     if (!url) return undefined;
-    const filename = url.split(/[/?#]/).pop();
-    return filename?.replace(/\.[^.]+$/, '');
+    try {
+      const filename = new URL(url).pathname.split('/').pop();
+      return filename?.replace(/\.[^.]+$/, '');
+    } catch {
+      return undefined;
+    }
   };
 
   const imgKey = extract(nav.img_url);

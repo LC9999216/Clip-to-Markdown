@@ -12,6 +12,16 @@ describe('B站 WBI 签名', () => {
     });
   });
 
+  it('从带查询参数或片段的图片 URL 提取文件名密钥', () => {
+    expect(extractWbiKeys({
+      img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png?ver=1',
+      sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png#hash',
+    })).toEqual({
+      imgKey: '7cd084941338484aae1ad9425b84077c',
+      subKey: '4932caff0ff746eab6f01bf08b70ac45',
+    });
+  });
+
   it('缺少任一图片 URL 时抛出明确错误', () => {
     expect(() => extractWbiKeys({
       sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',

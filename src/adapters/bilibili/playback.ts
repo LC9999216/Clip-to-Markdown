@@ -16,6 +16,11 @@ function playbackIdentity(url: URL): string | null {
   return `${bvid}:p${page}`;
 }
 
+/** 字幕页与播放桥接共用的 B 站视频身份解析（BV 号 + 分 P）。 */
+export function parseBilibiliVideoIdentity(url: URL): string | null {
+  return playbackIdentity(url);
+}
+
 function unsupportedPage(): GetBilibiliPlaybackStateResponse {
   return {
     success: false,

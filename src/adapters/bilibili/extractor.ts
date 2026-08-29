@@ -11,50 +11,10 @@ import type { ContentDocument } from '../../core/schema';
 import { sourceBlockId, splitLongBlockText } from '../../analysis/source-blocks';
 import type { AnalysisSourceBlock } from '../../analysis/types';
 import type { FetchJsonCredentials, FetchJsonResponse } from '../../types/messages';
+import { fetchBilibiliSubtitleResource } from './subtitle-service';
+import type { BiliSubtitleLine } from './subtitle-types';
 
-// ---------- B 站 API 返回结构（仅声明用到的字段） ----------
-
-interface BiliApiResponse<T = unknown> {
-  code: number;
-  message?: string;
-  data: T;
-}
-
-interface BiliPage {
-  cid: number;
-  page: number;
-  part: string;
-  duration: number;
-}
-
-interface BiliVideoMeta {
-  aid: number;
-  title: string;
-  desc: string;
-  pubdate: number;
-  cid: number;
-  duration: number;
-  owner: { name: string };
-  pages: BiliPage[];
-}
-
-interface BiliSubtitleTrack {
-  id: number;
-  lan: string;
-  lan_doc: string;
-  subtitle_url: string;
-}
-
-interface BiliPlayerData {
-  subtitle?: { subtitles?: BiliSubtitleTrack[] };
-  view_points?: Array<{ content?: string; from?: number; to?: number }>;
-}
-
-export interface BiliSubtitleBodyItem {
-  from: number;
-  to: number;
-  content: string;
-}
+export type BiliSubtitleBodyItem = BiliSubtitleLine;
 
 export interface BiliChapter {
   title: string;
@@ -153,115 +113,6 @@ async function fetchJson(url: string, credentials?: FetchJsonCredentials): Promi
   const resp = await sendRuntimeMessage<FetchJsonResponse>(message);
   if (!resp.success) throw new ExtractionError('UNKNOWN', resp.error);
   return resp.data;
-}
-
-// ---------- B 站 API 调用 ----------
-
-async function fetchBiliVideoMeta(bvid: string): Promise<BiliVideoMeta> {
-  const payload = (await fetchJson(
-    `https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}`,
-  )) as BiliApiResponse<BiliVideoMeta>;
-  if (payload.code !== 0) {
-    throw new ExtractionError('NOT_FOUND_METADATA', payload.message || '无法获取视频信息');
-  }
-  return payload.data;
-}
-
-function pickPage(pages: BiliPage[], pageIndex: number, fallbackCid: number): { cid: number; part: string; duration: number } {
-  const list = Array.isArray(pages) ? pages : [];
-  const byIndex = list[pageIndex - 1];
-  if (byIndex?.cid) return { cid: byIndex.cid, part: byIndex.part ?? '', duration: byIndex.duration ?? 0 };
-  const byNo = list.find((p) => Number(p.page) === pageIndex);
-  if (byNo?.cid) return { cid: byNo.cid, part: byNo.part ?? '', duration: byNo.duration ?? 0 };
-  const first = list[0];
-  if (first?.cid) return { cid: first.cid, part: first.part ?? '', duration: first.duration ?? 0 };
-  return { cid: fallbackCid, part: '', duration: 0 };
-}
-
-interface SubtitleBundle {
-  tracks: BiliSubtitleTrack[];
-  chapters: BiliChapter[];
-}
-
-async function fetchSubtitleBundle(bvid: string, cid: number, aid: number): Promise<SubtitleBundle> {
-  const requests: Array<{ source: string; url: string }> = [];
-  if (aid) {
-    requests.push({
-      source: 'player-wbi-v2',
-      url: `https://api.bilibili.com/x/player/wbi/v2?aid=${aid}&cid=${cid}&bvid=${encodeURIComponent(bvid)}`,
-    });
-  }
-  requests.push({
-    source: 'player-v2',
-    url: `https://api.bilibili.com/x/player/v2?bvid=${encodeURIComponent(bvid)}&cid=${cid}${aid ? `&aid=${aid}` : ''}`,
-  });
-
-  for (const req of requests) {
-    let payload: BiliApiResponse<BiliPlayerData>;
-    try {
-      payload = (await fetchJson(req.url)) as BiliApiResponse<BiliPlayerData>;
-    } catch {
-      continue;
-    }
-    if (payload.code !== 0) continue;
-    const tracks = normalizeTracks(payload.data?.subtitle?.subtitles ?? []);
-    if (tracks.length > 0) {
-      return { tracks, chapters: normalizeChapters(payload.data?.view_points ?? []) };
-    }
-    // 该来源成功但无字幕：直接返回空，不再跨源兜底（与源插件对齐）
-    return { tracks: [], chapters: normalizeChapters(payload.data?.view_points ?? []) };
-  }
-  throw new ExtractionError('UNKNOWN', '无法获取字幕列表');
-}
-
-function normalizeSubtitleUrl(url: string): string {
-  const text = String(url || '').trim();
-  if (!text) return '';
-  return text.startsWith('//') ? `https:${text}` : text;
-}
-
-function normalizeTracks(tracks: BiliSubtitleTrack[]): BiliSubtitleTrack[] {
-  return (tracks || [])
-    .map((t) => ({ ...t, subtitle_url: normalizeSubtitleUrl(t.subtitle_url ?? '') }))
-    .filter((t) => t.subtitle_url)
-    .sort((a, b) => subtitlePriority(a) - subtitlePriority(b));
-}
-
-/** 中文优先（含 AI 中文），其次英文，再次其他 */
-function subtitlePriority(track: BiliSubtitleTrack): number {
-  const lan = String(track.lan || '').toLowerCase();
-  const label = String(track.lan_doc || '').toLowerCase();
-  if (lan === 'zh-cn' || lan === 'zh-hans') return 0;
-  if (lan === 'zh') return 1;
-  if (lan.includes('zh')) return 2;
-  if (label.includes('中文')) return 3;
-  if (lan === 'en' || lan === 'en-us' || lan === 'en-gb') return 10;
-  if (lan.includes('en')) return 11;
-  if (label.includes('英文') || label.includes('英语') || label.includes('english')) return 12;
-  return 50;
-}
-
-function normalizeChapterTime(value: unknown): number {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num < 0) return 0;
-  // 毫秒时间戳统一转秒
-  return num > 60 * 60 * 24 ? num / 1000 : num;
-}
-
-function normalizeChapters(points: Array<{ content?: string; from?: number; to?: number }>): BiliChapter[] {
-  return (points || [])
-    .map((p) => ({
-      title: String(p?.content ?? '').trim(),
-      from: normalizeChapterTime(p?.from),
-      to: normalizeChapterTime(p?.to),
-    }))
-    .filter((c) => c.title && c.from >= 0)
-    .sort((a, b) => a.from - b.from);
-}
-
-async function fetchSubtitleBody(url: string): Promise<BiliSubtitleBodyItem[]> {
-  const payload = (await fetchJson(url, 'omit')) as { body?: BiliSubtitleBodyItem[] };
-  return Array.isArray(payload?.body) ? payload.body : [];
 }
 
 // ---------- Markdown 拼装 ----------
@@ -389,32 +240,19 @@ export async function extractBilibiliVisualSourceAsync(doc: Document, url: URL):
     throw new ExtractionError('UNSUPPORTED_PAGE', ERROR_MESSAGES.UNSUPPORTED_PAGE);
   }
 
-  const meta = await fetchBiliVideoMeta(bvid);
-  const pageIndex = extractPageIndex(url);
-  const page = pickPage(meta.pages, pageIndex, meta.cid);
-  if (!page.cid) {
-    throw new ExtractionError('NOT_FOUND_METADATA', '无法定位当前视频分 P');
-  }
-
-  const bundle = await fetchSubtitleBundle(bvid, page.cid, meta.aid);
-  let body: BiliSubtitleBodyItem[] = [];
-  const track = bundle.tracks[0];
-  if (track) {
-    try {
-      body = await fetchSubtitleBody(track.subtitle_url);
-    } catch {
-      body = [];
-    }
-  }
-
-  const published = meta.pubdate > 0 ? formatLocalDate(meta.pubdate * 1000) : '';
-  const author = String(meta.owner?.name ?? readAuthorFromDom(doc)).trim() || '未知 UP 主';
-  const title = String(meta.title ?? readTitleFromDom(doc)).trim() || bvid;
-
-  const description = String(meta.desc ?? readDescriptionFromDom(doc)).trim();
+  const resource = await fetchBilibiliSubtitleResource({
+    url,
+    requestJson: fetchJson,
+    allowEmpty: true,
+  });
+  const { identity, chapters, lines: body } = resource;
+  const published = resource.publishedAt > 0 ? formatLocalDate(resource.publishedAt * 1000) : '';
+  const author = resource.author || readAuthorFromDom(doc) || '未知 UP 主';
+  const title = resource.title || readTitleFromDom(doc) || bvid;
+  const description = resource.description || readDescriptionFromDom(doc);
   const bodyMarkdown = buildBodyMarkdown({
     description,
-    chapters: bundle.chapters,
+    chapters,
     body,
     includeTimestamp: true,
   });
@@ -424,18 +262,18 @@ export async function extractBilibiliVisualSourceAsync(doc: Document, url: URL):
     metadata: {
       platform: 'bilibili',
       contentType: 'bilibili-video',
-      sourceUrl: canonicalVideoUrl(bvid, pageIndex),
+      sourceUrl: canonicalVideoUrl(identity.bvid, identity.pageIndex),
       author: { name: author },
       published,
       title,
-      id: bvid,
+      id: identity.bvid,
     },
     body: {
       type: 'article',
       children: [{ type: 'markdown', value: bodyMarkdown }],
     },
   };
-  return { document, sourceEntries: buildBilibiliSourceBlocks({ description, chapters: bundle.chapters, body }) };
+  return { document, sourceEntries: buildBilibiliSourceBlocks({ description, chapters, body }) };
 }
 
 export async function extractBilibiliAsync(doc: Document, url: URL): Promise<ContentDocument> {

@@ -201,6 +201,17 @@ describe('B 站无字幕降级', () => {
         } });
         return;
       }
+      if (message.url.includes('/x/web-interface/nav')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            isLogin: true,
+            img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+            sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+          },
+        } });
+        return;
+      }
       callback({ success: true, data: { code: 0, data: { subtitle: { subtitles: [] }, view_points: [{ content: '开场', from: 0, to: 20 }] } } });
     });
     const result = await bilibiliAdapter.extractVisualSource!(document, new URL('https://www.bilibili.com/video/BV1xx411c7mD/'));
@@ -226,6 +237,17 @@ describe('B 站字幕请求凭据', () => {
             duration: 60,
             owner: { name: 'UP 主' },
             pages: [{ cid: 20, page: 1, part: '', duration: 60 }],
+          },
+        } });
+        return;
+      }
+      if (message.url.includes('/x/web-interface/nav')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            isLogin: true,
+            img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+            sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
           },
         } });
         return;

@@ -10,7 +10,7 @@ import { BVID_RE } from './selectors';
 import type { ContentDocument } from '../../core/schema';
 import { sourceBlockId, splitLongBlockText } from '../../analysis/source-blocks';
 import type { AnalysisSourceBlock } from '../../analysis/types';
-import type { FetchJsonResponse } from '../../types/messages';
+import type { FetchJsonCredentials, FetchJsonResponse } from '../../types/messages';
 
 // ---------- B 站 API 返回结构（仅声明用到的字段） ----------
 
@@ -146,8 +146,11 @@ function sendRuntimeMessage<T>(msg: unknown): Promise<T> {
   });
 }
 
-async function fetchJson(url: string): Promise<unknown> {
-  const resp = await sendRuntimeMessage<FetchJsonResponse>({ type: 'FETCH_JSON', url });
+async function fetchJson(url: string, credentials?: FetchJsonCredentials): Promise<unknown> {
+  const message = credentials === undefined
+    ? { type: 'FETCH_JSON' as const, url }
+    : { type: 'FETCH_JSON' as const, url, credentials };
+  const resp = await sendRuntimeMessage<FetchJsonResponse>(message);
   if (!resp.success) throw new ExtractionError('UNKNOWN', resp.error);
   return resp.data;
 }
@@ -257,7 +260,7 @@ function normalizeChapters(points: Array<{ content?: string; from?: number; to?:
 }
 
 async function fetchSubtitleBody(url: string): Promise<BiliSubtitleBodyItem[]> {
-  const payload = (await fetchJson(url)) as { body?: BiliSubtitleBodyItem[] };
+  const payload = (await fetchJson(url, 'omit')) as { body?: BiliSubtitleBodyItem[] };
   return Array.isArray(payload?.body) ? payload.body : [];
 }
 

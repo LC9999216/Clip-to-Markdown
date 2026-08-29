@@ -10,6 +10,7 @@ import {
   tabsSendMessageMock,
 } from './setup';
 import type { ContentDocument } from '../src/core/schema';
+import { isFetchJsonRequest } from '../src/types/messages';
 
 const SETTINGS_KEY = 'clip2md.settings';
 
@@ -17,6 +18,62 @@ const DOWNLOAD = {
   type: 'DOWNLOAD',
   payload: { markdown: '# hi', filename: 'tweet.md' },
 };
+
+function okJson(data: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify(data),
+  } as unknown as Response;
+}
+
+describe('background FETCH_JSON handler', () => {
+  it('字幕 CDN 请求 credentials=omit → fetch 使用 omit', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okJson({ body: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resp = await dispatchRuntimeMessage(
+      {
+        type: 'FETCH_JSON',
+        url: 'https://aisubtitle.hdslb.com/a.json',
+        credentials: 'omit',
+      },
+      { url: 'https://www.bilibili.com/video/BV1xx411c7mD/' },
+    );
+
+    expect(resp).toEqual({ success: true, data: { body: [] } });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://aisubtitle.hdslb.com/a.json',
+      expect.objectContaining({ credentials: 'omit' }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('省略 credentials 的 B 站 API 请求默认使用 include', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okJson({ code: 0 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resp = await dispatchRuntimeMessage(
+      { type: 'FETCH_JSON', url: 'https://api.bilibili.com/x/web-interface/view' },
+      { url: 'https://www.bilibili.com/video/BV1xx411c7mD/' },
+    );
+
+    expect(resp).toEqual({ success: true, data: { code: 0 } });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.bilibili.com/x/web-interface/view',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('credentials=same-origin 被请求守卫拒绝', async () => {
+    expect(isFetchJsonRequest({
+      type: 'FETCH_JSON',
+      url: 'https://aisubtitle.hdslb.com/a.json',
+      credentials: 'same-origin',
+    })).toBe(false);
+  });
+});
 
 describe('background DOWNLOAD handler', () => {
   it('受信任 sender（扩展页）→ 执行下载', async () => {

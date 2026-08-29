@@ -19,6 +19,7 @@ import {
   isStartVisualAnalysisRequest,
   isTestAiRequest,
   isTestObsidianRequest,
+  type FetchJsonCredentials,
 } from '../types/messages';
 import './quick-save';
 import './visual-summary-command';
@@ -100,7 +101,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ success: false, error: '来自不受信任页面的请求已被拒绝。' });
       return false;
     }
-    handleFetchJson(msg.url)
+    handleFetchJson(msg.url, msg.credentials)
       .then((data) => sendResponse({ success: true, data }))
       .catch((e) => sendResponse({ success: false, error: String(e) }));
     return true;
@@ -205,7 +206,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
  * 代理抓取 B 站 JSON：带用户 cookie + referer，绕过内容脚本的页面 CORS 限制。
  * 仅允许 api.bilibili.com / *.hdslb.com 等白名单域名。
  */
-async function handleFetchJson(url: string): Promise<unknown> {
+async function handleFetchJson(url: string, credentials: FetchJsonCredentials = 'include'): Promise<unknown> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -227,7 +228,7 @@ async function handleFetchJson(url: string): Promise<unknown> {
 
   const resp = await fetch(url, {
     method: 'GET',
-    credentials: 'include',
+    credentials,
     cache: 'no-store',
     headers,
     referrer: 'https://www.bilibili.com/',

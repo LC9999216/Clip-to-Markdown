@@ -30,7 +30,8 @@ export type NavigationErrorCode = VisualNavigationErrorCode;
  * content script 请求 background 代理抓取 JSON（仅限 B 站相关域名）。
  * B 站字幕需要带用户 cookie + referer，且内容脚本受页面 CORS 限制，故统一走 SW 代理。
  */
-export type FetchJsonRequest = { type: 'FETCH_JSON'; url: string };
+export type FetchJsonCredentials = 'include' | 'omit';
+export type FetchJsonRequest = { type: 'FETCH_JSON'; url: string; credentials?: FetchJsonCredentials };
 export type FetchJsonResponse =
   | { success: true; data: unknown }
   | { success: false; error: string };
@@ -199,7 +200,10 @@ export function isNavigateToSourceRequest(m: unknown): m is NavigateToSourceRequ
 
 export function isFetchJsonRequest(m: unknown): m is FetchJsonRequest {
   if (!isRecord(m)) return false;
-  return m.type === 'FETCH_JSON' && typeof m.url === 'string' && m.url !== '';
+  return m.type === 'FETCH_JSON'
+    && typeof m.url === 'string'
+    && m.url !== ''
+    && (m.credentials === undefined || m.credentials === 'include' || m.credentials === 'omit');
 }
 
 export function isSaveToObsidianRequest(m: unknown): m is SaveToObsidianRequest {

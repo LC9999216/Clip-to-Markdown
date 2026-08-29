@@ -208,3 +208,53 @@ describe('B 站无字幕降级', () => {
     expect(renderDocument(result.document)).toContain('（暂无字幕）');
   });
 });
+
+describe('B 站字幕请求凭据', () => {
+  it('字幕 CDN 使用 omit，view/player API 保持默认 include', async () => {
+    const messages: Array<{ type: string; url: string; credentials?: string }> = [];
+    runtimeSendMessageMock.mockImplementation((message: { type: string; url: string; credentials?: string }, callback: (response: unknown) => void) => {
+      messages.push(message);
+      if (message.url.includes('/x/web-interface/view')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            aid: 10,
+            title: '有字幕视频',
+            desc: '视频简介',
+            pubdate: 0,
+            cid: 20,
+            duration: 60,
+            owner: { name: 'UP 主' },
+            pages: [{ cid: 20, page: 1, part: '', duration: 60 }],
+          },
+        } });
+        return;
+      }
+      if (message.url.includes('/x/player/wbi/v2')) {
+        callback({ success: true, data: {
+          code: 0,
+          data: {
+            subtitle: {
+              subtitles: [{
+                id: 1,
+                lan: 'zh-CN',
+                lan_doc: '中文',
+                subtitle_url: 'https://aisubtitle.hdslb.com/a.json',
+              }],
+            },
+            view_points: [],
+          },
+        } });
+        return;
+      }
+      callback({ success: true, data: { body: [{ from: 0, to: 2, content: '字幕正文' }] } });
+    });
+
+    await bilibiliAdapter.extractVisualSource!(document, new URL('https://www.bilibili.com/video/BV1xx411c7mD/'));
+
+    expect(messages.filter((message) => message.url.includes('api.bilibili.com'))
+      .every((message) => message.credentials === undefined)).toBe(true);
+    expect(messages.find((message) => message.url.includes('aisubtitle.hdslb.com')))
+      .toMatchObject({ credentials: 'omit' });
+  });
+});

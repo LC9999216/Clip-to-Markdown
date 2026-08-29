@@ -24,6 +24,25 @@ export type NavigateToSourceRequest = {
   payload: VisualSourceAnchor;
 };
 
+export type GetBilibiliPlaybackStateRequest = { type: 'GET_BILIBILI_PLAYBACK_STATE' };
+export type GetBilibiliPlaybackStateResponse =
+  | { success: true; identity: string; currentTime: number; paused: boolean }
+  | { success: false; error: { code: 'UNSUPPORTED_PAGE' | 'PLAYER_NOT_READY'; message: string } };
+
+export type SeekBilibiliVideoRequest = {
+  type: 'SEEK_BILIBILI_VIDEO';
+  payload: { expectedIdentity: string; seconds: number };
+};
+export type SeekBilibiliVideoResponse =
+  | { success: true }
+  | {
+    success: false;
+    error: {
+      code: 'INVALID_REQUEST' | 'UNSUPPORTED_PAGE' | 'PLAYER_NOT_READY' | 'SOURCE_CHANGED';
+      message: string;
+    };
+  };
+
 export type NavigationErrorCode = VisualNavigationErrorCode;
 
 /**
@@ -84,7 +103,13 @@ export type SaveCurrentTabResponse =
   | { success: true; filename: string }
   | { success: false; error: string };
 
-export type ContentRequest = StatusRequest | ExtractRequest | ExtractVisualSourceRequest | NavigateToSourceRequest;
+export type ContentRequest =
+  | StatusRequest
+  | ExtractRequest
+  | ExtractVisualSourceRequest
+  | NavigateToSourceRequest
+  | GetBilibiliPlaybackStateRequest
+  | SeekBilibiliVideoRequest;
 export type RuntimeMessage =
   | ContentRequest
   | DownloadRequest
@@ -138,6 +163,11 @@ export type DownloadResponse = { success: true; filename: string } | { success: 
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
+
+function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
 
 export function isDownloadRequest(m: unknown): m is DownloadRequest {
   if (!isRecord(m)) return false;
@@ -196,6 +226,28 @@ export function isNavigateToSourceRequest(m: unknown): m is NavigateToSourceRequ
     && typeof sourceQuote === 'string'
     && sourceQuote.trim() !== ''
     && Array.from(sourceQuote).length <= 140;
+}
+
+export function isGetBilibiliPlaybackStateRequest(m: unknown): m is GetBilibiliPlaybackStateRequest {
+  return isRecord(m)
+    && m.type === 'GET_BILIBILI_PLAYBACK_STATE'
+    && hasExactKeys(m, ['type']);
+}
+
+const BILIBILI_PLAYBACK_IDENTITY_RE = /^BV[0-9A-Za-z]+:p[1-9]\d*$/;
+
+export function isSeekBilibiliVideoRequest(m: unknown): m is SeekBilibiliVideoRequest {
+  if (!isRecord(m) || m.type !== 'SEEK_BILIBILI_VIDEO' || !hasExactKeys(m, ['type', 'payload'])) {
+    return false;
+  }
+  if (!isRecord(m.payload) || !hasExactKeys(m.payload, ['expectedIdentity', 'seconds'])) return false;
+  const { expectedIdentity, seconds } = m.payload;
+  return typeof expectedIdentity === 'string'
+    && BILIBILI_PLAYBACK_IDENTITY_RE.test(expectedIdentity)
+    && typeof seconds === 'number'
+    && Number.isFinite(seconds)
+    && seconds >= 0
+    && seconds <= 86400;
 }
 
 export function isFetchJsonRequest(m: unknown): m is FetchJsonRequest {

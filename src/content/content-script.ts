@@ -11,10 +11,16 @@ import { ExtractionError } from '../core/error';
 import type {
   ExtractResponse,
   ExtractVisualSourceResponse,
+  SeekBilibiliVideoResponse,
   NavigateToSourceResponse,
   StatusResponse,
 } from '../types/messages';
-import { isNavigateToSourceRequest } from '../types/messages';
+import {
+  isGetBilibiliPlaybackStateRequest,
+  isNavigateToSourceRequest,
+  isSeekBilibiliVideoRequest,
+} from '../types/messages';
+import { readBilibiliPlaybackState, seekBilibiliVideo } from '../adapters/bilibili/playback';
 import type { PlatformAdapter } from '../adapters/types';
 import type { PlatformContentType } from '../core/schema';
 import type { VisualSourceExtraction } from '../types/visual-source';
@@ -109,6 +115,28 @@ function handleExtractVisualSource(): ExtractVisualSourceResponse | Promise<Extr
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (typeof msg === 'object' && msg !== null) {
     const type = (msg as { type?: string }).type;
+    if (type === 'GET_BILIBILI_PLAYBACK_STATE') {
+      if (!isGetBilibiliPlaybackStateRequest(msg)) {
+        sendResponse({
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: '播放状态请求无效。' },
+        });
+        return false;
+      }
+      sendResponse(readBilibiliPlaybackState(document, currentUrl()));
+      return false;
+    }
+    if (type === 'SEEK_BILIBILI_VIDEO') {
+      if (!isSeekBilibiliVideoRequest(msg)) {
+        sendResponse({
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: '视频跳转请求无效。' },
+        } satisfies SeekBilibiliVideoResponse);
+        return false;
+      }
+      sendResponse(seekBilibiliVideo(document, currentUrl(), msg.payload));
+      return false;
+    }
     if (type === 'GET_STATUS') {
       sendResponse(handleGetStatus());
       return false;

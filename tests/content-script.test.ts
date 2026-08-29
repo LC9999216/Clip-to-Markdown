@@ -2,7 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import '../src/content/content-script';
 import { dispatchRuntimeMessage } from './setup';
 import { mountFixture } from './helpers';
-import type { ExtractResponse, ExtractVisualSourceResponse, StatusResponse } from '../src/types/messages';
+import type {
+  ExtractResponse,
+  ExtractVisualSourceResponse,
+  GetBilibiliPlaybackStateResponse,
+  SeekBilibiliVideoResponse,
+  StatusResponse,
+} from '../src/types/messages';
 
 /** jsdom 中重定向 window.location（jsdom 默认 origin 不匹配，用 defineProperty 覆盖） */
 function setLocation(url: string): void {
@@ -79,6 +85,54 @@ describe('content script 消息路由', () => {
     if (!resp.success) {
       expect(resp.error.code).toBe('UNSUPPORTED_PAGE');
     }
+  });
+});
+
+describe('content script B站播放器路由', () => {
+  it('B站播放器 GET 返回当前播放状态', async () => {
+    setLocation('https://www.bilibili.com/video/BV1xx411c7mD/?p=3');
+    document.body.innerHTML = '<video></video>';
+    const video = document.querySelector('video') as HTMLVideoElement;
+    video.currentTime = 18.75;
+    Object.defineProperty(video, 'paused', { configurable: true, value: false });
+
+    const response = await dispatchRuntimeMessage({ type: 'GET_BILIBILI_PLAYBACK_STATE' }) as GetBilibiliPlaybackStateResponse;
+
+    expect(response).toEqual({
+      success: true,
+      identity: 'BV1xx411c7mD:p3',
+      currentTime: 18.75,
+      paused: false,
+    });
+  });
+
+  it('B站播放器 SEEK 通过路由跳转且保持暂停', async () => {
+    setLocation('https://www.bilibili.com/video/BV1xx411c7mD/');
+    document.body.innerHTML = '<video></video>';
+    const video = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(video, 'paused', { configurable: true, value: true });
+    Object.defineProperty(video, 'play', { configurable: true, value: vi.fn(() => Promise.resolve()) });
+
+    const response = await dispatchRuntimeMessage({
+      type: 'SEEK_BILIBILI_VIDEO',
+      payload: { expectedIdentity: 'BV1xx411c7mD:p1', seconds: 120 },
+    }) as SeekBilibiliVideoResponse;
+
+    expect(response).toEqual({ success: true });
+    expect(video.currentTime).toBe(120);
+    expect(video.play).not.toHaveBeenCalled();
+  });
+
+  it('B站播放器拒绝非法 SEEK 请求', async () => {
+    const response = await dispatchRuntimeMessage({
+      type: 'SEEK_BILIBILI_VIDEO',
+      payload: { expectedIdentity: 'bad', seconds: Number.NaN },
+    });
+
+    expect(response).toEqual({
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: '视频跳转请求无效。' },
+    });
   });
 });
 

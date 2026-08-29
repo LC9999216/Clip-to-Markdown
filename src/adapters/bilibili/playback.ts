@@ -9,8 +9,10 @@ function playbackIdentity(url: URL): string | null {
   if (url.hostname !== 'www.bilibili.com') return null;
   const bvid = BVID_RE.exec(url.pathname)?.[1];
   if (!bvid) return null;
-  const requestedPage = Number(url.searchParams.get('p') ?? '1');
-  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  // 与 subtitle-service 的 positiveInteger 语义一致：非数值/非正数回退 1，小数截断，
+  // 保证同一 URL 在播放桥接与字幕资源两侧派生出相同身份。
+  const requestedPage = Math.floor(Number(url.searchParams.get('p') ?? '1'));
+  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   return `${bvid}:p${page}`;
 }
 

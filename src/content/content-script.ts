@@ -11,6 +11,7 @@ import { ExtractionError } from '../core/error';
 import type {
   ExtractResponse,
   ExtractVisualSourceResponse,
+  GetBilibiliPlaybackStateResponse,
   SeekBilibiliVideoResponse,
   NavigateToSourceResponse,
   StatusResponse,
@@ -120,7 +121,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({
           success: false,
           error: { code: 'INVALID_REQUEST', message: '播放状态请求无效。' },
-        });
+        } satisfies GetBilibiliPlaybackStateResponse);
         return false;
       }
       sendResponse(readBilibiliPlaybackState(document, currentUrl()));

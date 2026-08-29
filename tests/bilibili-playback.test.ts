@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { GetBilibiliPlaybackStateResponse } from '../src/types/messages';
 import {
   isGetBilibiliPlaybackStateRequest,
   isSeekBilibiliVideoRequest,
@@ -43,6 +44,15 @@ describe('B站播放器桥接', () => {
     expect(readBilibiliPlaybackState(document, VIDEO_URL)).toMatchObject({
       success: false,
       error: { code: 'PLAYER_NOT_READY' },
+    });
+  });
+
+  it('非整数分 P 参数与字幕服务一致按截断处理', () => {
+    mountVideo({ currentTime: 5, paused: true });
+
+    expect(readBilibiliPlaybackState(document, new URL('https://www.bilibili.com/video/BV1xx411c7mD/?p=2.7'))).toMatchObject({
+      success: true,
+      identity: 'BV1xx411c7mD:p2',
     });
   });
 
@@ -105,6 +115,14 @@ describe('B站播放器桥接', () => {
 });
 
 describe('B站播放器消息守卫', () => {
+  it('GET 请求无效时的响应属于声明的响应契约', () => {
+    const invalidResponse: GetBilibiliPlaybackStateResponse = {
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: '播放状态请求无效。' },
+    };
+    expect(invalidResponse.success).toBe(false);
+  });
+
   it('GET 只接受精确的无载荷请求', () => {
     expect(isGetBilibiliPlaybackStateRequest({ type: 'GET_BILIBILI_PLAYBACK_STATE' })).toBe(true);
     expect(isGetBilibiliPlaybackStateRequest({ type: 'GET_BILIBILI_PLAYBACK_STATE', payload: {} })).toBe(false);

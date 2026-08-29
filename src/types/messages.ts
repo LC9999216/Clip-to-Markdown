@@ -27,7 +27,7 @@ export type NavigateToSourceRequest = {
 export type GetBilibiliPlaybackStateRequest = { type: 'GET_BILIBILI_PLAYBACK_STATE' };
 export type GetBilibiliPlaybackStateResponse =
   | { success: true; identity: string; currentTime: number; paused: boolean }
-  | { success: false; error: { code: 'UNSUPPORTED_PAGE' | 'PLAYER_NOT_READY'; message: string } };
+  | { success: false; error: { code: 'INVALID_REQUEST' | 'UNSUPPORTED_PAGE' | 'PLAYER_NOT_READY'; message: string } };
 
 export type SeekBilibiliVideoRequest = {
   type: 'SEEK_BILIBILI_VIDEO';

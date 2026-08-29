@@ -106,6 +106,18 @@ describe('content script B站播放器路由', () => {
     });
   });
 
+  it('B站播放器拒绝非法 GET 请求', async () => {
+    setLocation('https://www.bilibili.com/video/BV1xx411c7mD/');
+    document.body.innerHTML = '<video></video>';
+
+    const response = await dispatchRuntimeMessage({ type: 'GET_BILIBILI_PLAYBACK_STATE', extra: 1 }) as GetBilibiliPlaybackStateResponse;
+
+    expect(response).toEqual({
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: '播放状态请求无效。' },
+    });
+  });
+
   it('B站播放器 SEEK 通过路由跳转且保持暂停', async () => {
     setLocation('https://www.bilibili.com/video/BV1xx411c7mD/');
     document.body.innerHTML = '<video></video>';

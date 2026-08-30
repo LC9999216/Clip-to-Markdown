@@ -414,7 +414,7 @@ describe('字幕页播放联动', () => {
     setSeekResponse: (value: unknown) => void;
   }
 
-  function mountPlaybackPage(options: { currentTime: number; paused?: boolean }): PlaybackControls {
+  function mountPlaybackPage(options: { currentTime: number; paused?: boolean; cdn?: Record<string, unknown> }): PlaybackControls {
     let currentTime = options.currentTime;
     let paused = options.paused ?? false;
     let seekResponse: unknown = { success: true };
@@ -433,7 +433,7 @@ describe('字幕页播放联动', () => {
         return;
       }
     });
-    respondFetchJson({ cdn: MULTI_SEGMENT_CDN });
+    respondFetchJson({ cdn: options.cdn ?? MULTI_SEGMENT_CDN });
     return {
       setTime: (value) => { currentTime = value; },
       setSeekResponse: (value) => { seekResponse = value; },
@@ -579,6 +579,68 @@ describe('字幕页播放联动', () => {
     expect(activeRow()?.getAttribute('data-start')).toBe('30');
     expect(scrollIntoViewMock).not.toHaveBeenCalled();
   });
+
+  it('细粒度分段后点击第三段跳到其新的起始时间（8 秒而不是 0 秒）', async () => {
+    mountPlaybackPage({ currentTime: 1, cdn: LONG_LINE_CDN });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const rows = document.querySelectorAll('#subtitle-list .subtitle-row');
+    expect(rows).toHaveLength(4);
+    (rows[2] as HTMLButtonElement).click();
+
+    expect(seekMessages()).toEqual([
+      { type: 'SEEK_BILIBILI_VIDEO', payload: { expectedIdentity: 'BV1xx411c7mD:p2', seconds: 8 } },
+    ]);
+  });
+
+  it('播放高亮按约 4 秒的短时间段切换', async () => {
+    const playback = mountPlaybackPage({ currentTime: 3.9, cdn: LONG_LINE_CDN });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(activeRow()?.getAttribute('data-start')).toBe('0');
+
+    playback.setTime(4);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()?.getAttribute('data-start')).toBe('4');
+
+    playback.setTime(8.5);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()?.getAttribute('data-start')).toBe('8');
+
+    playback.setTime(13.5);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()?.getAttribute('data-start')).toBe('12');
+
+    // 14 秒后没有下一源行：无高亮
+    playback.setTime(14);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()).toBeNull();
+  });
+
+  it('真实源行空档不生成占位行且播放到空档时无高亮', async () => {
+    const playback = mountPlaybackPage({
+      currentTime: 5,
+      cdn: {
+        [HUMAN_ZH_URL]: {
+          body: [
+            { from: 0, to: 2, content: '第一句' },
+            { from: 10, to: 12, content: '第二句' },
+          ],
+        },
+      },
+    });
+    dispose = await initializeSubtitlePage();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(document.querySelectorAll('#subtitle-list .subtitle-row')).toHaveLength(2);
+    expect(activeRow()).toBeNull();
+
+    playback.setTime(10.5);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(activeRow()?.getAttribute('data-start')).toBe('10');
+  });
 });
 
 // ---- AI 简中翻译兜底 ----
@@ -607,6 +669,12 @@ function makeEnglishJapanesePlayer() {
 const ENGLISH_JAPANESE_CDN: Record<string, unknown> = {
   [EN_URL]: { body: [{ from: 0, to: 4, content: ENGLISH_BODY }] },
   [JP_URL]: { body: [{ from: 0, to: 4, content: '日本語の字幕。' }] },
+};
+
+// 细粒度分段集成 fixture：84 个中文 code point、0~14 秒（对应截图里 00:00 → 00:14 一大段）
+const LONG_ZH_84 = '一二三四五六七八九十'.repeat(8) + '甲乙丙丁';
+const LONG_LINE_CDN: Record<string, unknown> = {
+  [HUMAN_ZH_URL]: { body: [{ from: 0, to: 14, content: LONG_ZH_84 }] },
 };
 
 function respondEnglishJapanese(translate?: unknown): void {
@@ -1077,5 +1145,88 @@ describe('字幕页翻译失败与并发', () => {
       expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toContain('你有没有发现');
     });
     expect((document.querySelector('#subtitle-list') as HTMLElement).scrollTop).toBe(120);
+  });
+});
+
+// ---- 细粒度展示分段（官方轨与 AI 虚拟轨同一规则） ----
+
+describe('字幕页细粒度分段', () => {
+  let dispose: (() => void) | undefined;
+
+  beforeEach(() => {
+    mountSubtitlePage();
+    tabsQueryMock.mockImplementation((_query, callback) => {
+      callback?.([{ id: 7, active: true }] as chrome.tabs.Tab[]);
+    });
+  });
+
+  afterEach(() => dispose?.());
+
+  it('官方中文长行渲染为 4 个约 4 秒的短段', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondFetchJson({ cdn: LONG_LINE_CDN });
+
+    dispose = await initializeSubtitlePage();
+
+    await vi.waitFor(() => expect(trackSelect().value).toBe('human-zh'));
+    const rows = document.querySelectorAll('#subtitle-list .subtitle-row');
+    expect(rows).toHaveLength(4);
+    expect([...rows].map((row) => row.getAttribute('data-start'))).toEqual(['0', '4', '8', '12']);
+    expect([...rows].map((row) => row.querySelector('.subtitle-time')?.textContent))
+      .toEqual(['00:00', '00:04', '00:08', '00:12']);
+    expect([...rows].map((row) => row.querySelector('.subtitle-text')?.textContent).join('')).toBe(LONG_ZH_84);
+    // 轨道选择仍显示官方中文轨名称
+    expect(trackSelect().selectedOptions[0]?.textContent).toBe('中文');
+  });
+
+  it('AI 中文虚拟轨使用同一分段规则且翻译请求只发生一次', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    // 分段发生在翻译结果返回之后：请求仍只有原始英文 1 行（0~4 秒）
+    respondEnglishJapanese({ success: true, lines: [{ from: 0, to: 14, content: LONG_ZH_84 }] });
+
+    dispose = await initializeSubtitlePage();
+
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+    const rows = document.querySelectorAll('#subtitle-list .subtitle-row');
+    expect(rows).toHaveLength(4);
+    expect([...rows].map((row) => row.getAttribute('data-start'))).toEqual(['0', '4', '8', '12']);
+    expect([...rows].map((row) => row.querySelector('.subtitle-text')?.textContent).join('')).toBe(LONG_ZH_84);
+    expect(translationCalls()).toBe(1);
+    expect(runtimeSendMessageMock).toHaveBeenCalledWith({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: {
+        sourceTrackId: 'ai-en',
+        lines: [{ from: 0, to: 4, content: ENGLISH_BODY }],
+      },
+    }, expect.any(Function));
+    // 分段不改变翻译行的时间范围：首段 0 秒、末段覆盖到 14 秒
+    expect(rows[0]?.getAttribute('data-start')).toBe('0');
+    expect(rows[3]?.querySelector('.subtitle-time')?.textContent).toBe('00:12');
+  });
+
+  it('切官方英文再切回 AI 中文：分段行数不变且不重复翻译', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondEnglishJapanese({ success: true, lines: [{ from: 0, to: 14, content: LONG_ZH_84 }] });
+
+    dispose = await initializeSubtitlePage();
+    await vi.waitFor(() => {
+      expect(document.querySelectorAll('#subtitle-list .subtitle-row')).toHaveLength(4);
+    });
+
+    trackSelect().value = 'ai-en';
+    trackSelect().dispatchEvent(new Event('change'));
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe(ENGLISH_BODY);
+    });
+
+    trackSelect().value = VIRTUAL_ID;
+    trackSelect().dispatchEvent(new Event('change'));
+    await vi.waitFor(() => {
+      expect(document.querySelectorAll('#subtitle-list .subtitle-row')).toHaveLength(4);
+    });
+    expect([...document.querySelectorAll('#subtitle-list .subtitle-text')].map((node) => node.textContent).join(''))
+      .toBe(LONG_ZH_84);
+    // 翻译缓存 key 只依赖源轨：切分后的行数变化不影响缓存命中
+    expect(translationCalls()).toBe(1);
   });
 });

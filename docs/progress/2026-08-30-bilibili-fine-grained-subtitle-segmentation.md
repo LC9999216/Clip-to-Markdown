@@ -59,7 +59,11 @@
 
 ## 五、自动化验证
 
-（待最终门禁回填）
+- **Task 2 后**：`npx vitest run tests/adapters/bilibili-transcript.test.ts tests/adapters/bilibili-subtitle-service.test.ts tests/adapters/bilibili.test.ts` → 45/45 通过（含 3 个保护文件对应测试）。
+- **Task 3 后**：`npx vitest run tests/subtitle-page.test.ts` → 52/52 一次通过（新增 6 个细粒度分段集成用例，未改 `subtitle.ts`）。
+- **全量**：`npm test` 38 文件 / **606 测试**全过（0 失败）。
+
+集成覆盖点：官方中文长行 4 段（data-start 0/4/8/12、显示 00:00/00:04/00:08/00:12、拼接不丢字）；AI 虚拟轨同规则 4 段且翻译请求仅 1 次（请求载荷仍为原始英文 1 行 0~4 秒——分段发生在翻译返回之后）；切官方英文再切回虚拟轨命中翻译缓存（key 只依赖源轨）；点击第三段 seek 8 秒；播放 3.9/4.0/8.5/13.5/14.0 秒高亮按短段切换、无下一行无高亮；0~2 与 10~12 真实空档无占位行、空档处无高亮。
 
 ## 六、手工 Chrome 验收
 

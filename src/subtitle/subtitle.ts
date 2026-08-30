@@ -20,6 +20,7 @@ import type {
   GetBilibiliPlaybackStateResponse,
   SeekBilibiliVideoResponse,
   StatusResponse,
+  SubtitleTranslationErrorCode,
   TranslateBilibiliSubtitlesResponse,
 } from '../types/messages';
 import { isTranslateBilibiliSubtitlesResponse } from '../types/messages';
@@ -191,6 +192,23 @@ function pageErrorMessage(error: unknown): string {
     }
   }
   return MSG_FETCH_FAILED;
+}
+
+/** 翻译错误码 → 可操作的中文提示；绝不包含 provider 原始响应或 API Key。 */
+function translationErrorMessage(code: SubtitleTranslationErrorCode): string {
+  switch (code) {
+    case 'AI_TRANSLATION_DISABLED': return '该视频没有简体中文字幕；请在设置中开启B站字幕自动翻译';
+    case 'AI_NOT_CONFIGURED': return '字幕翻译需要先配置并启用AI服务';
+    case 'AI_HOST_NOT_GRANTED': return 'AI接口尚未授权，请在设置中授权并测试';
+    case 'AI_AUTH_FAILED': return 'AI服务认证失败，请检查API Key';
+    case 'AI_ENDPOINT_OR_MODEL_NOT_FOUND': return 'AI接口或模型不存在，请检查设置';
+    case 'AI_RATE_LIMITED': return 'AI字幕翻译请求过于频繁或额度不足';
+    case 'AI_PROVIDER_ERROR': return 'AI字幕翻译服务暂时不可用';
+    case 'AI_TIMEOUT': return 'AI字幕翻译超时，请稍后刷新';
+    case 'AI_NETWORK_ERROR': return '无法连接AI字幕翻译服务';
+    case 'AI_INVALID_RESPONSE': return 'AI返回的字幕翻译格式无效，请刷新重试';
+    default: return 'AI字幕翻译失败，请稍后刷新';
+  }
 }
 
 /** 请求 Background 代理翻译；响应经过严格守卫，不可信数据不进入渲染。 */
@@ -544,9 +562,10 @@ export async function initializeSubtitlePage(): Promise<() => void> {
             }
             virtual = { trackId: virtualTrackId, lines: response.lines };
           } else {
-            // 翻译失败：先保留可读的官方英文正文，再给出状态提示；不清空轨道与正文
+            // 翻译失败：先用源英文官方正文 renderReady，再设置状态文案；
+            // 不能调用 renderError（会清空轨道与正文）。
             renderReady(resource);
-            status.textContent = `AI字幕翻译失败（${response.code}）`;
+            status.textContent = translationErrorMessage(response.code);
             return;
           }
         }

@@ -28,6 +28,12 @@ export type SubtitleCompletion = (
   options: TextCompletionOptions,
 ) => Promise<string>;
 
+/** 批次级持久化钩子：重试时可跳过已翻译批次，避免为同一批内容重复付费。 */
+export interface SubtitleTranslationHooks {
+  loadBatch?(batchStart: number, sourceBatch: BiliSubtitleLine[]): BiliSubtitleLine[] | undefined;
+  saveBatch?(batchStart: number, sourceBatch: BiliSubtitleLine[], translated: BiliSubtitleLine[]): void;
+}
+
 const TRANSLATION_SYSTEM_PROMPT = `你是B站视频的英文字幕翻译器。把输入的英文字幕逐行翻译成简体中文。
 要求：
 - 只做翻译，不解释、不总结、不评注。
@@ -103,6 +109,24 @@ function parseTranslationResponse(raw: string, expectedCount: number): Map<strin
   return byId;
 }
 
+/**
+ * 便宜的整批回显启发式：源行含英文字母而全部译文都不含任何 CJK 字符时，
+ * 判定为"未翻译"（单个专有名词行保留英文是允许的，不触发）。
+ */
+function batchLooksUntranslated(sourceBatch: BiliSubtitleLine[], translated: Map<string, string>): boolean {
+  if (!sourceBatch.some((line) => /[A-Za-z]/.test(line.content))) return false;
+  for (const text of translated.values()) {
+    if (/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(text)) return false;
+  }
+  return true;
+}
+
+/** 校验缓存批次：必须与源行等长且时间码一致，否则忽略。 */
+function cachedBatchMatches(sourceBatch: BiliSubtitleLine[], cached: BiliSubtitleLine[]): boolean {
+  return cached.length === sourceBatch.length
+    && cached.every((line, index) => line.from === sourceBatch[index]?.from && line.to === sourceBatch[index]?.to);
+}
+
 async function translateBatch(
   batch: BiliSubtitleLine[],
   settings: AiSettings,
@@ -117,7 +141,8 @@ async function translateBatch(
   ];
 
   const first = parseTranslationResponse(await complete(settings, messages, COMPLETION_OPTIONS), batch.length);
-  if (first !== null) {
+  const firstValid = first !== null && !batchLooksUntranslated(batch, first);
+  if (firstValid) {
     return batch.map((line, index) => ({ from: line.from, to: line.to, content: first.get(lineId(index))! }));
   }
 
@@ -126,7 +151,7 @@ async function translateBatch(
     { role: 'user', content: userContent },
   ];
   const repaired = parseTranslationResponse(await complete(settings, repairMessages, COMPLETION_OPTIONS), batch.length);
-  if (repaired === null) {
+  if (repaired === null || batchLooksUntranslated(batch, repaired)) {
     throw new VisualAnalysisRequestError('AI_INVALID_RESPONSE', 'AI 返回的字幕翻译格式无效，请重试。');
   }
   return batch.map((line, index) => ({ from: line.from, to: line.to, content: repaired.get(lineId(index))! }));
@@ -135,16 +160,27 @@ async function translateBatch(
 /**
  * 把英文字幕行翻译为简体中文行：
  * 分批请求 AI，按 ID 回填译文，严格保留时间码与顺序。
+ * 提供 hooks 时按批次读写缓存，失败重试可跳过已翻译批次。
  */
 export async function translateBilibiliSubtitleLines(
   lines: BiliSubtitleLine[],
   settings: AiSettings,
   complete: SubtitleCompletion = completeText,
+  hooks: SubtitleTranslationHooks = {},
 ): Promise<BiliSubtitleLine[]> {
   if (lines.length === 0) return [];
   const results: BiliSubtitleLine[] = [];
+  let batchStart = 0;
   for (const batch of buildBatches(lines)) {
-    results.push(...await translateBatch(batch, settings, complete));
+    const cached = hooks.loadBatch?.(batchStart, batch);
+    if (cached && cachedBatchMatches(batch, cached)) {
+      results.push(...cached);
+    } else {
+      const translated = await translateBatch(batch, settings, complete);
+      hooks.saveBatch?.(batchStart, batch, translated);
+      results.push(...translated);
+    }
+    batchStart += batch.length;
   }
   return results;
 }

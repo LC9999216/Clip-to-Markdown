@@ -8,8 +8,12 @@ import { getAiOriginPattern } from '../core/ai-settings';
 import { sanitizeFilenamePart } from '../core/filename';
 import { loadSettings, resolveDownloadPath } from '../core/settings';
 import { saveToObsidian, testObsidian } from './obsidian';
-import { testAiConnection, VisualAnalysisRequestError } from '../analysis/client';
-import { translateBilibiliSubtitleLines } from '../analysis/subtitle-translation';
+import { completeText, testAiConnection, VisualAnalysisRequestError } from '../analysis/client';
+import {
+  translateBilibiliSubtitleLines,
+  type SubtitleTranslationHooks,
+} from '../analysis/subtitle-translation';
+import type { BiliSubtitleLine } from '../adapters/bilibili/subtitle-types';
 import { getVisualAnalysisState, startVisualAnalysis } from './visual-summary';
 import { runSave } from './quick-save';
 import {
@@ -98,6 +102,23 @@ function hasOriginPermission(pattern: string): Promise<boolean> {
   });
 }
 
+/** Service Worker 生命周期内的批次翻译备忘：重试时避免为同一批内容重复付费。 */
+const subtitleBatchMemo = new Map<string, BiliSubtitleLine[]>();
+
+function batchMemoKey(sourceTrackId: string, batchStart: number, batch: BiliSubtitleLine[]): string {
+  const fingerprint = batch.map((line) => `${line.from}-${line.to}-${line.content}`).join('|');
+  return `${sourceTrackId}:${batchStart}:${batch.length}:${fingerprint}`;
+}
+
+function subtitleTranslationHooks(sourceTrackId: string): SubtitleTranslationHooks {
+  return {
+    loadBatch: (batchStart, batch) => subtitleBatchMemo.get(batchMemoKey(sourceTrackId, batchStart, batch)),
+    saveBatch: (batchStart, batch, translated) => {
+      subtitleBatchMemo.set(batchMemoKey(sourceTrackId, batchStart, batch), translated);
+    },
+  };
+}
+
 /**
  * 受信任扩展页的字幕翻译管道：
  * 开关 → 配置完整性 → 主机权限 → 分批 AI 翻译。绝不返回 provider 原始错误正文。
@@ -126,7 +147,7 @@ async function handleTranslateBilibiliSubtitles(payload: {
     return { success: false, code: 'AI_HOST_NOT_GRANTED', error: 'AI接口尚未授权，请在设置中授权并测试。' };
   }
   try {
-    const lines = await translateBilibiliSubtitleLines(payload.lines, ai);
+    const lines = await translateBilibiliSubtitleLines(payload.lines, ai, completeText, subtitleTranslationHooks(payload.sourceTrackId));
     return { success: true, lines };
   } catch (error) {
     if (error instanceof VisualAnalysisRequestError) {

@@ -350,12 +350,8 @@ function isTranslatedSubtitleLine(line: unknown): line is BiliSubtitleLine {
   return isTranslatableSubtitleLine(line);
 }
 
-export function isTranslateBilibiliSubtitlesRequest(m: unknown): m is TranslateBilibiliSubtitlesRequest {
-  if (!isRecord(m) || m.type !== 'TRANSLATE_BILIBILI_SUBTITLES') return false;
-  if (!isRecord(m.payload) || !hasExactKeys(m.payload, ['sourceTrackId', 'lines'])) return false;
-  const { sourceTrackId, lines } = m.payload;
-  if (typeof sourceTrackId !== 'string' || sourceTrackId === '') return false;
-  if (Array.from(sourceTrackId).length > MAX_SOURCE_TRACK_ID_CHARS) return false;
+/** 翻译请求行数/长度/时间上限（Background 守卫与字幕页预检共用同一份）。 */
+export function canTranslateSubtitleLines(lines: unknown): lines is BiliSubtitleLine[] {
   if (!Array.isArray(lines) || lines.length === 0 || lines.length > MAX_TRANSLATE_REQUEST_LINES) return false;
   let totalChars = 0;
   for (const line of lines) {
@@ -364,6 +360,33 @@ export function isTranslateBilibiliSubtitlesRequest(m: unknown): m is TranslateB
     if (totalChars > MAX_TRANSLATE_TOTAL_CHARS) return false;
   }
   return true;
+}
+
+const SUBTITLE_TRANSLATION_ERROR_CODES: readonly string[] = [
+  'AI_TRANSLATION_DISABLED',
+  'AI_NOT_CONFIGURED',
+  'AI_HOST_NOT_GRANTED',
+  'AI_AUTH_FAILED',
+  'AI_ENDPOINT_OR_MODEL_NOT_FOUND',
+  'AI_RATE_LIMITED',
+  'AI_PROVIDER_ERROR',
+  'AI_TIMEOUT',
+  'AI_NETWORK_ERROR',
+  'AI_INVALID_RESPONSE',
+];
+
+export function isSubtitleTranslationErrorCode(value: unknown): value is SubtitleTranslationErrorCode {
+  return typeof value === 'string' && SUBTITLE_TRANSLATION_ERROR_CODES.includes(value);
+}
+
+export function isTranslateBilibiliSubtitlesRequest(m: unknown): m is TranslateBilibiliSubtitlesRequest {
+  if (!isRecord(m) || !hasExactKeys(m, ['type', 'payload'])) return false;
+  if (m.type !== 'TRANSLATE_BILIBILI_SUBTITLES') return false;
+  if (!isRecord(m.payload) || !hasExactKeys(m.payload, ['sourceTrackId', 'lines'])) return false;
+  const { sourceTrackId } = m.payload;
+  if (typeof sourceTrackId !== 'string' || sourceTrackId === '') return false;
+  if (Array.from(sourceTrackId).length > MAX_SOURCE_TRACK_ID_CHARS) return false;
+  return canTranslateSubtitleLines(m.payload.lines);
 }
 
 /** 校验 Background 返回的翻译行；不可信数据不能直接渲染。 */
@@ -375,18 +398,6 @@ export function isTranslateBilibiliSubtitlesResponse(m: unknown): m is Translate
     }
     return m.lines.every((line) => isTranslatedSubtitleLine(line));
   }
-  const codes: readonly string[] = [
-    'AI_TRANSLATION_DISABLED',
-    'AI_NOT_CONFIGURED',
-    'AI_HOST_NOT_GRANTED',
-    'AI_AUTH_FAILED',
-    'AI_ENDPOINT_OR_MODEL_NOT_FOUND',
-    'AI_RATE_LIMITED',
-    'AI_PROVIDER_ERROR',
-    'AI_TIMEOUT',
-    'AI_NETWORK_ERROR',
-    'AI_INVALID_RESPONSE',
-  ];
-  return codes.includes(m.code as string) && typeof m.error === 'string';
+  return isSubtitleTranslationErrorCode(m.code) && typeof m.error === 'string';
 }
 

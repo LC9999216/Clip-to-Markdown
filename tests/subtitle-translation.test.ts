@@ -176,4 +176,86 @@ describe('translateBilibiliSubtitleLines', () => {
     await expect(translateBilibiliSubtitleLines([], SETTINGS, complete)).resolves.toEqual([]);
     expect(complete).not.toHaveBeenCalled();
   });
+
+  it('批次结果经 saveBatch 持久化，loadBatch 命中时不重复调用 AI', async () => {
+    const source = Array.from({ length: 120 }, (_, index) => ({
+      from: index * 2,
+      to: index * 2 + 2,
+      content: `Sentence ${index + 1}.`,
+    }));
+    const memo = new Map<number, Array<{ from: number; to: number; content: string }>>();
+    const hooks = {
+      loadBatch: (batchStart: number) => memo.get(batchStart),
+      saveBatch: (batchStart: number, _sourceBatch: unknown, translated: Array<{ from: number; to: number; content: string }>) => {
+        memo.set(batchStart, translated);
+      },
+    };
+    const complete = vi.fn().mockImplementation((_settings: unknown, messages: Array<{ role: string; content: string }>) => {
+      const user = messages.find((message) => message.role === 'user');
+      const payload = JSON.parse(user!.content) as { lines: Array<{ id: string; text: string }> };
+      return Promise.resolve(JSON.stringify({
+        translations: payload.lines.map((line) => ({ id: line.id, text: `译文-${line.id}` })),
+      }));
+    });
+
+    const first = await translateBilibiliSubtitleLines(source, SETTINGS, complete, hooks);
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(memo.size).toBe(2);
+
+    const completeAgain = vi.fn();
+    const second = await translateBilibiliSubtitleLines(source, SETTINGS, completeAgain, hooks);
+
+    expect(second).toEqual(first);
+    expect(completeAgain).not.toHaveBeenCalled();
+  });
+
+  it('缓存批次与源行时间码不符时忽略缓存并重新请求', async () => {
+    const hooks = {
+      loadBatch: (batchStart: number) =>
+        batchStart === 0 ? [{ from: 999, to: 1000, content: '脏缓存' }] : undefined,
+      saveBatch: () => {},
+    };
+    const complete = vi.fn().mockResolvedValue(JSON.stringify({
+      translations: [
+        { id: 'L0001', text: '你有没有注意到？' },
+        { id: 'L0002', text: '真正拉开差距的是方法。' },
+      ],
+    }));
+
+    const result = await translateBilibiliSubtitleLines(SOURCE, SETTINGS, complete, hooks);
+
+    expect(result).toEqual([
+      { from: 0, to: 2.5, content: '你有没有注意到？' },
+      { from: 2.5, to: 5, content: '真正拉开差距的是方法。' },
+    ]);
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('整批英文回显触发修复；修复仍回显则失败', async () => {
+    const echoBody = JSON.stringify({
+      translations: [
+        { id: 'L0001', text: 'Have you noticed it?' },
+        { id: 'L0002', text: 'The methods make the difference.' },
+      ],
+    });
+    const complete = vi.fn().mockResolvedValue(echoBody);
+
+    await expect(translateBilibiliSubtitleLines(SOURCE, SETTINGS, complete))
+      .rejects.toMatchObject({ code: 'AI_INVALID_RESPONSE' });
+    expect(complete).toHaveBeenCalledTimes(2);
+  });
+
+  it('个别行保留英文专名不算整批回显', async () => {
+    const complete = vi.fn().mockResolvedValue(JSON.stringify({
+      translations: [
+        { id: 'L0001', text: '你有没有注意到？' },
+        { id: 'L0002', text: 'OpenAI' },
+      ],
+    }));
+
+    const result = await translateBilibiliSubtitleLines(SOURCE, SETTINGS, complete);
+
+    expect(result.map((line) => line.content)).toEqual(['你有没有注意到？', 'OpenAI']);
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
 });

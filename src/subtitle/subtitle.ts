@@ -23,13 +23,21 @@ import type {
   SubtitleTranslationErrorCode,
   TranslateBilibiliSubtitlesResponse,
 } from '../types/messages';
-import { isTranslateBilibiliSubtitlesResponse } from '../types/messages';
+import {
+  canTranslateSubtitleLines,
+  isSubtitleTranslationErrorCode,
+  isTranslateBilibiliSubtitlesResponse,
+} from '../types/messages';
 
 const CACHE_PREFIX = 'clip2md.bilibiliSubtitle.cache.v1.';
 const UI_PREFIX = 'clip2md.bilibiliSubtitle.ui.v2.';
 const TRANSLATION_CACHE_PREFIX = 'clip2md.bilibiliSubtitle.translation.v1.';
+const TRANSLATION_FAILURE_PREFIX = 'clip2md.bilibiliSubtitle.translationFailed.v1.';
+/** 翻译失败标记的有效期：期内自动重开不重复付费，用户刷新仍可立即重试 */
+const TRANSLATION_FAILURE_TTL_MS = 10 * 60 * 1000;
 const TRANSLATED_TRACK_PREFIX = 'clip2md-ai-zh:';
 const TRANSLATED_TRACK_LABEL = '简体中文（AI 翻译）';
+const MSG_TRANSLATION_LIMIT = '字幕行数或长度超出自动翻译上限，已保留官方字幕';
 
 const POLL_INTERVAL_MS = 500;
 /** scrollIntoView 触发的滚动事件在该时间窗内视为程序滚动 */
@@ -374,6 +382,23 @@ export async function initializeSubtitlePage(): Promise<() => void> {
     return parseTranslationCacheEntry(await sessionGet(key), sourceTrackId);
   }
 
+  function writeTranslationFailure(identityKey: string, sourceTrackId: string, code: SubtitleTranslationErrorCode): void {
+    void chrome.storage.session.set({
+      [`${TRANSLATION_FAILURE_PREFIX}${identityKey}:${sourceTrackId}`]: { code, at: Date.now() },
+    });
+  }
+
+  /** 失败标记带 TTL：期内重新打开同一视频不再自动重试（避免重复付费），刷新仍可手动重试。 */
+  async function readTranslationFailure(identityKey: string, sourceTrackId: string): Promise<SubtitleTranslationErrorCode | undefined> {
+    const value = await sessionGet(`${TRANSLATION_FAILURE_PREFIX}${identityKey}:${sourceTrackId}`);
+    if (!value || typeof value !== 'object') return undefined;
+    const { code, at } = value as Record<string, unknown>;
+    if (typeof at !== 'number' || !Number.isFinite(at) || Date.now() - at > TRANSLATION_FAILURE_TTL_MS) {
+      return undefined;
+    }
+    return isSubtitleTranslationErrorCode(code) ? code : undefined;
+  }
+
   function markProgrammaticScroll(): void {
     lastProgrammaticScrollAt = Date.now();
   }
@@ -494,6 +519,8 @@ export async function initializeSubtitlePage(): Promise<() => void> {
     const virtualPreferred = preferred && isVirtualTrackId(preferred)
       ? sourceTrackIdOfVirtual(preferred)
       : null;
+    // 刷新按钮与手动切轨视为用户显式意图：绕过失败标记，立即重试
+    const userInitiated = args.forceRefresh || args.preferredTrackId !== undefined;
     const isStale = (): boolean => disposed || args.gen !== generation || args.tabId !== currentTabId;
 
     // 手动偏好官方轨：直接命中官方会话缓存
@@ -547,6 +574,12 @@ export async function initializeSubtitlePage(): Promise<() => void> {
 
       let virtual: VirtualTranslation | null = null;
       if (virtualSourceId) {
+        // 超出上限的官方字幕不做自动翻译（Background 也会拒绝这类载荷），保留可读正文
+        if (!canTranslateSubtitleLines(resource.lines)) {
+          renderReady(resource);
+          status.textContent = MSG_TRANSLATION_LIMIT;
+          return;
+        }
         const virtualTrackId = virtualTrackIdOf(virtualSourceId);
         const cachedTranslation = !args.forceRefresh && identityKey
           ? await readTranslationCache(identityKey, virtualSourceId)
@@ -554,6 +587,15 @@ export async function initializeSubtitlePage(): Promise<() => void> {
         if (cachedTranslation) {
           virtual = { trackId: virtualTrackId, lines: cachedTranslation.lines };
         } else {
+          // 非用户显式动作时，最近失败过的视频在 TTL 内不再自动重试（避免重复付费）
+          if (!userInitiated && identityKey) {
+            const failureCode = await readTranslationFailure(identityKey, virtualSourceId);
+            if (failureCode) {
+              renderReady(resource);
+              status.textContent = translationErrorMessage(failureCode);
+              return;
+            }
+          }
           const response = await requestTranslation(virtualSourceId, resource.lines);
           if (isStale()) return;
           if (response.success) {
@@ -562,6 +604,7 @@ export async function initializeSubtitlePage(): Promise<() => void> {
             }
             virtual = { trackId: virtualTrackId, lines: response.lines };
           } else {
+            if (identityKey) writeTranslationFailure(identityKey, virtualSourceId, response.code);
             // 翻译失败：先用源英文官方正文 renderReady，再设置状态文案；
             // 不能调用 renderError（会清空轨道与正文）。
             renderReady(resource);
@@ -571,8 +614,6 @@ export async function initializeSubtitlePage(): Promise<() => void> {
         }
       }
 
-      // 自动加载成功不得写轨道偏好；只重置内存中的滚动位置
-      uiState = { ...uiState, scrollTop: 0 };
       renderReady(resource, virtual);
     } catch (error) {
       if (isStale()) return;
@@ -627,7 +668,9 @@ export async function initializeSubtitlePage(): Promise<() => void> {
       tabId: currentTabId,
       gen,
       forceRefresh: true,
-      preferredTrackId: select.value || undefined,
+      // 用持久化偏好而不是 select 当前值：翻译失败回退到官方轨后，
+      // 刷新仍应重试翻译，而不是被当成手动官方偏好
+      preferredTrackId: uiState.preferredTrackId ?? undefined,
     });
   };
 

@@ -393,6 +393,12 @@ describe('TRANSLATE_BILIBILI_SUBTITLES payload guard', () => {
         lines: [{ from: 0, to: 2, content: 'Hello', url: 'https://evil.example.com' }],
       },
     })).toBe(false);
+    // 请求顶层也不允许多余字段
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en', lines: [{ from: 0, to: 2, content: 'Hello' }] },
+      pageUrl: 'https://www.bilibili.com/video/BV1xx/',
+    })).toBe(false);
   });
 
   it('强制行数、字符数、时间与 ID 上限', () => {
@@ -517,6 +523,24 @@ describe('background TRANSLATE_BILIBILI_SUBTITLES handler', () => {
     vi.unstubAllGlobals();
   });
 
+  it('同批次重试命中 Background 内存备忘，不重复调用 AI', async () => {
+    mockStoredSettings['clip2md.settings'] = translateSettings();
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify({
+      translations: [{ id: 'L0001', text: '你好' }],
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER)).toMatchObject({ success: true });
+    fetchMock.mockClear();
+
+    const retry = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+
+    expect(retry).toEqual({ success: true, lines: [{ from: 0, to: 2, content: '你好' }] });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it.each([
     [401, 'AI_AUTH_FAILED'],
     [404, 'AI_ENDPOINT_OR_MODEL_NOT_FOUND'],
@@ -530,8 +554,13 @@ describe('background TRANSLATE_BILIBILI_SUBTITLES handler', () => {
       status,
       json: async () => ({ error: { message: 'secret-provider-detail sk-internal-key' } }),
     }));
+    // 每个用例使用独立 sourceTrackId，避免命中前序测试写入的批次备忘
+    const message = {
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: `ai-en-error-${status}`, lines: [{ from: 0, to: 2, content: 'Hello' }] },
+    };
 
-    const resp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+    const resp = await dispatchRuntimeMessage(message, TRUSTED_SENDER);
 
     expect(resp).toMatchObject({ success: false, code });
     expect(JSON.stringify(resp)).not.toContain('secret-provider-detail');
@@ -548,10 +577,19 @@ describe('background TRANSLATE_BILIBILI_SUBTITLES handler', () => {
       .mockRejectedValueOnce(new TypeError('fetch failed'));
     vi.stubGlobal('fetch', fetchMock);
 
-    const timeoutResp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+    const timeoutMessage = {
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en-timeout', lines: [{ from: 0, to: 2, content: 'Hello' }] },
+    };
+    const networkMessage = {
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en-network', lines: [{ from: 0, to: 2, content: 'Hello' }] },
+    };
+
+    const timeoutResp = await dispatchRuntimeMessage(timeoutMessage, TRUSTED_SENDER);
     expect(timeoutResp).toMatchObject({ success: false, code: 'AI_TIMEOUT' });
 
-    const networkResp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+    const networkResp = await dispatchRuntimeMessage(networkMessage, TRUSTED_SENDER);
     expect(networkResp).toMatchObject({ success: false, code: 'AI_NETWORK_ERROR' });
     vi.unstubAllGlobals();
   });
@@ -560,8 +598,12 @@ describe('background TRANSLATE_BILIBILI_SUBTITLES handler', () => {
     mockStoredSettings['clip2md.settings'] = translateSettings();
     permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okAiContent('not-json')));
+    const message = {
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en-invalid', lines: [{ from: 0, to: 2, content: 'Hello' }] },
+    };
 
-    const resp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+    const resp = await dispatchRuntimeMessage(message, TRUSTED_SENDER);
 
     expect(resp).toMatchObject({ success: false, code: 'AI_INVALID_RESPONSE' });
     vi.unstubAllGlobals();

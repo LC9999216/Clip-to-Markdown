@@ -984,4 +984,98 @@ describe('字幕页翻译失败与并发', () => {
     expect(mockSessionStorage['clip2md.bilibiliSubtitle.translation.v1.BV1xx411c7mD:p2:ai-en'])
       .toMatchObject({ lines: [{ content: '最新刷新的翻译' }] });
   });
+
+  it('翻译失败后点击刷新会重新尝试翻译', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    const translatePending = respondEnglishJapaneseManual();
+
+    const initialization = initializeSubtitlePage();
+    await vi.waitFor(() => expect(translatePending).toHaveLength(1));
+    translatePending[0]?.({ success: false, code: 'AI_TIMEOUT', error: '超时' });
+    dispose = await initialization;
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-status')?.textContent).toBe('AI字幕翻译超时，请稍后刷新');
+    });
+
+    (document.querySelector('#action-refresh') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(translatePending).toHaveLength(2));
+    translatePending[1]?.({ success: true, lines: [{ from: 0, to: 4, content: '重试后的翻译' }] });
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe('重试后的翻译');
+    });
+    expect(trackSelect().value).toBe(VIRTUAL_ID);
+  });
+
+  it('自动翻译失败后重新打开视频不重复请求，刷新才重试', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    const translatePending = respondEnglishJapaneseManual();
+
+    const initialization = initializeSubtitlePage();
+    await vi.waitFor(() => expect(translatePending).toHaveLength(1));
+    translatePending[0]?.({ success: false, code: 'AI_RATE_LIMITED', error: '限流' });
+    dispose = await initialization;
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-status')?.textContent).toBe('AI字幕翻译请求过于频繁或额度不足');
+    });
+
+    // 重新探测同一视频（模拟切走再切回）：命中失败缓存，不再次请求 AI
+    dispatchTabActivated(7);
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-status')?.textContent).toBe('AI字幕翻译请求过于频繁或额度不足');
+    });
+    expect(translationCalls()).toBe(1);
+
+    // 用户显式刷新才重试
+    (document.querySelector('#action-refresh') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(translatePending).toHaveLength(2));
+    translatePending[1]?.({ success: true, lines: [{ from: 0, to: 4, content: '重试成功的翻译' }] });
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe('重试成功的翻译');
+    });
+  });
+
+  it('超出自动翻译上限的字幕不发起请求并提示保留官方字幕', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    runtimeSendMessageMock.mockImplementation((msg: unknown, cb?: (resp: unknown) => void) => {
+      const message = msg as { type?: string; url?: string };
+      if (message.type !== 'FETCH_JSON') return;
+      const url = message.url ?? '';
+      let payload: unknown;
+      if (url.includes('/x/web-interface/view')) payload = makeView();
+      else if (url.includes('/x/web-interface/nav')) payload = makeNav();
+      else if (url.includes('/x/player/wbi/v2')) payload = makeEnglishJapanesePlayer();
+      else if (url === EN_URL) payload = { body: [{ from: 0, to: 4, content: 'a'.repeat(2001) }] };
+      else payload = ENGLISH_JAPANESE_CDN[url];
+      cb?.({ success: true, data: payload });
+    });
+
+    dispose = await initializeSubtitlePage();
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-status')?.textContent).toBe('字幕行数或长度超出自动翻译上限，已保留官方字幕');
+    });
+    expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toContain('aaaa');
+    expect(trackSelect().value).toBe('ai-en');
+    expect(trackSelect().disabled).toBe(false);
+    expect(translationCalls()).toBe(0);
+  });
+
+  it('同一视频切换标签后恢复持久化的滚动位置', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondEnglishJapanese();
+
+    dispose = await initializeSubtitlePage();
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+
+    const list = document.querySelector('#subtitle-list') as HTMLElement;
+    list.scrollTop = 120;
+    list.dispatchEvent(new Event('scroll'));
+
+    dispatchTabActivated(7);
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toContain('你有没有发现');
+    });
+    expect((document.querySelector('#subtitle-list') as HTMLElement).scrollTop).toBe(120);
+  });
 });

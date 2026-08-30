@@ -226,7 +226,7 @@ score = 2 × multisetIntersection(bigrams(a), bigrams(b))
 - Read only: Git state and current implementation
 - Create: `docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md`
 
-- [ ] **Step 1: 进入正确工作树并核对分支**
+- [x] **Step 1: 进入正确工作树并核对分支**
 
 ```powershell
 Set-Location -LiteralPath 'C:\Users\HP\OneDrive\桌面\example\clip2md\.worktrees\bilibili-subtitle-sidepanel'
@@ -242,7 +242,7 @@ Expected:
 - 只有第 1.4 节三个保护文件和本计划/本任务文档修改；
 - 无来源不明修改。
 
-- [ ] **Step 2: 记录保护文件 SHA256 与 diff**
+- [x] **Step 2: 记录保护文件 SHA256 与 diff**
 
 ```powershell
 git diff -- src/adapters/bilibili/subtitle-service.ts tests/adapters/bilibili-subtitle-service.test.ts tests/adapters/bilibili.test.ts
@@ -259,7 +259,7 @@ D3002CB2E7429CD9BDEC2FABFFFEF2E8B632ECF2C5853021796975A6B762E21E  tests/adapters
 
 若实际开始哈希不同，不要回退；以开始时实际哈希为保护基线，并记录原因。
 
-- [ ] **Step 3: 运行完整基线**
+- [x] **Step 3: 运行完整基线**
 
 ```powershell
 npm test
@@ -270,7 +270,7 @@ git diff --check
 
 Expected：计划编写时参考基线为 38 文件、613 测试全过；typecheck/build/diff-check 退出码 0。若 Vitest/esbuild 在沙箱内报 `spawn EPERM`，在获得执行权限后原样重跑，不得把环境启动失败当成产品测试失败。
 
-- [ ] **Step 4: 创建进度报告骨架**
+- [x] **Step 4: 创建进度报告骨架**
 
 创建：
 
@@ -289,7 +289,7 @@ Expected：计划编写时参考基线为 38 文件、613 测试全过；typeche
 ## 十、提交记录和最终状态
 ```
 
-- [ ] **Step 5: 如需提交计划与报告骨架，只暂存精确文件**
+- [x] **Step 5: 如需提交计划与报告骨架，只暂存精确文件**
 
 ```powershell
 git add -- docs/superpowers/plans/2026-08-30-visual-summary-anchor-auto-recovery.md docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md
@@ -310,7 +310,7 @@ Expected：暂存区只有两个文档，绝不包含保护文件。
 - Create later: `src/analysis/anchor-recovery.ts`
 - Modify later: `src/analysis/schema.ts`
 
-- [ ] **Step 1: 写测试 fixture 与导入**
+- [x] **Step 1: 写测试 fixture 与导入**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -345,7 +345,7 @@ function summary(structure: VisualSummaryV2['structure']): VisualSummaryV2 {
 }
 ```
 
-- [ ] **Step 2: 写“两个错误 Quote 均恢复为对应 Block 原句”的失败测试**
+- [x] **Step 2: 写“两个错误 Quote 均恢复为对应 Block 原句”的失败测试**
 
 ```ts
 it('在对应 block 内高置信度重匹配被轻微改写的 sourceQuote', () => {
@@ -364,7 +364,7 @@ it('在对应 block 内高置信度重匹配被轻微改写的 sourceQuote', () 
 });
 ```
 
-- [ ] **Step 3: 写“合法 Quote 零修改”的失败测试**
+- [x] **Step 3: 写“合法 Quote 零修改”的失败测试**
 
 ```ts
 it('已经合法的 summary 原样返回，不重写 anchor', () => {
@@ -376,7 +376,7 @@ it('已经合法的 summary 原样返回，不重写 anchor', () => {
 });
 ```
 
-- [ ] **Step 4: 写归一化差异测试**
+- [x] **Step 4: 写归一化差异测试**
 
 至少使用三个独立用例：
 
@@ -397,7 +397,7 @@ it.each([
 });
 ```
 
-- [ ] **Step 5: 写四个必须拒绝猜测的测试**
+- [x] **Step 5: 写四个必须拒绝猜测的测试**
 
 分别断言返回对象/条目未被更改，并且 Validator 仍能看见问题：
 
@@ -466,7 +466,7 @@ it('候选同时出现在两个 sent blocks 时保持失败', () => {
 
 这些测试必须写出完整 fixture 和精确 expected，不能只检查 truthy/falsy。
 
-- [ ] **Step 6: 写短 Quote、长 Block 与不可变性测试**
+- [x] **Step 6: 写短 Quote、长 Block 与不可变性测试**
 
 覆盖：
 
@@ -478,7 +478,7 @@ it('候选同时出现在两个 sent blocks 时保持失败', () => {
 - 无 sourceBlocks、无 anchors 时返回原对象；
 - 一条恢复成功、另一条失败时只替换成功项，最终 Validator 仍拒绝整体结果。
 
-- [ ] **Step 7: 运行测试并保存红灯**
+- [x] **Step 7: 运行测试并保存红灯**
 
 ```powershell
 npx vitest run tests/anchor-recovery.test.ts
@@ -486,7 +486,7 @@ npx vitest run tests/anchor-recovery.test.ts
 
 Expected：FAIL，原因是 `src/analysis/anchor-recovery.ts` 尚不存在，而不是测试语法或 fixture 错误。把命令、失败原因和时间写入进度报告。
 
-- [ ] **Step 8: 提交测试合同**
+- [x] **Step 8: 提交测试合同**
 
 ```powershell
 git add -- tests/anchor-recovery.test.ts docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md

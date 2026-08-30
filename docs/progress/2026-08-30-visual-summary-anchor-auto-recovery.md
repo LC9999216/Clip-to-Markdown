@@ -32,7 +32,19 @@
 
 ## 四、TDD 红灯证据
 
-（待 Task 1/3 回填）
+**Task 1（恢复模块合同，2026-08-30 16:32:25）：**
+
+```text
+npx vitest run tests/anchor-recovery.test.ts
+→ Test Files 1 failed (1) / no tests
+Error: Failed to resolve import "../src/analysis/anchor-recovery" from "tests/anchor-recovery.test.ts". Does the file exist?
+```
+
+失败原因 = `src/analysis/anchor-recovery.ts` 尚不存在（计划预期的红灯形态），非测试语法或 fixture 错误。测试合同共 15 个用例：轻微改写恢复、合法零修改（toBe 同一性）、空白/全半角标点归一化恢复 ×3、不存在 Block ID 拒绝、低相似度拒绝、歧义（margin < 0.08）拒绝、跨 Block 重复拒绝、短 Quote（<6 code points）拒绝、300 字长句 140 窗口候选、扩展汉字（U+20000 区）强句末候选保留标点、不可变性（summary/keyPoints 引用、sourceBlocks 不变）、无 sourceBlocks 返回原对象、无 anchor 条目原样保留、部分成功只替换成功项且整体仍被 Validator 拒绝。
+
+**Task 3（三阶段状态机合同）：**
+
+（待回填）
 
 ## 五、实现摘要
 

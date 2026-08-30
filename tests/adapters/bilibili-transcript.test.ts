@@ -103,12 +103,15 @@ describe('B站字幕细粒度分段', () => {
     const result = groupTranscript([{ from: 0, to: 10, content }]);
 
     expect(result.map((segment) => Array.from(segment.text).length)).toEqual([24, 24, 24, 28]);
-    expect(result.map(({ start, end }) => [start, end])).toEqual([
-      [0, 2.4],
-      [2.4, 4.8],
-      [4.8, 7.2],
-      [7.2, 10],
-    ]);
+    // 非整数比例按计划使用 toBeCloseTo；相邻子段边界必须精确相等
+    expect(result[0]!.start).toBe(0);
+    expect(result[0]!.end).toBeCloseTo(2.4, 10);
+    expect(result[1]!.start).toBe(result[0]!.end);
+    expect(result[1]!.end).toBeCloseTo(4.8, 10);
+    expect(result[2]!.start).toBe(result[1]!.end);
+    expect(result[2]!.end).toBeCloseTo(7.2, 10);
+    expect(result[3]!.start).toBe(result[2]!.end);
+    expect(result.at(-1)!.end).toBe(10);
     expect(result.map((segment) => segment.text).join('')).toBe(content);
   });
 
@@ -126,12 +129,18 @@ describe('B站字幕细粒度分段', () => {
     const content = '时'.repeat(90);
     const result = groupTranscript([{ from: 0, to: 45, content }]);
 
-    expect(result).toHaveLength(12);
+    // target 8 / hardLimit 12：前 10 段各 8 字（4 秒），剩余 10 字 ≤ hardLimit 作为末段（5 秒）
+    expect(result).toHaveLength(11);
+    expect(result.map((segment) => Array.from(segment.text).length)).toEqual([
+      8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 10,
+    ]);
     expect(result.every((segment) => segment.end - segment.start <= 6 + EPSILON)).toBe(true);
     expect(result[0]!.start).toBe(0);
     expect(result.at(-1)!.end).toBe(45);
+    expect(result.every((segment, index) =>
+      index === 0 || result[index - 1]!.end === segment.start)).toBe(true);
     expect(result.map((segment) => segment.id)).toEqual(
-      Array.from({ length: 12 }, (_, index) => `S${String(index + 1).padStart(4, '0')}`),
+      Array.from({ length: 11 }, (_, index) => `S${String(index + 1).padStart(4, '0')}`),
     );
     expect(result.map((segment) => segment.text).join('')).toBe(content);
   });

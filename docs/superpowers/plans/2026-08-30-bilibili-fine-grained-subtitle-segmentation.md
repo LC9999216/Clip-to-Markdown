@@ -266,7 +266,7 @@ const segmentEnd = from + duration * (endOffset / totalChars);
 - Read only: repository state
 - Create later: `docs/progress/2026-08-30-bilibili-fine-grained-subtitle-segmentation.md`
 
-- [ ] **Step 1: 确认进入正确工作树**
+- [x] **Step 1: 确认进入正确工作树**
 
 ```powershell
 Set-Location -LiteralPath 'C:\Users\HP\OneDrive\桌面\example\clip2md\.worktrees\bilibili-subtitle-sidepanel'
@@ -282,7 +282,7 @@ Expected:
 - 上述 3 个既有文件仍显示为未提交修改；
 - 除计划文档外，没有本任务来源不明的新修改。
 
-- [ ] **Step 2: 记录保护文件的当前差异和哈希**
+- [x] **Step 2: 记录保护文件的当前差异和哈希**
 
 ```powershell
 git diff -- src/adapters/bilibili/subtitle-service.ts tests/adapters/bilibili-subtitle-service.test.ts tests/adapters/bilibili.test.ts
@@ -291,7 +291,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath 'src/adapters/bilibili/subtitle-serv
 
 Expected: 能看到既有差异，并获得 3 个哈希。把哈希写入进度报告的“开始状态”小节，完成后再次核对。
 
-- [ ] **Step 3: 运行基线测试**
+- [x] **Step 3: 运行基线测试**
 
 ```powershell
 npm test
@@ -309,7 +309,7 @@ Expected:
 
 如果基线失败，停止功能实现：记录失败命令和完整错误，确认是否为环境问题或既有修改导致，不得把基线失败混进本任务修复。
 
-- [ ] **Step 4: 创建进度报告骨架**
+- [x] **Step 4: 创建进度报告骨架**
 
 新建 `docs/progress/2026-08-30-bilibili-fine-grained-subtitle-segmentation.md`，至少包含：
 
@@ -326,7 +326,7 @@ Expected:
 ## 八、提交记录与最终工作树状态
 ```
 
-- [ ] **Step 5: 提交仅计划/报告准备（如实现 Agent 接手时计划尚未提交）**
+- [x] **Step 5: 提交仅计划/报告准备（如实现 Agent 接手时计划尚未提交）**
 
 不要把 3 个保护文件带入提交。若本计划文件已由上游 Agent 提交，则此步只提交新建的进度报告骨架；否则使用精确路径：
 
@@ -348,7 +348,7 @@ Expected staged names only包含上述计划/进度文档。
 - Modify: `tests/adapters/bilibili-transcript.test.ts`
 - Test target: `src/adapters/bilibili/transcript.ts`
 
-- [ ] **Step 1: 删除或改写只服务于旧“段落聚合”语义的断言**
+- [x] **Step 1: 删除或改写只服务于旧“段落聚合”语义的断言**
 
 旧测试中以下行为不再是正确需求：
 
@@ -358,7 +358,7 @@ Expected staged names only包含上述计划/进度文档。
 
 保留仍有效的不变量测试：空输入、过滤空白、顺序、唯一 ID、Unicode 汉字识别；把期望改为新合同。
 
-- [ ] **Step 2: 添加截图场景的确定性红灯测试**
+- [x] **Step 2: 添加截图场景的确定性红灯测试**
 
 使用 84 个中文 code point、`from: 0`、`to: 14`、无标点的单条源字幕。测试必须精确断言：
 
@@ -377,7 +377,7 @@ expect(segments.map((segment) => segment.text).join('')).toBe(sourceText);
 
 构造文本时使用清晰的 84 字 fixture，不能用随机字符串。注释说明该用例复现侧栏 `00:00 → 00:14` 的粗粒度问题。
 
-- [ ] **Step 3: 添加“绝不跨源行合并”测试**
+- [x] **Step 3: 添加“绝不跨源行合并”测试**
 
 输入：
 
@@ -390,7 +390,7 @@ expect(segments.map((segment) => segment.text).join('')).toBe(sourceText);
 
 期望两个输出段，分别为“你好”和“世界”，而不是“你好世界”。
 
-- [ ] **Step 4: 添加“保留真实时间空档”测试**
+- [x] **Step 4: 添加“保留真实时间空档”测试**
 
 输入：
 
@@ -403,7 +403,7 @@ expect(segments.map((segment) => segment.text).join('')).toBe(sourceText);
 
 期望只输出两个非空段，时间为 0~2 和 10~12；不得生成 2~10 的占位段。
 
-- [ ] **Step 5: 添加标点优先级测试**
+- [x] **Step 5: 添加标点优先级测试**
 
 分别覆盖：
 
@@ -419,14 +419,14 @@ expect(segments.map((segment) => segment.text).join('')).toBe(sourceText);
 - 时间按 code point 比例分配；
 - 段落顺序稳定。
 
-- [ ] **Step 6: 添加硬切和长度上限测试**
+- [x] **Step 6: 添加硬切和长度上限测试**
 
 - 无标点长中文：每个非尾段不超过 28 code points；
 - 无标点长拉丁：每个非尾段不超过 72 code points；
 - 在同等持续时长下，中文与拉丁使用各自限制；
 - 对满足 `duration / chars <= 6` 的正常源行，断言所有子段 `end - start <= 6 + Number.EPSILON`。
 
-- [ ] **Step 7: 添加极稀疏源行保真例外测试**
+- [x] **Step 7: 添加极稀疏源行保真例外测试**
 
 输入 `{ from: 0, to: 25, content: '甲' }`。
 
@@ -440,7 +440,7 @@ expect(segments).toEqual([
 
 并断言没有空文字段。这取代旧的“0~20 文本段 + 20~25 空段”期望。
 
-- [ ] **Step 8: 添加 Unicode 与退化时间测试**
+- [x] **Step 8: 添加 Unicode 与退化时间测试**
 
 覆盖：
 
@@ -450,7 +450,7 @@ expect(segments).toEqual([
 - 空白行仍被过滤；
 - 所有 ID 从 `S0001` 连续递增。
 
-- [ ] **Step 9: 运行目标测试并保存红灯证据**
+- [x] **Step 9: 运行目标测试并保存红灯证据**
 
 ```powershell
 npx vitest run tests/adapters/bilibili-transcript.test.ts
@@ -460,7 +460,7 @@ Expected: 新增的短分段用例失败，失败原因应明确指向旧实现�
 
 把失败测试名和关键 expected/actual 摘要写入进度报告“红灯测试证据”。
 
-- [ ] **Step 10: 提交测试合同**
+- [x] **Step 10: 提交测试合同**
 
 ```powershell
 git add -- tests/adapters/bilibili-transcript.test.ts docs/progress/2026-08-30-bilibili-fine-grained-subtitle-segmentation.md
@@ -480,7 +480,7 @@ Expected: 暂存区不包含 3 个保护文件。
 - Modify: `src/adapters/bilibili/transcript.ts`
 - Test: `tests/adapters/bilibili-transcript.test.ts`
 
-- [ ] **Step 1: 删除旧段落聚合状态**
+- [x] **Step 1: 删除旧段落聚合状态**
 
 从 `groupTranscript` 中移除：
 
@@ -491,7 +491,7 @@ Expected: 暂存区不包含 3 个保护文件。
 
 不要保留两套并行算法或 feature flag。
 
-- [ ] **Step 2: 实现 code point 安全的语言限制选择**
+- [x] **Step 2: 实现 code point 安全的语言限制选择**
 
 建议最小结构：
 
@@ -509,7 +509,7 @@ function getSegmentLimits(text: string): SegmentLimits {
 
 禁止把限制导出为公共 API，除非测试只能通过公开 API 验证；优先通过 `groupTranscript` 的行为测试私有细节。
 
-- [ ] **Step 3: 实现确定性切点选择函数**
+- [x] **Step 3: 实现确定性切点选择函数**
 
 建议签名：
 
@@ -536,7 +536,7 @@ function findCutIndex(
 
 如果实现超过约 40~50 行，先检查是否把候选查找写得过度抽象。只需要满足当前固定优先级。
 
-- [ ] **Step 4: 实现单条源行拆分**
+- [x] **Step 4: 实现单条源行拆分**
 
 建议签名：
 
@@ -576,7 +576,7 @@ while (offset < codePoints.length) {
 
 实现中必须防止无限循环，并确保最后一段结束时间精确使用 `to`。
 
-- [ ] **Step 5: 将 `groupTranscript` 简化为逐行展开与编号**
+- [x] **Step 5: 将 `groupTranscript` 简化为逐行展开与编号**
 
 目标结构应接近：
 
@@ -595,7 +595,7 @@ export function groupTranscript(lines: BiliSubtitleLine[]): BiliTranscriptSegmen
 
 如果需要保留边界空格，调整过滤/拆分细节，但不要恢复跨行聚合。
 
-- [ ] **Step 6: 运行目标测试直到全绿**
+- [x] **Step 6: 运行目标测试直到全绿**
 
 ```powershell
 npx vitest run tests/adapters/bilibili-transcript.test.ts
@@ -603,7 +603,7 @@ npx vitest run tests/adapters/bilibili-transcript.test.ts
 
 Expected: 该文件全部通过。
 
-- [ ] **Step 7: 运行适配器相关回归**
+- [x] **Step 7: 运行适配器相关回归**
 
 ```powershell
 npx vitest run tests/adapters/bilibili-transcript.test.ts tests/adapters/bilibili-subtitle-service.test.ts tests/adapters/bilibili.test.ts
@@ -611,7 +611,7 @@ npx vitest run tests/adapters/bilibili-transcript.test.ts tests/adapters/bilibil
 
 Expected: 全部通过。若保护文件对应测试失败，先判断是否为本任务改变公共语义导致；不得修改保护文件来“消除”失败。
 
-- [ ] **Step 8: 审查实现是否保持最小**
+- [x] **Step 8: 审查实现是否保持最小**
 
 检查：
 
@@ -622,7 +622,7 @@ Expected: 全部通过。若保护文件对应测试失败，先判断是否为�
 - 没有空文字段；
 - 没有对 `subtitle.ts` 做无必要修改。
 
-- [ ] **Step 9: 提交最小实现**
+- [x] **Step 9: 提交最小实现**
 
 ```powershell
 git add -- src/adapters/bilibili/transcript.ts docs/progress/2026-08-30-bilibili-fine-grained-subtitle-segmentation.md

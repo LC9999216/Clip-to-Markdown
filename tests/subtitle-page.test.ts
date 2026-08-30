@@ -31,8 +31,10 @@ function makeNav(isLogin = true) {
     code: 0,
     data: {
       isLogin,
-      img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
-      sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+      wbi_img: {
+        img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+        sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+      },
     },
   };
 }
@@ -90,11 +92,19 @@ interface FetchFixture {
   player?: unknown;
   cdn?: Record<string, unknown>;
   fail?: boolean;
+  translate?: unknown;
 }
 
 function respondFetchJson(fixture: FetchFixture = {}): void {
   runtimeSendMessageMock.mockImplementation((msg: unknown, cb?: (resp: unknown) => void) => {
     const message = msg as { type?: string; url?: string };
+    if (message.type === 'TRANSLATE_BILIBILI_SUBTITLES') {
+      cb?.(fixture.translate ?? {
+        success: true,
+        lines: [{ from: 0, to: 4, content: '你有没有发现，现在大家使用 AI 的方式都差不多？' }],
+      });
+      return;
+    }
     if (message.type !== 'FETCH_JSON') return;
     const url = message.url ?? '';
     let payload: unknown;
@@ -155,15 +165,25 @@ describe('字幕页加载、缓存与轨道', () => {
 
     dispose = await initializeSubtitlePage();
     await vi.waitFor(() => expect(document.querySelectorAll('#subtitle-list .subtitle-row')).toHaveLength(1));
-    const callsAfterFirst = runtimeSendMessageMock.mock.calls.length;
     expect(Object.keys(mockSessionStorage)).toContain('clip2md.bilibiliSubtitle.cache.v1.BV1xx411c7mD:p2:human-zh');
-    expect(Object.keys(mockSessionStorage)).toContain('clip2md.bilibiliSubtitle.ui.v1.BV1xx411c7mD:p2');
+    // ui.v2 只持久化用户主动切换的轨道：自动选择不落盘
+    expect(Object.keys(mockSessionStorage)).not.toContain('clip2md.bilibiliSubtitle.ui.v2.BV1xx411c7mD:p2');
 
+    // 用户显式选择当前轨道写入偏好后，重新打开才直接命中缓存
+    const select = document.querySelector('#subtitle-track') as HTMLSelectElement;
+    select.value = 'human-zh';
+    select.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => {
+      expect(mockSessionStorage['clip2md.bilibiliSubtitle.ui.v2.BV1xx411c7mD:p2'])
+        .toMatchObject({ preferredTrackId: 'human-zh' });
+    });
+
+    const callsAfterSelection = runtimeSendMessageMock.mock.calls.length;
     const firstDispose = dispose;
     dispose = await initializeSubtitlePage();
     firstDispose?.();
 
-    expect(runtimeSendMessageMock.mock.calls.length).toBe(callsAfterFirst);
+    expect(runtimeSendMessageMock.mock.calls.length).toBe(callsAfterSelection);
     expect(document.querySelectorAll('#subtitle-list .subtitle-row')).toHaveLength(1);
     expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe('人工中文第一句');
   });
@@ -558,5 +578,290 @@ describe('字幕页播放联动', () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(activeRow()?.getAttribute('data-start')).toBe('30');
     expect(scrollIntoViewMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---- AI 简中翻译兜底 ----
+
+const EN_URL = 'https://subtitle.hdslb.com/ai-en.json';
+const JP_URL = 'https://subtitle.hdslb.com/ai-jp.json';
+const VIRTUAL_ID = 'clip2md-ai-zh:ai-en';
+const ENGLISH_BODY = 'You may have noticed that everyone uses AI in similar ways.';
+const TRANSLATED_BODY = '你有没有发现，现在大家使用 AI 的方式都差不多？';
+
+function makeEnglishJapanesePlayer() {
+  return {
+    code: 0,
+    data: {
+      subtitle: {
+        subtitles: [
+          { id_str: 'ai-en', lan: 'ai-en', lan_doc: 'English', subtitle_url: EN_URL, ai_status: 1 },
+          { id_str: 'ai-jp', lan: 'ai-jp', lan_doc: '日本語', subtitle_url: JP_URL, ai_status: 1 },
+        ],
+      },
+      view_points: [],
+    },
+  };
+}
+
+const ENGLISH_JAPANESE_CDN: Record<string, unknown> = {
+  [EN_URL]: { body: [{ from: 0, to: 4, content: ENGLISH_BODY }] },
+  [JP_URL]: { body: [{ from: 0, to: 4, content: '日本語の字幕。' }] },
+};
+
+function respondEnglishJapanese(translate?: unknown): void {
+  respondFetchJson({
+    player: makeEnglishJapanesePlayer(),
+    cdn: ENGLISH_JAPANESE_CDN,
+    ...(translate !== undefined ? { translate } : {}),
+  });
+}
+
+function translationCalls(): number {
+  return runtimeSendMessageMock.mock.calls.filter(
+    (call) => (call[0] as { type?: string }).type === 'TRANSLATE_BILIBILI_SUBTITLES',
+  ).length;
+}
+
+function trackSelect(): HTMLSelectElement {
+  return document.querySelector('#subtitle-track') as HTMLSelectElement;
+}
+
+describe('字幕页 AI 简中翻译', () => {
+  let dispose: (() => void) | undefined;
+
+  beforeEach(() => {
+    mountSubtitlePage();
+    tabsQueryMock.mockImplementation((_query, callback) => {
+      callback?.([{ id: 7, active: true }] as chrome.tabs.Tab[]);
+    });
+  });
+
+  afterEach(() => dispose?.());
+
+  it('无官方中文但有英文时默认显示简体中文 AI 翻译', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondEnglishJapanese();
+
+    dispose = await initializeSubtitlePage();
+
+    await vi.waitFor(() => {
+      expect(trackSelect().value).toBe('clip2md-ai-zh:ai-en');
+    });
+    expect([...trackSelect().options].map((item) => item.textContent))
+      .toEqual(['简体中文（AI 翻译）', 'English（AI）', '日本語（AI）']);
+    expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent)
+      .toContain('你有没有发现');
+    expect(runtimeSendMessageMock).toHaveBeenCalledWith({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: {
+        sourceTrackId: 'ai-en',
+        lines: [{ from: 0, to: 4, content: expect.any(String) }],
+      },
+    }, expect.any(Function));
+  });
+
+  it('存在官方中文时不出现虚拟轨且零翻译请求', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondFetchJson({ cdn: defaultCdn() });
+
+    dispose = await initializeSubtitlePage();
+
+    await vi.waitFor(() => expect(trackSelect().value).toBe('human-zh'));
+    expect([...trackSelect().options].map((item) => item.textContent)).not.toContain('简体中文（AI 翻译）');
+    expect(translationCalls()).toBe(0);
+  });
+
+  it('自动翻译后手动选英文恢复官方正文并把偏好写入 ui.v2', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondEnglishJapanese();
+
+    dispose = await initializeSubtitlePage();
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+
+    trackSelect().value = 'ai-en';
+    trackSelect().dispatchEvent(new Event('change'));
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe(ENGLISH_BODY);
+    });
+    expect(mockSessionStorage['clip2md.bilibiliSubtitle.ui.v2.BV1xx411c7mD:p2'])
+      .toMatchObject({ preferredTrackId: 'ai-en' });
+  });
+
+  it('重新打开恢复手动英文偏好且不自动翻译', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondEnglishJapanese();
+
+    dispose = await initializeSubtitlePage();
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+    trackSelect().value = 'ai-en';
+    trackSelect().dispatchEvent(new Event('change'));
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe(ENGLISH_BODY);
+    });
+    const callsBeforeReopen = translationCalls();
+
+    const firstDispose = dispose;
+    dispose = await initializeSubtitlePage();
+    firstDispose?.();
+
+    await vi.waitFor(() => expect(trackSelect().value).toBe('ai-en'));
+    expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe(ENGLISH_BODY);
+    expect(translationCalls()).toBe(callsBeforeReopen);
+  });
+
+  it('手动选回虚拟简中命中翻译缓存', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondEnglishJapanese();
+
+    dispose = await initializeSubtitlePage();
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+    trackSelect().value = 'ai-en';
+    trackSelect().dispatchEvent(new Event('change'));
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe(ENGLISH_BODY);
+    });
+
+    trackSelect().value = VIRTUAL_ID;
+    trackSelect().dispatchEvent(new Event('change'));
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toContain('你有没有发现');
+    });
+    expect(trackSelect().value).toBe(VIRTUAL_ID);
+    expect(translationCalls()).toBe(1);
+  });
+
+  it('ui.v1 的旧轨道选择被忽略，不阻止自动简中默认', async () => {
+    mockSessionStorage['clip2md.bilibiliSubtitle.ui.v1.BV1xx411c7mD:p2'] = { trackId: 'ai-en', scrollTop: 0 };
+    respondGetStatus(BILIBILI_STATUS);
+    respondEnglishJapanese();
+
+    dispose = await initializeSubtitlePage();
+
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+    expect(translationCalls()).toBe(1);
+  });
+
+  it('同一会话第二次进入命中翻译缓存，翻译消息不增加', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondEnglishJapanese();
+
+    dispose = await initializeSubtitlePage();
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+    expect(translationCalls()).toBe(1);
+
+    const firstDispose = dispose;
+    dispose = await initializeSubtitlePage();
+    firstDispose?.();
+
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+    expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toContain('你有没有发现');
+    expect(translationCalls()).toBe(1);
+  });
+
+  it('翻译缓存使用固定会话键并记录源轨 ID 与译文行', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    respondEnglishJapanese();
+
+    dispose = await initializeSubtitlePage();
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+
+    const key = 'clip2md.bilibiliSubtitle.translation.v1.BV1xx411c7mD:p2:ai-en';
+    expect(Object.keys(mockSessionStorage)).toContain(key);
+    expect(mockSessionStorage[key]).toMatchObject({
+      sourceTrackId: 'ai-en',
+      lines: [{ from: 0, to: 4, content: TRANSLATED_BODY }],
+    });
+  });
+
+  it('点击刷新绕过官方缓存与翻译缓存并替换正文', async () => {
+    respondGetStatus(BILIBILI_STATUS);
+    const cdn: Record<string, unknown> = {
+      [EN_URL]: { body: [{ from: 0, to: 4, content: ENGLISH_BODY }] },
+      [JP_URL]: { body: [{ from: 0, to: 4, content: '日本語の字幕。' }] },
+    };
+    let translate: unknown = { success: true, lines: [{ from: 0, to: 4, content: TRANSLATED_BODY }] };
+    runtimeSendMessageMock.mockImplementation((msg: unknown, cb?: (resp: unknown) => void) => {
+      const message = msg as { type?: string; url?: string };
+      if (message.type === 'TRANSLATE_BILIBILI_SUBTITLES') {
+        cb?.(translate);
+        return;
+      }
+      if (message.type !== 'FETCH_JSON') return;
+      const url = message.url ?? '';
+      let payload: unknown;
+      if (url.includes('/x/web-interface/view')) payload = makeView();
+      else if (url.includes('/x/web-interface/nav')) payload = makeNav();
+      else if (url.includes('/x/player/wbi/v2')) payload = makeEnglishJapanesePlayer();
+      else payload = cdn[url];
+      cb?.({ success: true, data: payload });
+    });
+
+    dispose = await initializeSubtitlePage();
+    await vi.waitFor(() => expect(trackSelect().value).toBe(VIRTUAL_ID));
+    const officialCallsBefore = runtimeSendMessageMock.mock.calls.length;
+    const translateCallsBefore = translationCalls();
+
+    cdn[EN_URL] = { body: [{ from: 0, to: 4, content: 'Updated English line.' }] };
+    translate = { success: true, lines: [{ from: 0, to: 4, content: '刷新后的简中正文' }] };
+    (document.querySelector('#action-refresh') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe('刷新后的简中正文');
+    });
+    expect(trackSelect().value).toBe(VIRTUAL_ID);
+    expect(runtimeSendMessageMock.mock.calls.length).toBeGreaterThan(officialCallsBefore);
+    expect(translationCalls()).toBe(translateCallsBefore + 1);
+  });
+
+  it('切换标签后旧视频迟到的翻译响应被 generation 丢弃', async () => {
+    const statusPending: Array<(status: unknown) => void> = [];
+    const translatePending: Array<(resp: unknown) => void> = [];
+    tabsSendMessageMock.mockImplementation((_tabId, message, callback) => {
+      if ((message as { type?: string }).type === 'GET_STATUS') {
+        statusPending.push((status) => callback?.(status));
+      }
+    });
+    runtimeSendMessageMock.mockImplementation((msg: unknown, cb?: (resp: unknown) => void) => {
+      const message = msg as { type?: string; url?: string };
+      if (message.type === 'TRANSLATE_BILIBILI_SUBTITLES') {
+        translatePending.push((resp) => cb?.(resp));
+        return;
+      }
+      if (message.type !== 'FETCH_JSON') return;
+      const url = message.url ?? '';
+      let payload: unknown;
+      if (url.includes('/x/web-interface/view')) payload = makeView();
+      else if (url.includes('/x/web-interface/nav')) payload = makeNav();
+      else if (url.includes('/x/player/wbi/v2')) payload = makeEnglishJapanesePlayer();
+      else payload = ENGLISH_JAPANESE_CDN[url];
+      cb?.({ success: true, data: payload });
+    });
+
+    const initialization = initializeSubtitlePage();
+    await vi.waitFor(() => expect(statusPending).toHaveLength(1));
+    statusPending[0]?.(BILIBILI_STATUS);
+    await vi.waitFor(() => expect(translatePending).toHaveLength(1));
+
+    dispatchTabActivated(9);
+    await vi.waitFor(() => expect(statusPending).toHaveLength(2));
+    statusPending[1]?.({ ...BILIBILI_STATUS, url: 'https://www.bilibili.com/video/BV1xx411c7mD/?p=3' });
+    await vi.waitFor(() => expect(translatePending).toHaveLength(2));
+
+    // 旧视频（tab 7 / p2）的迟到翻译响应：必须被丢弃，不得渲染或写入缓存
+    translatePending[0]?.({ success: true, lines: [{ from: 0, to: 4, content: '旧视频的迟到翻译' }] });
+    dispose = await initialization;
+    expect(Object.keys(mockSessionStorage).some((key) => key.includes('translation.v1.BV1xx411c7mD:p2')))
+      .toBe(false);
+
+    // 当前视频（tab 9 / p3）的翻译正常渲染
+    translatePending[1]?.({ success: true, lines: [{ from: 0, to: 4, content: '当前视频的翻译' }] });
+    await vi.waitFor(() => {
+      expect(document.querySelector('#subtitle-list .subtitle-text')?.textContent).toBe('当前视频的翻译');
+    });
+    expect(trackSelect().value).toBe(VIRTUAL_ID);
+    expect(translationCalls()).toBe(2);
   });
 });

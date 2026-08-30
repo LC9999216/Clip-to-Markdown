@@ -7,6 +7,10 @@ import { fetchBilibiliSubtitleResource } from '../adapters/bilibili/subtitle-ser
 import type { BiliSubtitleResource } from '../adapters/bilibili/subtitle-service';
 import { BiliSubtitleError } from '../adapters/bilibili/subtitle-types';
 import type {
+  BiliSubtitleLine,
+  BiliSubtitleTrack,
+} from '../adapters/bilibili/subtitle-types';
+import type {
   BiliJsonRequest,
 } from '../adapters/bilibili/subtitle-service';
 import { groupTranscript } from '../adapters/bilibili/transcript';
@@ -16,10 +20,15 @@ import type {
   GetBilibiliPlaybackStateResponse,
   SeekBilibiliVideoResponse,
   StatusResponse,
+  TranslateBilibiliSubtitlesResponse,
 } from '../types/messages';
+import { isTranslateBilibiliSubtitlesResponse } from '../types/messages';
 
 const CACHE_PREFIX = 'clip2md.bilibiliSubtitle.cache.v1.';
-const UI_PREFIX = 'clip2md.bilibiliSubtitle.ui.v1.';
+const UI_PREFIX = 'clip2md.bilibiliSubtitle.ui.v2.';
+const TRANSLATION_CACHE_PREFIX = 'clip2md.bilibiliSubtitle.translation.v1.';
+const TRANSLATED_TRACK_PREFIX = 'clip2md-ai-zh:';
+const TRANSLATED_TRACK_LABEL = '简体中文（AI 翻译）';
 
 const POLL_INTERVAL_MS = 500;
 /** scrollIntoView 触发的滚动事件在该时间窗内视为程序滚动 */
@@ -31,8 +40,66 @@ const MSG_LOADING = '正在加载字幕…';
 const MSG_PLAYER_NOT_READY = '播放器尚未加载，请稍后重试';
 
 interface SubtitlePageUiState {
-  trackId: string | null;
+  preferredTrackId: string | null;
   scrollTop: number;
+}
+
+/** 虚拟简中轨只存在于字幕页展示层，不进入官方字幕资源。 */
+interface VirtualTranslation {
+  trackId: string;
+  lines: BiliSubtitleLine[];
+}
+
+interface TranslationCacheEntry {
+  sourceTrackId: string;
+  lines: BiliSubtitleLine[];
+}
+
+function isVirtualTrackId(trackId: string): boolean {
+  return trackId.startsWith(TRANSLATED_TRACK_PREFIX);
+}
+
+function virtualTrackIdOf(sourceTrackId: string): string {
+  return `${TRANSLATED_TRACK_PREFIX}${sourceTrackId}`;
+}
+
+function sourceTrackIdOfVirtual(virtualTrackId: string): string {
+  return virtualTrackId.slice(TRANSLATED_TRACK_PREFIX.length);
+}
+
+function isChineseTrack(track: BiliSubtitleTrack): boolean {
+  return track.language.split('-').includes('zh')
+    || track.label.includes('中文')
+    || track.label.includes('汉语');
+}
+
+function isEnglishTrack(track: BiliSubtitleTrack): boolean {
+  return track.language.split('-').includes('en')
+    || /english/i.test(track.label);
+}
+
+/** 有官方中文时不翻译；否则返回作为翻译源的英文轨。 */
+function translationSource(resource: BiliSubtitleResource): BiliSubtitleTrack | undefined {
+  if (resource.tracks.some(isChineseTrack)) return undefined;
+  return resource.tracks.find(isEnglishTrack);
+}
+
+/** 缓存中的翻译行必须重新校验：不可信 storage 数据不能直接渲染。 */
+function isRenderableTranslatedLine(line: unknown): line is BiliSubtitleLine {
+  if (typeof line !== 'object' || line === null || Array.isArray(line)) return false;
+  const { from, to, content } = line as Record<string, unknown>;
+  if (typeof from !== 'number' || !Number.isFinite(from) || from < 0) return false;
+  if (typeof to !== 'number' || !Number.isFinite(to) || to < from) return false;
+  return typeof content === 'string' && content !== '';
+}
+
+function parseTranslationCacheEntry(value: unknown, sourceTrackId: string): TranslationCacheEntry | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.sourceTrackId !== sourceTrackId) return undefined;
+  if (!Array.isArray(record.lines) || record.lines.length === 0) return undefined;
+  if (!record.lines.every((line) => isRenderableTranslatedLine(line))) return undefined;
+  return { sourceTrackId, lines: record.lines as BiliSubtitleLine[] };
 }
 
 function element<T extends HTMLElement>(id: string): T {
@@ -126,6 +193,26 @@ function pageErrorMessage(error: unknown): string {
   return MSG_FETCH_FAILED;
 }
 
+/** 请求 Background 代理翻译；响应经过严格守卫，不可信数据不进入渲染。 */
+function requestTranslation(sourceTrackId: string, lines: BiliSubtitleLine[]): Promise<TranslateBilibiliSubtitlesResponse> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: 'TRANSLATE_BILIBILI_SUBTITLES', payload: { sourceTrackId, lines } },
+      (response: unknown) => {
+        if (chrome.runtime.lastError) {
+          resolve({ success: false, code: 'AI_PROVIDER_ERROR', error: '字幕翻译服务暂不可用。' });
+          return;
+        }
+        resolve(
+          isTranslateBilibiliSubtitlesResponse(response)
+            ? response
+            : { success: false, code: 'AI_INVALID_RESPONSE', error: '字幕翻译响应格式无效。' },
+        );
+      },
+    );
+  });
+}
+
 function splitIdentity(identity: string): { bvid: string; pageIndex: number } | null {
   const match = /^(BV[0-9A-Za-z]+):p([1-9]\d*)$/.exec(identity);
   if (!match) return null;
@@ -165,8 +252,18 @@ function renderSegments(
   list.replaceChildren(fragment);
 }
 
-function renderTrackOptions(select: HTMLSelectElement, resource: BiliSubtitleResource): void {
+function renderTrackOptions(
+  select: HTMLSelectElement,
+  resource: BiliSubtitleResource,
+  virtual: VirtualTranslation | null,
+): void {
   const fragment = document.createDocumentFragment();
+  if (virtual) {
+    const option = document.createElement('option');
+    option.value = virtual.trackId;
+    option.textContent = TRANSLATED_TRACK_LABEL;
+    fragment.appendChild(option);
+  }
   for (const track of resource.tracks) {
     const option = document.createElement('option');
     option.value = track.id;
@@ -175,7 +272,7 @@ function renderTrackOptions(select: HTMLSelectElement, resource: BiliSubtitleRes
   }
   select.replaceChildren(fragment);
   select.disabled = resource.tracks.length === 0;
-  select.value = resource.selectedTrackId ?? '';
+  select.value = virtual ? virtual.trackId : (resource.selectedTrackId ?? '');
 }
 
 export async function initializeSubtitlePage(): Promise<() => void> {
@@ -193,7 +290,7 @@ export async function initializeSubtitlePage(): Promise<() => void> {
   let currentUrl: URL | undefined;
   let currentIdentity: string | null = null;
   let currentResource: BiliSubtitleResource | null = null;
-  let uiState: SubtitlePageUiState = { trackId: null, scrollTop: 0 };
+  let uiState: SubtitlePageUiState = { preferredTrackId: null, scrollTop: 0 };
 
   // 播放同步状态
   let stopPlaybackSync: (() => void) | null = null;
@@ -216,14 +313,14 @@ export async function initializeSubtitlePage(): Promise<() => void> {
   }
 
   async function loadUiState(identityKey: string): Promise<void> {
+    uiState = { preferredTrackId: null, scrollTop: 0 };
     const value = await sessionGet(`${UI_PREFIX}${identityKey}`);
-    if (!value || typeof value !== 'object') {
-      uiState = { trackId: null, scrollTop: 0 };
-      return;
-    }
+    if (!value || typeof value !== 'object') return;
     const record = value as Record<string, unknown>;
     uiState = {
-      trackId: typeof record.trackId === 'string' ? record.trackId : null,
+      preferredTrackId: typeof record.preferredTrackId === 'string' && record.preferredTrackId !== ''
+        ? record.preferredTrackId
+        : null,
       scrollTop: typeof record.scrollTop === 'number' && Number.isFinite(record.scrollTop) ? record.scrollTop : 0,
     };
   }
@@ -246,6 +343,17 @@ export async function initializeSubtitlePage(): Promise<() => void> {
     const resource = (result as { resource?: unknown }).resource;
     if (!resource || typeof resource !== 'object') return undefined;
     return resource as BiliSubtitleResource;
+  }
+
+  function writeTranslationCache(identityKey: string, entry: TranslationCacheEntry): void {
+    void chrome.storage.session.set({
+      [`${TRANSLATION_CACHE_PREFIX}${identityKey}:${entry.sourceTrackId}`]: entry,
+    });
+  }
+
+  async function readTranslationCache(identityKey: string, sourceTrackId: string): Promise<TranslationCacheEntry | undefined> {
+    const key = `${TRANSLATION_CACHE_PREFIX}${identityKey}:${sourceTrackId}`;
+    return parseTranslationCacheEntry(await sessionGet(key), sourceTrackId);
   }
 
   function markProgrammaticScroll(): void {
@@ -340,12 +448,12 @@ export async function initializeSubtitlePage(): Promise<() => void> {
     select.disabled = true;
   }
 
-  function renderReady(resource: BiliSubtitleResource): void {
+  function renderReady(resource: BiliSubtitleResource, virtual: VirtualTranslation | null = null): void {
     currentResource = resource;
     status.textContent = '';
     title.textContent = resource.title;
-    renderTrackOptions(select, resource);
-    const segments = groupTranscript(resource.lines);
+    renderTrackOptions(select, resource, virtual);
+    const segments = groupTranscript(virtual ? virtual.lines : resource.lines);
     renderSegments(list, segments, (seconds) => { void seekTo(seconds); });
     if (uiState.scrollTop > 0) list.scrollTop = uiState.scrollTop;
     stopPlaybackSync?.();
@@ -364,30 +472,91 @@ export async function initializeSubtitlePage(): Promise<() => void> {
     preferredTrackId?: string;
   }): Promise<void> {
     const identityKey = identityKeyOf(args.identity);
-    const preferred = args.preferredTrackId ?? uiState.trackId ?? undefined;
+    const preferred = args.preferredTrackId ?? uiState.preferredTrackId ?? undefined;
+    const virtualPreferred = preferred && isVirtualTrackId(preferred)
+      ? sourceTrackIdOfVirtual(preferred)
+      : null;
+    const isStale = (): boolean => disposed || args.gen !== generation || args.tabId !== currentTabId;
 
-    if (!args.forceRefresh && preferred && identityKey) {
+    // 手动偏好官方轨：直接命中官方会话缓存
+    if (!args.forceRefresh && preferred && !virtualPreferred && identityKey) {
       const cached = await readCache(identityKey, preferred);
-      if (cached && !disposed && args.gen === generation && args.tabId === currentTabId) {
+      if (cached && !isStale()) {
         renderReady(cached);
         return;
       }
     }
 
+    // 手动偏好虚拟简中：官方源轨与翻译缓存都命中时直接渲染，不发任何请求
+    if (!args.forceRefresh && virtualPreferred && identityKey) {
+      const cachedOfficial = await readCache(identityKey, virtualPreferred);
+      const cachedTranslation = await readTranslationCache(identityKey, virtualPreferred);
+      if (cachedOfficial && cachedTranslation && !isStale()) {
+        renderReady(cachedOfficial, { trackId: virtualTrackIdOf(virtualPreferred), lines: cachedTranslation.lines });
+        return;
+      }
+    }
+
     try {
-      const resource = await fetchBilibiliSubtitleResource({
+      let resource = await fetchBilibiliSubtitleResource({
         url: args.pageUrl,
         requestJson,
-        preferredTrackId: preferred,
+        preferredTrackId: virtualPreferred ?? preferred,
       });
-      if (disposed || args.gen !== generation || args.tabId !== currentTabId) return;
-      if (identityKey) {
-        writeCache(identityKey, resource);
-        writeUiState({ trackId: resource.selectedTrackId, scrollTop: 0 });
+      if (isStale()) return;
+      if (identityKey) writeCache(identityKey, resource);
+
+      // 决策：是否需要虚拟简中轨，以及英文源轨 ID
+      let virtualSourceId: string | null = null;
+      if (virtualPreferred) {
+        virtualSourceId = resource.tracks.some((track) => track.id === virtualPreferred)
+          ? virtualPreferred
+          : null;
+      } else if (!preferred) {
+        const source = translationSource(resource);
+        if (source && source.id !== resource.selectedTrackId) {
+          // 源英文轨不是当前选中轨：按源轨 ID 重新获取官方行
+          resource = await fetchBilibiliSubtitleResource({
+            url: args.pageUrl,
+            requestJson,
+            preferredTrackId: source.id,
+          });
+          if (isStale()) return;
+          if (identityKey) writeCache(identityKey, resource);
+        }
+        virtualSourceId = source?.id ?? null;
       }
-      renderReady(resource);
+
+      let virtual: VirtualTranslation | null = null;
+      if (virtualSourceId) {
+        const virtualTrackId = virtualTrackIdOf(virtualSourceId);
+        const cachedTranslation = !args.forceRefresh && identityKey
+          ? await readTranslationCache(identityKey, virtualSourceId)
+          : undefined;
+        if (cachedTranslation) {
+          virtual = { trackId: virtualTrackId, lines: cachedTranslation.lines };
+        } else {
+          const response = await requestTranslation(virtualSourceId, resource.lines);
+          if (isStale()) return;
+          if (response.success) {
+            if (identityKey) {
+              writeTranslationCache(identityKey, { sourceTrackId: virtualSourceId, lines: response.lines });
+            }
+            virtual = { trackId: virtualTrackId, lines: response.lines };
+          } else {
+            // 翻译失败：先保留可读的官方英文正文，再给出状态提示；不清空轨道与正文
+            renderReady(resource);
+            status.textContent = `AI字幕翻译失败（${response.code}）`;
+            return;
+          }
+        }
+      }
+
+      // 自动加载成功不得写轨道偏好；只重置内存中的滚动位置
+      uiState = { ...uiState, scrollTop: 0 };
+      renderReady(resource, virtual);
     } catch (error) {
-      if (disposed || args.gen !== generation || args.tabId !== currentTabId) return;
+      if (isStale()) return;
       renderError(pageErrorMessage(error));
     }
   }
@@ -445,6 +614,8 @@ export async function initializeSubtitlePage(): Promise<() => void> {
 
   select.onchange = () => {
     if (disposed || !currentIdentity || !currentUrl || currentTabId === undefined) return;
+    // 只有用户主动切换才写轨道偏好（ui.v2）；自动加载不写
+    writeUiState({ preferredTrackId: select.value || null });
     generation += 1;
     const gen = generation;
     renderLoading();

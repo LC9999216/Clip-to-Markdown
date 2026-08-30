@@ -226,8 +226,8 @@ describe('B站独立字幕页构建与入口', () => {
     expect(html).toMatch(/id="action-back"[^>]*href="sidepanel\.html"/);
     expect(html).toContain('subtitle.js');
     expect(html).toContain('subtitle.css');
-    // 明确排除越界控件：搜索、段数、复制、导出、翻译、双语、顺句、ASR
-    expect(html).not.toMatch(/搜索|段数|复制|导出|翻译|双语|顺句|语音识别|ASR|search|export/i);
+    // 明确排除越界控件：搜索、段数、复制、导出、双语、顺句、ASR（自动简中翻译为设计内功能）
+    expect(html).not.toMatch(/复制|导出|搜索|双语|顺句|段数|语音识别|ASR|search|export/i);
   });
 
   it('构建复制第三方许可声明到 dist', () => {
@@ -246,10 +246,12 @@ describe('B站独立字幕页构建与入口', () => {
     expect(notices).toContain('THE SOFTWARE IS PROVIDED');
   });
 
-  it('README 记录独立字幕页、仅官方字幕、无 ASR 与参考来源', () => {
+  it('README 记录独立字幕页、AI 简中兜底、隐私边界与参考来源', () => {
     const readme = read('README.md');
     expect(readme).toContain('B站独立字幕页');
-    expect(readme).toContain('仅官方字幕');
+    expect(readme).toContain('简体中文（AI 翻译）');
+    expect(readme).toContain('不会发送音频或视频');
+    expect(readme).toContain('可能产生费用');
     expect(readme).toContain('无ASR');
     expect(readme).toContain('https://github.com/biuworks/bilibili-digest');
   });

@@ -847,9 +847,9 @@ git commit -m "fix: address subtitle segmentation review"
 
 此任务需要真实 Chrome、B 站页面和用户登录/扩展设置。若执行环境无法加载扩展，必须明确标为未验证，不能以单元测试代替手工验收结论。
 
-**执行结果（2026-08-30）：Step 1–6 全部未执行（未验证）**——执行环境为 Windows + 系统 Chrome `151.0.7922.174`，branded Chrome ≥137 已移除 `--load-extension` 支持（`chrome://extensions` 列表为空），Playwright chromium 打开 `chrome://extensions` WebUI 触发整体崩溃，persistent context + 扩展 flag 组合注册不出扩展 Service Worker。证据与用户手工验收步骤见进度报告 §六；以下复选框保留未勾选状态以如实反映。
+**最终执行结果（2026-08-30）：Step 1–6 已由用户在真实 Chrome/B 站环境完成人工验收并确认全部通过、无异常。** 此结论为用户提供的人工验收证据；当前对话未附原始截图、Network 导出、Chrome/扩展精确版本或前 8 个时间点明细，进度报告 §六如实记录该证据边界。
 
-- [ ] **Step 1: 重新加载本工作树构建的扩展**
+- [x] **Step 1: 重新加载本工作树构建的扩展**
 
 ```powershell
 npm run build
@@ -857,7 +857,7 @@ npm run build
 
 在 `chrome://extensions` 开启开发者模式，确认加载/重新加载的是当前工作树的 `dist`，不是其他 checkout 的构建目录。
 
-- [ ] **Step 2: 验收截图中的官方中文字幕视频**
+- [x] **Step 2: 验收截图中的官方中文字幕视频**
 
 打开：
 
@@ -876,7 +876,7 @@ https://www.bilibili.com/video/BV1dsut6AES4/
 - 不出现同一句重复多次；
 - 源字幕真实空档不被伪文字填满。
 
-- [ ] **Step 3: 验收点击跳转**
+- [x] **Step 3: 验收点击跳转**
 
 随机点击至少 5 个非首段字幕：
 
@@ -884,7 +884,7 @@ https://www.bilibili.com/video/BV1dsut6AES4/
 - 不总是跳回一整条大字幕的起点；
 - 点击后当前高亮与播放器位置一致。
 
-- [ ] **Step 4: 验收随播放高亮**
+- [x] **Step 4: 验收随播放高亮**
 
 连续播放至少 60 秒：
 
@@ -893,7 +893,7 @@ https://www.bilibili.com/video/BV1dsut6AES4/
 - 在明确无字幕/停顿处允许没有高亮；
 - 自动滚动不应因分段增多而跳到错误位置。
 
-- [ ] **Step 5: 验收 AI 中文轨**
+- [x] **Step 5: 验收 AI 中文轨**
 
 打开此前 AI 翻译目标视频：
 
@@ -911,7 +911,7 @@ https://www.bilibili.com/video/BV1Yku16CEzX/
 
 不得代替用户启用费用开关或填入 API Key。
 
-- [ ] **Step 6: 记录证据**
+- [x] **Step 6: 记录证据**
 
 进度报告至少记录：
 

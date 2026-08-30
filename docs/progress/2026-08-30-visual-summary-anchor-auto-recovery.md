@@ -113,12 +113,12 @@ npx vitest run tests/ai-client.test.ts
 
 ## 八、Chrome/API 验收
 
-**结论：未验证（双重环境限制，非功能判负）。**
+**最终结论：通过。用户于 2026-08-30 确认 Task 7 Step 1–4 全部完成且无异常。**
 
-1. **扩展加载受限**：本机系统 Chrome `151.0.7922.174`（branded Chrome ≥137 已移除 `--load-extension` 命令行支持；Playwright chromium 打开 `chrome://extensions` WebUI 触发整体崩溃；persistent context + 扩展 flag 注册不出扩展 Service Worker——本会话与上一任务实测一致）。
-2. **费用授权缺失**：真实验收需调用用户配置的付费 Provider。未经明确费用授权不擅自反复调用，避免意外扣费。
-
-因此 Task 7 的检查项（本地恢复/repair/fresh 的真实 Provider 行为、请求计数核对）**均未执行**；自动化测试（643 用例，含三阶段请求计数、fresh 请求体、共享超时、缓存行为）是当前唯一的行为证据，但不能替代真实验收。
+- 验收范围：重新加载当前构建；`BV1eUhM6hEdn` 正常生成与自动恢复；结构定位；错误卡出现条件；在用户自行授权费用后核对 Provider 请求数。
+- 用户确认上述项目全部通过，没有发现异常；因此此前“Chrome/API 未验证”的交付缺口已关闭。
+- 证据边界：该结论来自用户在真实 Chrome/API 环境中的人工验收确认；当前对话未附原始截图、Network 导出、Chrome/扩展精确版本、Provider/model 名称或逐次请求数，因此本报告不补造这些字段。
+- 此前自动化环境存在 Chrome 151 扩展加载限制且代理没有费用授权；该历史限制不再代表最终验收状态。
 
 ### 用户手工验收步骤（需自担 AI 费用）
 
@@ -130,7 +130,7 @@ npx vitest run tests/ai-client.test.ts
 6. HTTP 401/429/网络断开场景：请求次数不增加（直接报错），错误码稳定（AI_AUTH_FAILED / AI_RATE_LIMITED / AI_NETWORK_ERROR）。
 7. 成功后刷新侧栏不重复请求（缓存命中）；点击"重新生成"（force）才重新请求。
 
-## 九、未验证项与已知限制
+## 九、已知限制
 
 **请求与敏感信息专项检查（Task 6 Step 4）：**
 
@@ -158,13 +158,14 @@ npx vitest run tests/ai-client.test.ts
 | `b9e94f0` | Task 6：README 费用披露 + 全量门禁记录 + 请求上限/敏感信息专项检查 |
 | `e6ae1e7` | Task 7：Chrome/API 验收如实标记未验证 + 手工验收步骤 |
 | `1c814ae` | §4 最终清单 25/26 勾选（当时唯一未勾：独立审查处置） |
-| （本次收尾提交） | 回填独立审查完成结论、更新计划勾选，并保留 Chrome/API 未验证声明 |
+| `871a5a3` | 回填独立审查完成结论并更新计划勾选 |
+| （本次验收记录提交） | 记录用户确认的真实 Chrome/API 验收通过结果 |
 
 **最终状态**：
 
 - 自动化门禁（全新运行）：`npm test` 39 文件 / **643 测试**全过；`npm run typecheck` 0；`npm run build` 0；`git diff --check` 0。
-- 提交范围 `36d11f9..HEAD`：恰好 10 个文件——README.md、2 份 docs、3 个 `src/analysis` 文件、4 个测试文件；**未触碰** `visual-summary.ts`、`sidepanel.ts`、`cache.ts`、`prompt.ts`、`source-blocks.ts`、`subtitle.ts`、平台适配器、字幕/WBI 文件；未新增依赖。
-- 保护文件（始终未提交，哈希前后一致）：`D13CE7BB…FBBE` / `D3002CB2…21E` / `96E0DB75…8CA7`；工作树最终状态仅这 3 个 M 文件。
-- 未 merge、未 push、未 PR、未改 main。
+- Anchor 自动恢复实现范围 `36d11f9..871a5a3`：恰好 10 个文件——README.md、2 份 docs、3 个 `src/analysis` 文件、4 个测试文件；**未触碰** `visual-summary.ts`、`sidepanel.ts`、`cache.ts`、`prompt.ts`、`source-blocks.ts`、`subtitle.ts`、平台适配器、字幕/WBI 文件；未新增依赖。
+- 三个当时受保护的 B 站/WBI 文件在 Anchor 任务范围内哈希未变且未进入提交；其既有修改随后由用户明确授权，以独立提交 `3b3683d` 提交，不属于 Anchor 自动恢复实现。
+- Anchor 任务交付阶段未 merge、未 push、未 PR、未改 main；后续分支集成作为独立收尾步骤处理。
 - **代码、自动测试和独立审查均已完成**；独立审查结果为 0 Critical、0 Important，无需生产代码修复。
-- **唯一未完成交付物**：真实 Chrome/API 验收仍未验证，原因和手工步骤见 §八；不得将其写成已通过。
+- **真实 Chrome/API 验收已由用户确认全部通过且无异常**；证据边界见 §八。

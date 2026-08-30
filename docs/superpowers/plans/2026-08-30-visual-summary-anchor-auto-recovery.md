@@ -1168,14 +1168,14 @@ git commit -m "docs: close visual recovery independent review"
 
 ## Task 7：真实验收与最终交付
 
-**执行结果（2026-08-30）：Step 1–4 全部未执行（未验证）**——双重限制：①本机 Chrome `151.0.7922.174` 无法加载解压扩展（branded ≥137 移除 `--load-extension`，Playwright chromium 打开 chrome://extensions 崩溃，persistent context 注册不出扩展 Service Worker）；②真实验收需调用用户付费 Provider，未经明确费用授权不擅自调用。证据与完整手工验收步骤见进度报告 §八；以下复选框保持未勾选以如实反映。Step 5–8（可离线完成的部分）已执行。
+**最终执行结果（2026-08-30）：Step 1–4 已由用户在真实 Chrome/API 环境完成人工验收并确认全部通过、无异常。** 用户的确认同时构成费用相关步骤已由用户自行授权并执行的证据；当前对话未附原始截图、Network 导出、Provider/model 名称或逐次请求数，进度报告 §八如实记录该证据边界。Step 5–8 亦已完成。
 
 **Files:**
 
 - Read built extension: `dist/`
 - Modify: `docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md`
 
-- [ ] **Step 1: 构建并重新加载扩展**
+- [x] **Step 1: 构建并重新加载扩展**
 
 ```powershell
 npm run build
@@ -1183,7 +1183,7 @@ npm run build
 
 在 `chrome://extensions` 重新加载当前工作树的 `dist`。确认没有加载主工作树或旧构建。
 
-- [ ] **Step 2: 使用截图视频做正常用户验收**
+- [x] **Step 2: 使用截图视频做正常用户验收**
 
 打开：
 
@@ -1200,11 +1200,11 @@ https://www.bilibili.com/video/BV1eUhM6hEdn/
 
 真实 Provider 输出具有随机性，无法稳定触发三阶段，因此此步骤不能替代自动化请求次数测试。
 
-- [ ] **Step 3: 在明确授权费用后检查 Provider 请求数**
+- [x] **Step 3: 在明确授权费用后检查 Provider 请求数**
 
 通过 DevTools Network 或用户 Provider 控制台记录一次主动操作的请求数。不得为了制造失败反复消耗用户额度。若没有费用授权，将此项标为未验证。
 
-- [ ] **Step 4: 记录人工证据**
+- [x] **Step 4: 记录人工证据**
 
 报告记录：
 

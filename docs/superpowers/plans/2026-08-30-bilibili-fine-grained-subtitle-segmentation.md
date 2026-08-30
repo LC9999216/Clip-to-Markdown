@@ -821,7 +821,7 @@ Expected:
 
 所有 Critical/Important 必须修复并复跑全量门禁；Minor 要么修复，要么在报告中写明不修理由。
 
-- [ ] **Step 7: 提交文档与审查修复**
+- [x] **Step 7: 提交文档与审查修复**
 
 ```powershell
 git add -- README.md docs/progress/2026-08-30-bilibili-fine-grained-subtitle-segmentation.md
@@ -846,6 +846,8 @@ git commit -m "fix: address subtitle segmentation review"
 - Update evidence: `docs/progress/2026-08-30-bilibili-fine-grained-subtitle-segmentation.md`
 
 此任务需要真实 Chrome、B 站页面和用户登录/扩展设置。若执行环境无法加载扩展，必须明确标为未验证，不能以单元测试代替手工验收结论。
+
+**执行结果（2026-08-30）：Step 1–6 全部未执行（未验证）**——执行环境为 Windows + 系统 Chrome `151.0.7922.174`，branded Chrome ≥137 已移除 `--load-extension` 支持（`chrome://extensions` 列表为空），Playwright chromium 打开 `chrome://extensions` WebUI 触发整体崩溃，persistent context + 扩展 flag 组合注册不出扩展 Service Worker。证据与用户手工验收步骤见进度报告 §六；以下复选框保留未勾选状态以如实反映。
 
 - [ ] **Step 1: 重新加载本工作树构建的扩展**
 
@@ -930,7 +932,7 @@ https://www.bilibili.com/video/BV1Yku16CEzX/
 
 - Update: `docs/progress/2026-08-30-bilibili-fine-grained-subtitle-segmentation.md`
 
-- [ ] **Step 1: 复核保护文件哈希**
+- [x] **Step 1: 复核保护文件哈希**
 
 ```powershell
 Get-FileHash -Algorithm SHA256 -LiteralPath 'src/adapters/bilibili/subtitle-service.ts','tests/adapters/bilibili-subtitle-service.test.ts','tests/adapters/bilibili.test.ts'
@@ -938,7 +940,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath 'src/adapters/bilibili/subtitle-serv
 
 Expected: 与 Task 0 记录一致。若不一致，停止交付并审查原因；不得直接回退，因为这些修改属于用户。
 
-- [ ] **Step 2: 复核提交内容**
+- [x] **Step 2: 复核提交内容**
 
 ```powershell
 git log --oneline --decorate -10
@@ -953,7 +955,7 @@ Expected:
 - 3 个保护文件仍只以未提交状态存在，不出现在本任务 commit diff；
 - 没有 merge commit、push 或 PR 副作用。
 
-- [ ] **Step 3: 最后一次全量门禁**
+- [x] **Step 3: 最后一次全量门禁**
 
 在所有审查修复和文档更新后重新运行，不得引用较早结果：
 
@@ -966,7 +968,7 @@ git diff --check
 
 把实际数字和退出码写进进度报告。
 
-- [ ] **Step 4: 提交最终报告更新**
+- [x] **Step 4: 提交最终报告更新**
 
 ```powershell
 git add -- docs/progress/2026-08-30-bilibili-fine-grained-subtitle-segmentation.md
@@ -975,7 +977,7 @@ git diff --cached --name-only
 git commit -m "docs: finalize subtitle segmentation verification"
 ```
 
-- [ ] **Step 5: 给用户的最终交付摘要必须包含**
+- [x] **Step 5: 给用户的最终交付摘要必须包含**
 
 1. branch 与 HEAD；
 2. 起始/最终提交范围；

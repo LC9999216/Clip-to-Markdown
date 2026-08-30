@@ -50,7 +50,7 @@
 - **语言判定**：`/\p{Script=Han}/u`（支持扩展汉字），全部按 `Array.from` 的 code point 计数。
 - **按时长调整**：`targetByTime = max(1, floor(chars×4/duration))`、`maxByTime = max(targetByTime, floor(chars×6/duration))`；`targetLimit = min(languageTarget, targetByTime)`、`hardLimit = max(targetLimit, min(languageMax, maxByTime))`。
 - **切点优先级**（`findCutIndex`）：强句末 `。！？”’!?；;` → 后跟空白的拉丁句点（保护小数/版本号/URL）→ 弱标点 `，,、：:` → 拉丁空白边界 → `targetLimit` 硬切；候选位于 `[offset+min(minCut, remaining−1), offset+hardLimit]`，同优先级取距 `offset+targetLimit` 最近、同距取较后（标点归前段）；剩余 ≤ hardLimit 直接收尾。
-- **空白处理**（`advanceCut`）：分隔空白归入前段，且保证每段至少一个非空白字符——不丢字、无纯空白段。
+- **空白处理**（`advanceCut` + 切分循环）：正常分隔空白归入前段，且吸收以本段硬上限为界（避免病态长空白串使子段超过 6 秒）；被截断产生的纯空白块**不单独成段**，挂起后并入下一个含内容子段（行尾则并入最后一段），起点取块首、时间仍按 code point 比例——"无空文字段"（计划 §0.4 硬性要求）优先于"子段 ≤ 6 秒"（后者在病态输入下不可两全，已在 §七 说明）。
 - **极稀疏例外**：`duration > 6 且 duration/chars > 6` 时保留单个非空展示段与原始时间范围（进入切分循环前判断）。
 - **时间分配**：`from + duration×(offset/chars)`；首段 start 精确等于 `from`、末段 end 精确等于 `to`、相邻子段共享同一表达式（IEEE 精确相等）；`to < from` 规范为非负区间，`from === to` 不产生 NaN。
 - **`groupTranscript`**：过滤空白行 → 逐行 `flatMap(splitSubtitleLine)` → 全局顺序编号 `S0001…`。
@@ -62,6 +62,7 @@
 - **Task 2 后**：`npx vitest run tests/adapters/bilibili-transcript.test.ts tests/adapters/bilibili-subtitle-service.test.ts tests/adapters/bilibili.test.ts` → 45/45 通过（含 3 个保护文件对应测试）。
 - **Task 3 后**：`npx vitest run tests/subtitle-page.test.ts` → 52/52 一次通过（新增 6 个细粒度分段集成用例，未改 `subtitle.ts`）。
 - **全量**：`npm test` 38 文件 / **606 测试**全过（0 失败）。
+- **最终（独立审查修复后，全新运行）**：`npm test` 38 文件 / **610 测试**全过；typecheck 0；build 0；`git diff --check` 干净。
 
 集成覆盖点：官方中文长行 4 段（data-start 0/4/8/12、显示 00:00/00:04/00:08/00:12、拼接不丢字）；AI 虚拟轨同规则 4 段且翻译请求仅 1 次（请求载荷仍为原始英文 1 行 0~4 秒——分段发生在翻译返回之后）；切官方英文再切回虚拟轨命中翻译缓存（key 只依赖源轨）；点击第三段 seek 8 秒；播放 3.9/4.0/8.5/13.5/14.0 秒高亮按短段切换、无下一行无高亮；0~2 与 10~12 真实空档无占位行、空档处无高亮。
 
@@ -95,7 +96,21 @@
 
 **范围与敏感信息检查：** `git status` 仅含本任务允许文件与 3 个保护文件；`rg "API[_ -]?KEY|Authorization|Bearer"` 在新增/修改文件中的命中仅为既有良性文案（测试错误提示与用户文档），分段代码零命中，无密钥、Authorization header 或 Provider 正文。
 
-## 八、提交记录与最终工作树状态
+## 八、独立代码审查结论与处置
+
+独立审查（子代理，快照 HEAD `c03f01c`，自行复跑单元/全量测试与 typecheck，另用 node 直载 transcript.ts 实测边界）结论：**0 Critical、1 Important、2 Minor**；8 个专项问题（跨行合并、死循环/丢字、code point、时间数学、稀疏例外、双轨集成、翻译语义、保护文件）全部通过；确认窗口倒置（hardLimit < minCut）回退行为可接受、`subtitle.ts` 未触碰、diff 范围合规。
+
+处置记录：
+
+| 发现 | 级别 | 处置 |
+|---|---|---|
+| 纯空白展示段：行内空白串长于 hardLimit 时，fix-up 分支吞掉整个剩余空白，产出可点击/高亮的"看不见的文字"段（实测 30 空格/20 秒 → 22 空白段约 12.9 秒） | Important | **已修复**（`fix: merge long whitespace runs…`）：TDD 红灯先行；吸收仍以硬上限封顶，纯空白块不再单独成段——挂起并入下一个含内容子段（行尾并入最后一段），时间仍按比例、相邻端点仍精确相等、拼接仍无损；新增"行中长空白串"测试（19 用例） |
+| 句点后"空白或文本结尾"：实现只判空白 | Minor | **已处理**：审查已证明文本结尾句点永远进不了候选窗口（整段收尾分支 + `last < total-1`），行为完全等价；在 `dotCut` 处补等价性注释防未来重构产生真实差异 |
+| 文档未同步空白归属语义；§九待回填 | Minor | **已修复**：§四"空白处理"按新语义重写并明确"无空段"优先于"≤6 秒"；§九提交清单已回填（审查快照为 c03f01c，其时 §九 尚未提交）。计划文档 §1.5"固定规格"正文未改动——计划文档仅按约定做 checkbox 勾选，正文差异以本报告为准 |
+
+审查修复后复跑：`npx vitest run tests/adapters/bilibili-transcript.test.ts` 19/19；`npm test` 38 文件 / **610 测试**全过；typecheck 0。
+
+## 九、提交记录与最终工作树状态
 
 提交范围 `2c72489..HEAD`（分支 `codex/bilibili-subtitle-sidepanel`，未 merge/push/PR/改 main）：
 
@@ -111,5 +126,8 @@
 | `1e2405d` | fix: bound whitespace absorption by segment hard limit（自查修复+红灯测试） |
 | `f7730cd` | test: keep empty-input invariant in segmentation suite |
 | `c03f01c` | test: lock degenerate cut-window progress invariant |
+| `d5393d2` | docs: record segmentation commit log in progress report |
+| `9783665` | docs: tick verified items in segmentation checklist |
+| `83b56cf` | fix: merge long whitespace runs into adjacent content segments（审查 Important 1 修复） |
 
 最终工作树：仅 3 个既有未提交保护文件（哈希与开始时一致，未进入任何提交）。

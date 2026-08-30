@@ -145,6 +145,17 @@ describe('B站字幕细粒度分段', () => {
     expect(result.map((segment) => segment.text).join('')).toBe(content);
   });
 
+  it('长空白串归前段时受硬上限约束，不使子段超过 6 秒', () => {
+    // 23 code points / 8 秒（正常密度）；空白候选切点 12..17、target 11
+    const content = 'a'.repeat(10) + ' '.repeat(10) + 'b'.repeat(3);
+    const result = groupTranscript([{ from: 0, to: 8, content }]);
+
+    expect(result.map((segment) => Array.from(segment.text).length)).toEqual([17, 6]);
+    expect(result.every((segment) => segment.end - segment.start <= 6 + EPSILON)).toBe(true);
+    expect(result.map((segment) => segment.text).join('')).toBe(content);
+    expect(result[0]!.end).toBeCloseTo(8 * 17 / 23, 10);
+  });
+
   it('极稀疏源行保真例外：单字 25 秒保留原始时间范围（源数据过稀，非算法缺陷）', () => {
     const result = groupTranscript([{ from: 0, to: 25, content: '甲' }]);
 

@@ -105,11 +105,11 @@ function findCutIndex(
   return idealCut;
 }
 
-/** 分隔空白归入前段；同时保证每段至少包含一个非空白字符（不丢字、无纯空白段）。 */
-function advanceCut(codePoints: string[], offset: number, cut: number): number {
+/** 分隔空白归入前段但不越过本段硬上限；保证每段至少一个非空白字符（不丢字、无纯空白段）。 */
+function advanceCut(codePoints: string[], offset: number, cut: number, hardLimitEnd: number): number {
   const total = codePoints.length;
   let end = cut;
-  while (end < total && isWhitespaceChar(codePoints[end])) end += 1;
+  while (end < total && end < hardLimitEnd && isWhitespaceChar(codePoints[end])) end += 1;
   if (!sliceHasContent(codePoints, offset, end) && end < total) {
     end += 1;
     while (end < total && isWhitespaceChar(codePoints[end])) end += 1;
@@ -148,7 +148,7 @@ function splitSubtitleLine(line: BiliSubtitleLine): Array<{ start: number; end: 
   let offset = 0;
   while (offset < chars) {
     const rawCut = findCutIndex(codePoints, offset, targetLimit, hardLimit, limits.minCut, isCjk);
-    const cut = advanceCut(codePoints, offset, rawCut);
+    const cut = advanceCut(codePoints, offset, rawCut, offset + hardLimit);
     const start = offset === 0 ? from : from + duration * (offset / chars);
     const end = cut === chars ? to : from + duration * (cut / chars);
     segments.push({ start, end, text: codePoints.slice(offset, cut).join('') });

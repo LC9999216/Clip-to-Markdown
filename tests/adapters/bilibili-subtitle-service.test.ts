@@ -29,8 +29,10 @@ function makeNav(isLogin = true) {
     code: 0,
     data: {
       isLogin,
-      img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
-      sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+      wbi_img: {
+        img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+        sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+      },
     },
   };
 }
@@ -103,6 +105,28 @@ function makeRequestJson(options: {
 }
 
 describe('B站官方字幕服务', () => {
+  it('从 nav.data.wbi_img 读取当前 WBI 密钥响应结构', async () => {
+    const requests: Array<{ url: string; credentials?: 'include' | 'omit' }> = [];
+    await fetchBilibiliSubtitleResource({
+      url: videoUrl,
+      requestJson: makeRequestJson({
+        requests,
+        nav: {
+          code: 0,
+          data: {
+            isLogin: true,
+            wbi_img: {
+              img_url: 'https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png',
+              sub_url: 'https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png',
+            },
+          },
+        },
+      }),
+    });
+
+    expect(new URL(requests[2]!.url).pathname).toBe('/x/player/wbi/v2');
+  });
+
   it('按 view → nav → 签名 player → CDN 完成请求并选择优先轨道', async () => {
     const requests: Array<{ url: string; credentials?: 'include' | 'omit' }> = [];
     const resource = await fetchBilibiliSubtitleResource({
@@ -138,6 +162,43 @@ describe('B站官方字幕服务', () => {
       { title: '开场', from: 0, to: 12 },
       { title: '正文', from: 12, to: 30 },
     ]);
+  });
+
+  it('默认选择 ai-zh 简体中文而不是先返回的 ai-en 英文', async () => {
+    const requests: Array<{ url: string; credentials?: 'include' | 'omit' }> = [];
+    const player = {
+      code: 0,
+      data: {
+        subtitle: {
+          subtitles: [
+            {
+              id_str: 'ai-en',
+              lan: 'ai-en',
+              lan_doc: 'English',
+              ai_type: 1,
+              subtitle_url: 'https://subtitle.hdslb.com/ai-en.json',
+            },
+            {
+              id_str: 'ai-zh',
+              lan: 'ai-zh',
+              lan_doc: 'Chinese (Simplified)',
+              ai_type: 1,
+              subtitle_url: 'https://subtitle.hdslb.com/ai-zh.json',
+            },
+          ],
+        },
+        view_points: [],
+      },
+    };
+
+    const resource = await fetchBilibiliSubtitleResource({
+      url: videoUrl,
+      requestJson: makeRequestJson({ requests, player }),
+    });
+
+    expect(resource.tracks.map((track) => track.id)).toEqual(['ai-zh', 'ai-en']);
+    expect(resource.selectedTrackId).toBe('ai-zh');
+    expect(requests.at(-1)!.url).toBe('https://subtitle.hdslb.com/ai-zh.json');
   });
 
   it('有效 preferredTrackId 覆盖自动优先级', async () => {

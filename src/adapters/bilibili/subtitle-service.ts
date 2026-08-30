@@ -39,8 +39,10 @@ interface BiliViewData {
 
 interface BiliNavData {
   isLogin?: unknown;
-  img_url?: unknown;
-  sub_url?: unknown;
+  wbi_img?: {
+    img_url?: unknown;
+    sub_url?: unknown;
+  };
 }
 
 interface BiliSubtitleRawTrack {
@@ -146,7 +148,9 @@ function isAiTrack(track: BiliSubtitleRawTrack): boolean {
 }
 
 function isChineseTrack(language: string, label: string): boolean {
-  return language === 'zh' || language.startsWith('zh-') || label.includes('中文') || label.includes('汉语');
+  return language.split('-').includes('zh')
+    || label.includes('中文')
+    || label.includes('汉语');
 }
 
 function subtitlePriority(track: BiliSubtitleTrack): number {
@@ -264,8 +268,8 @@ export async function fetchBilibiliSubtitleResource(args: {
   let player: BiliApiResponse<BiliPlayerData>;
   try {
     const keys = extractWbiKeys({
-      img_url: String(navData.img_url ?? ''),
-      sub_url: String(navData.sub_url ?? ''),
+      img_url: String(navData.wbi_img?.img_url ?? ''),
+      sub_url: String(navData.wbi_img?.sub_url ?? ''),
     });
     const signedQuery = signWbiParams(
       { aid: positiveInteger(viewData.aid, 0), cid: page.cid, bvid },

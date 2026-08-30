@@ -1341,30 +1341,30 @@ git diff --cached --check
 
 ## 4. 最终审查清单
 
-- [ ] 合法首次输出只请求一次。
-- [ ] 初次 Quote 本地恢复成功仍只请求一次。
-- [ ] 本地恢复只修改 Quote，不修改 Block ID 或分析内容。
-- [ ] 返回 Quote 是对应 Block 的精确子串。
-- [ ] 返回 Quote 不超过 140 codepoints。
-- [ ] 低相似度、过短、歧义和跨 Block 重复均保守失败。
-- [ ] 本地恢复后仍运行严格 Anchor Validator。
-- [ ] 初次校验失败后只有一次 repair。
-- [ ] repair 校验失败后只有一次 fresh generation。
-- [ ] fresh request 不携带旧输出或 repair 错误。
-- [ ] fresh 输出也运行本地恢复和严格 Validator。
-- [ ] 单次分析最多 3 次 Provider 请求。
-- [ ] HTTP/网络/鉴权/限流/超时不被本功能自动重试。
-- [ ] 三阶段共享现有 30 秒总时间预算。
-- [ ] 三阶段失败后错误诊断安全、有限且不泄露 Provider 正文/API Key。
-- [ ] 只有合法结果进入 session cache。
-- [ ] Background 不产生中间 error state 或第二 requestId。
-- [ ] Side Panel 最终仍提供“重新生成”。
-- [ ] V1 analyzeContent 仍最多一次 repair，不启用 fresh。
-- [ ] README 披露最多 3 次请求和费用。
-- [ ] 未修改 Source Block 提取、导航、字幕和 WBI。
-- [ ] 未增加依赖。
-- [ ] 全量测试、typecheck、build、diff-check 全绿。
+- [x] 合法首次输出只请求一次。
+- [x] 初次 Quote 本地恢复成功仍只请求一次。
+- [x] 本地恢复只修改 Quote，不修改 Block ID 或分析内容。
+- [x] 返回 Quote 是对应 Block 的精确子串。
+- [x] 返回 Quote 不超过 140 codepoints。
+- [x] 低相似度、过短、歧义和跨 Block 重复均保守失败。
+- [x] 本地恢复后仍运行严格 Anchor Validator。
+- [x] 初次校验失败后只有一次 repair。
+- [x] repair 校验失败后只有一次 fresh generation。
+- [x] fresh request 不携带旧输出或 repair 错误。
+- [x] fresh 输出也运行本地恢复和严格 Validator。
+- [x] 单次分析最多 3 次 Provider 请求。
+- [x] HTTP/网络/鉴权/限流/超时不被本功能自动重试。
+- [x] 三阶段共享现有 30 秒总时间预算。
+- [x] 三阶段失败后错误诊断安全、有限且不泄露 Provider 正文/API Key。
+- [x] 只有合法结果进入 session cache。
+- [x] Background 不产生中间 error state 或第二 requestId。
+- [x] Side Panel 最终仍提供“重新生成”。
+- [x] V1 analyzeContent 仍最多一次 repair，不启用 fresh。
+- [x] README 披露最多 3 次请求和费用。
+- [x] 未修改 Source Block 提取、导航、字幕和 WBI。
+- [x] 未增加依赖。
+- [x] 全量测试、typecheck、build、diff-check 全绿。
 - [ ] 独立审查 Critical/Important 全部处置。
-- [ ] 三个保护文件哈希未变且未进入提交。
-- [ ] Chrome/API 验收已记录或明确未验证。
-- [ ] 未 merge、push、PR 或修改 main。
+- [x] 三个保护文件哈希未变且未进入提交。
+- [x] Chrome/API 验收已记录或明确未验证。
+- [x] 未 merge、push、PR 或修改 main。

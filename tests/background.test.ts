@@ -609,3 +609,172 @@ describe('background TRANSLATE_BILIBILI_SUBTITLES handler', () => {
     vi.unstubAllGlobals();
   });
 });
+
+// ---- 一图速览三阶段恢复（本地恢复 / repair / fresh） ----
+
+const RECOVERY_BLOCK_TEXT = '这是第一段正文内容，用于验证自动恢复。';
+
+function recoveryDocument(): ContentDocument {
+  return {
+    version: 1,
+    metadata: {
+      platform: 'x',
+      contentType: 'x-article',
+      sourceUrl: 'https://x.com/alice/status/123',
+      author: { name: 'Alice', handle: 'alice' },
+      published: '',
+      title: 'Article title',
+    },
+    body: {
+      type: 'article',
+      children: [{ type: 'paragraph', children: [{ type: 'text', value: RECOVERY_BLOCK_TEXT }] }],
+    },
+  };
+}
+
+function recoverySummary(sourceQuote: string): unknown {
+  return {
+    schemaVersion: 2,
+    summary: ['总结一', '总结二'],
+    keyPoints: [{ title: 'a', description: 'b' }, { title: 'c', description: 'd' }],
+    structure: [{ title: '正文', sourceBlockId: 'B001', sourceQuote }],
+  };
+}
+
+function stateWritesFor(tabId: number): string[] {
+  const setMock = chrome.storage.session.set as unknown as { mock: { calls: Array<[Record<string, unknown>]> } };
+  return setMock.mock.calls
+    .map(([items]) => items[`clip2md.visualSummary.state.${tabId}`] as { status?: string } | undefined)
+    .filter((state): state is { status: string } => Boolean(state))
+    .map((state) => state.status);
+}
+
+function cachedSummary(): unknown {
+  const cacheKey = Object.keys(mockSessionStorage).find((key) => key.startsWith('clip2md.visualSummary.v2.cache.'));
+  return cacheKey === undefined ? undefined : mockSessionStorage[cacheKey];
+}
+
+describe('background visual summary 三阶段恢复', () => {
+  function clearSessionWriteHistory(): void {
+    const setSpy = chrome.storage.session.set as unknown as { mock: { calls: unknown[] } };
+    setSpy.mock.calls.length = 0;
+  }
+
+  it('初次输出 Quote 轻微差异时本地恢复成功：1 次请求、done、缓存恢复后结果', async () => {
+    mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      callback?.({
+        success: true,
+        document: recoveryDocument(),
+        sourceBlocks: [{ id: 'B001', kind: 'paragraph', text: RECOVERY_BLOCK_TEXT }],
+      });
+    });
+    clearSessionWriteHistory();
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify(recoverySummary('这是第一段正文内容，用于验证自动恢复!'))));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resp = await dispatchRuntimeMessage(
+      { type: 'START_VISUAL_ANALYSIS', payload: { tabId: 42 } },
+      { url: 'chrome-extension://test-extension-id/sidepanel.html' },
+    );
+
+    expect(resp).toEqual({ success: true, requestId: expect.any(String) });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const state = mockSessionStorage['clip2md.visualSummary.state.42'] as { status: string; result?: { structure?: Array<{ sourceQuote?: string }> } };
+    expect(state.status).toBe('done');
+    expect(state.result?.structure?.[0]?.sourceQuote).toBe(RECOVERY_BLOCK_TEXT);
+
+    expect(stateWritesFor(42)).toEqual(['extracting', 'analyzing', 'done']);
+
+    const cached = cachedSummary() as { structure?: Array<{ sourceQuote?: string }> } | undefined;
+    expect(cached).toBeDefined();
+    expect(cached?.structure?.[0]?.sourceQuote).toBe(RECOVERY_BLOCK_TEXT);
+    vi.unstubAllGlobals();
+  });
+
+  it('repair 失败后 fresh 成功：恰好 3 次请求、无中间 error、结果进缓存、再次启动命中缓存', async () => {
+    mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      callback?.({
+        success: true,
+        document: recoveryDocument(),
+        sourceBlocks: [{ id: 'B001', kind: 'paragraph', text: RECOVERY_BLOCK_TEXT }],
+      });
+    });
+    clearSessionWriteHistory();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okAiContent(JSON.stringify(recoverySummaryWithBlock('B999', '不存在'))))
+      .mockResolvedValueOnce(okAiContent(JSON.stringify(recoverySummaryWithBlock('B998', '仍然不存在'))))
+      .mockResolvedValueOnce(okAiContent(JSON.stringify(recoverySummary(RECOVERY_BLOCK_TEXT))));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await dispatchRuntimeMessage(
+      { type: 'START_VISUAL_ANALYSIS', payload: { tabId: 42 } },
+      { url: 'chrome-extension://test-extension-id/sidepanel.html' },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(stateWritesFor(42)).toEqual(['extracting', 'analyzing', 'done']);
+    expect((mockSessionStorage['clip2md.visualSummary.state.42'] as { status: string }).status).toBe('done');
+    expect(cachedSummary()).toBeDefined();
+
+    fetchMock.mockClear();
+    const rerun = await dispatchRuntimeMessage(
+      { type: 'START_VISUAL_ANALYSIS', payload: { tabId: 42 } },
+      { url: 'chrome-extension://test-extension-id/sidepanel.html' },
+    );
+    expect(rerun).toEqual({ success: true, requestId: expect.any(String) });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((mockSessionStorage['clip2md.visualSummary.state.42'] as { status: string }).status).toBe('done');
+    vi.unstubAllGlobals();
+  });
+
+  it('三阶段全部失败：最终 error AI_INVALID_RESPONSE、不写缓存、恰好 3 次请求', async () => {
+    mockStoredSettings['clip2md.settings'] = AI_SETTINGS_FIXTURE;
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    tabsSendMessageMock.mockImplementation((_tabId, _message, callback) => {
+      callback?.({
+        success: true,
+        document: recoveryDocument(),
+        sourceBlocks: [{ id: 'B001', kind: 'paragraph', text: RECOVERY_BLOCK_TEXT }],
+      });
+    });
+    clearSessionWriteHistory();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okAiContent(JSON.stringify(recoverySummaryWithBlock('B999', '不存在'))))
+      .mockResolvedValueOnce(okAiContent(JSON.stringify(recoverySummaryWithBlock('B998', '仍然不存在'))))
+      .mockResolvedValueOnce(okAiContent(JSON.stringify(recoverySummaryWithBlock('B001', '完全不同的错误引用'))));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await dispatchRuntimeMessage(
+      { type: 'START_VISUAL_ANALYSIS', payload: { tabId: 42 } },
+      { url: 'chrome-extension://test-extension-id/sidepanel.html' },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const state = mockSessionStorage['clip2md.visualSummary.state.42'] as {
+      status: string;
+      error?: { code: string; message: string };
+    };
+    expect(state.status).toBe('error');
+    expect(state.error?.code).toBe('AI_INVALID_RESPONSE');
+    expect(state.error?.message).toContain('首次校验');
+    expect(state.error?.message).toContain('自动修复后');
+    expect(state.error?.message).toContain('全新生成后');
+    expect(state.error?.message).toContain('请重新生成');
+    expect(cachedSummary()).toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+});
+
+function recoverySummaryWithBlock(blockId: string, quote: string): unknown {
+  return {
+    schemaVersion: 2,
+    summary: ['总结一', '总结二'],
+    keyPoints: [{ title: 'a', description: 'b' }, { title: 'c', description: 'd' }],
+    structure: [{ title: '正文', sourceBlockId: blockId, sourceQuote: quote }],
+  };
+}

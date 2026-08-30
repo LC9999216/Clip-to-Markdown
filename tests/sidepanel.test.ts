@@ -276,6 +276,30 @@ describe('Side Panel V2 result rendering', () => {
     expect(document.querySelector('#status-copy')?.textContent).toContain('X 推文');
   });
 
+  it('shows the regenerate action after final three-stage failure', async () => {
+    mockSessionStorage['clip2md.visualSummary.state.7'] = doneState('旧页面');
+    dispose = await initializeSidePanel();
+    dispatchStorageChange({
+      'clip2md.visualSummary.state.7': {
+        newValue: {
+          status: 'error',
+          tabId: 7,
+          requestId: 'req-three-stage',
+          updatedAt: 3,
+          error: {
+            code: 'AI_INVALID_RESPONSE',
+            message: 'AI 返回的分析结果未通过校验。首次校验：structure[0].sourceQuote not found in block B001。'
+              + '自动修复后：structure[0].sourceQuote not found in block B001。'
+              + '全新生成后：structure[0].sourceQuote not found in block B001。请重新生成。',
+          },
+        },
+      },
+    });
+    expect(document.querySelector('#status-label')?.textContent).toBe('暂时无法生成一图速览');
+    expect(document.querySelector('#status-copy')?.textContent).toContain('全新生成后');
+    expect(document.querySelector('#status-action')?.textContent).toBe('重新生成');
+  });
+
   it('switches to the activated tab and reads only that tab state', async () => {
     mockSessionStorage['clip2md.visualSummary.state.7'] = doneState('标签页 7', ['正文 7', '第二句']);
     mockSessionStorage['clip2md.visualSummary.state.8'] = { ...doneState('标签页 8', ['正文 8', '第二句']), tabId: 8 };

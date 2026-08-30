@@ -66,6 +66,10 @@ npx vitest run tests/ai-client.test.ts
 
 **`src/analysis/schema.ts`：** 仅将 `MAX_SOURCE_QUOTE_CHARS = 140` 导出（`parseVisualSummaryV2` 截断行为未变）。
 
+**`src/analysis/client.ts`（Task 4）：** `parseRecoverAndValidateV2` 统一验收门（parse → recover → validate，三阶段共用同一函数，任何阶段不得绕过）；`analyzeContentV2` 从两阶段循环重写为线性三阶段状态机（INITIAL 原始 prompt → REPAIR 一次（原 prompt + buildRepairPromptV2 问题列表与上次输出）→ FRESH 一次（复用 initialMessages，物理上不可能携带旧输出）；非校验错误（HTTP/网络/超时）在各自阶段直接传播；三阶段共享同一 AbortController 30 秒总预算；三次校验失败才抛 AI_INVALID_RESPONSE，`invalidResponseMessage` 扩展为三段（保留 240 code point 截断与 Block ID 脱敏）；无递归调用。V1 `analyzeContent` 零改动（全部 V1 测试原样通过）。
+
+**Task 5（Background / Side Panel 集成，测试证明生产行为已正确）：** `src/background/visual-summary.ts`、`src/sidepanel/sidepanel.ts`、`src/analysis/cache.ts` **零修改**——Background 的 try/catch 只在 `analyzeContentV2`（内含三阶段）完整结束后写终态，天然不产生中间 error state；缓存只写成功返回值。新增测试锁定：初次本地恢复成功 = 1 次 fetch + done + 状态序列 extracting→analyzing→done + 缓存恢复后结果；repair 失败 fresh 成功 = 恰好 3 次 fetch + 无中间 error + 缓存 + 非 force 重启命中缓存零请求；三次全败 = 最终 error AI_INVALID_RESPONSE（三段诊断）+ 无缓存 + 3 次 fetch；Side Panel 最终失败显示"重新生成"按钮。
+
 ## 六、自动化门禁
 
 （待回填）

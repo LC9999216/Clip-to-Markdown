@@ -845,7 +845,7 @@ git commit -m "test: define three-stage visual summary recovery"
 - Modify: `src/analysis/client.ts`
 - Test: `tests/ai-client.test.ts`
 
-- [ ] **Step 1: 更新文件头约束**
+- [x] **Step 1: 更新文件头约束**
 
 把“最多一次 repair”说明改成：
 
@@ -854,7 +854,7 @@ git commit -m "test: define three-stage visual summary recovery"
  * - V2 单次主动分析最多三次 Provider 请求，三阶段共享 30 秒总超时；
 ```
 
-- [ ] **Step 2: 导入恢复函数并建立统一验收门**
+- [x] **Step 2: 导入恢复函数并建立统一验收门**
 
 ```ts
 import { recoverVisualSummaryAnchors } from './anchor-recovery';
@@ -870,7 +870,7 @@ function parseRecoverAndValidateV2(content: string, input: AnalysisInput): Visua
 
 三个阶段必须调用同一个函数，禁止第三阶段绕过本地恢复或 Validator。
 
-- [ ] **Step 3: 将安全诊断扩展为三个阶段**
+- [x] **Step 3: 将安全诊断扩展为三个阶段**
 
 将两参数 `invalidResponseMessage` 改为明确三阶段：
 
@@ -889,7 +889,7 @@ function invalidResponseMessage(
 
 保留现有单条诊断 240 codepoints 截断和 Block ID 脱敏。
 
-- [ ] **Step 4: 用明确阶段变量替代两次循环**
+- [x] **Step 4: 用明确阶段变量替代两次循环**
 
 实现结构应保持线性：
 
@@ -972,7 +972,7 @@ function invalidV2Response(): VisualAnalysisRequestError {
 
 不要用递归调用 `analyzeContentV2`，否则请求上限和超时难以证明。
 
-- [ ] **Step 5: 运行 Client 测试至全绿**
+- [x] **Step 5: 运行 Client 测试至全绿**
 
 ```powershell
 npx vitest run tests/ai-client.test.ts tests/anchor-recovery.test.ts tests/analysis-schema.test.ts
@@ -980,11 +980,11 @@ npx vitest run tests/ai-client.test.ts tests/anchor-recovery.test.ts tests/analy
 
 Expected：全部通过；成功路径请求数分别精确为 1、2、3；最终失败精确为 3。
 
-- [ ] **Step 6: 检查 V1 未变化**
+- [x] **Step 6: 检查 V1 未变化**
 
 在 `tests/ai-client.test.ts` 保留/补充：V1 初次非法、repair 仍非法时仍最多 2 次，不启用 anchor recovery 或 fresh generation。
 
-- [ ] **Step 7: 提交 Client 实现**
+- [x] **Step 7: 提交 Client 实现**
 
 ```powershell
 git add -- src/analysis/client.ts tests/ai-client.test.ts docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md
@@ -1003,7 +1003,7 @@ git commit -m "feat: retry invalid visual summaries with fresh generation"
 - Modify: `tests/sidepanel.test.ts`
 - Modify only if a failing test proves necessary: `src/background/visual-summary.ts`, `src/sidepanel/sidepanel.ts`
 
-- [ ] **Step 1: 添加 Background 本地恢复成功测试**
+- [x] **Step 1: 添加 Background 本地恢复成功测试**
 
 让提取结果提供 `B001: 正文内容。`，Provider 首次返回 `sourceQuote: "正文 内容!"`。通过 `START_VISUAL_ANALYSIS` 后断言：
 
@@ -1013,7 +1013,7 @@ git commit -m "feat: retry invalid visual summaries with fresh generation"
 - 缓存写入的是恢复后的严格合法结果；
 - 状态序列仍为 `extracting → analyzing → done`。
 
-- [ ] **Step 2: 添加 repair 失败、fresh 成功的 Background 测试**
+- [x] **Step 2: 添加 repair 失败、fresh 成功的 Background 测试**
 
 Mock 三次输出：初次 `B999`、repair `B998`、fresh 合法。断言：
 
@@ -1023,7 +1023,7 @@ Mock 三次输出：初次 `B999`、repair `B998`、fresh 合法。断言：
 - 最终结果被缓存；
 - 再次非 force 启动命中缓存，不产生第 4 次请求。
 
-- [ ] **Step 3: 添加三次失败不缓存测试**
+- [x] **Step 3: 添加三次失败不缓存测试**
 
 三次均返回非法 Anchor，断言：
 
@@ -1032,7 +1032,7 @@ Mock 三次输出：初次 `B999`、repair `B998`、fresh 合法。断言：
 - 缓存没有 done result；
 - fetch 恰好 3 次。
 
-- [ ] **Step 4: 保持 force 与请求隔离**
+- [x] **Step 4: 保持 force 与请求隔离**
 
 补充断言：
 
@@ -1041,7 +1041,7 @@ Mock 三次输出：初次 `B999`、repair `B998`、fresh 合法。断言：
 - requestId/标签页变化的既有竞态测试继续通过；
 - 自动 fresh 不创建第二个 Background requestId。
 
-- [ ] **Step 5: 添加 Side Panel 最终错误按钮回归**
+- [x] **Step 5: 添加 Side Panel 最终错误按钮回归**
 
 给 Side Panel 一个最终 `AI_INVALID_RESPONSE` state，断言：
 
@@ -1051,7 +1051,7 @@ expect(document.querySelector('#status-action')?.textContent).toBe('重新生成
 
 中间 repair/fresh 不会写 error state，因此不得新增中间按钮或 UI 状态。
 
-- [ ] **Step 6: 运行集成回归**
+- [x] **Step 6: 运行集成回归**
 
 ```powershell
 npx vitest run tests/background.test.ts tests/sidepanel.test.ts tests/visual-summary.test.ts tests/analysis-cache.test.ts
@@ -1059,7 +1059,7 @@ npx vitest run tests/background.test.ts tests/sidepanel.test.ts tests/visual-sum
 
 Expected：全部通过。如果无需修改生产 Background/Side Panel，则保持它们零修改。
 
-- [ ] **Step 7: 提交集成测试**
+- [x] **Step 7: 提交集成测试**
 
 ```powershell
 git add -- tests/background.test.ts tests/sidepanel.test.ts docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md

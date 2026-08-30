@@ -28,7 +28,19 @@
 
 ## 三、红灯测试证据
 
-（待 Task 1 回填）
+重写 `tests/adapters/bilibili-transcript.test.ts`（15 个用例锁定新合同）后运行 `npx vitest run tests/adapters/bilibili-transcript.test.ts`：**15 failed (15)**，全部为语义失败（非 fixture/导入/语法错误），关键 expected/actual：
+
+- `84 字无标点中文源行…`：actual `[ [0, 14] ]`（旧实现整行一段 14 秒）≠ expected `[ [0,4],[4,8],[8,12],[12,14] ]`
+- `绝不跨源字幕行合并…`：actual `['你好世界']`（跨行合并）≠ expected `['你好','世界']`
+- `保留源字幕之间的真实时间空档…`：actual `['第一句第二句']`（合并后 [0,12]）≠ expected `['第一句','第二句']`
+- `强句末标点优先…`/`逗号作为次优切点…`：actual 单段（旧 min 30 字阈值内不切）
+- `拉丁文本在空白边界切分…`：actual 字数 `[60]` ≠ expected `[30, 30]`
+- `小数、版本号与 URL 中的句点…`：actual 1 段 ≠ ≥2 段（旧实现不切）
+- `无标点长中文…`：actual `[100]` ≠ expected `[24,24,24,28]`；`无标点长拉丁…`：actual `[100]` ≠ expected `[55,45]`
+- `正常字符密度…`：actual 3 段（20 秒窗口）≠ expected 12 段（≤6 秒）
+- `极稀疏源行保真例外…`：actual 含 `{text: ''}` 的 timing-only 空段 ≠ expected 单段 `'甲'`
+- `扩展汉字…`：actual 2 段（每行 100 字）≠ expected 8 段（[24,24,24,28]×2）
+- `from === to…`/`to < from…`：旧实现对退化时间产生 `end: 3 < start: 8` 等异常
 
 ## 四、实现摘要
 

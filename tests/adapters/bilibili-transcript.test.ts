@@ -169,6 +169,23 @@ describe('B站字幕细粒度分段', () => {
     expect(result.map((segment) => segment.text).join('')).toBe(content);
   });
 
+  it('行中长空白串并入下一个含内容子段，绝不产生纯空白展示段', () => {
+    // 35 code points / 20 秒：hardLimit 10 < minCut 12（窗口倒置）且空白串 30 > hardLimit
+    const content = 'ab' + ' '.repeat(30) + 'ccc';
+    const result = groupTranscript([{ from: 0, to: 20, content }]);
+
+    expect(result.every((segment) => segment.text.trim().length > 0)).toBe(true);
+    expect(result.map((segment) => segment.text).join('')).toBe(content);
+    expect(result).toHaveLength(2);
+    expect(result.map((segment) => Array.from(segment.text).length)).toEqual([10, 25]);
+    expect(result[0]!.text).toBe('ab' + ' '.repeat(8));
+    expect(result[1]!.text).toBe(' '.repeat(22) + 'ccc');
+    // 空白块时间归入下一段：相邻端点仍精确相等
+    expect(result[0]!.end).toBe(result[1]!.start);
+    expect(result[0]!.end).toBeCloseTo(20 * 10 / 35, 10);
+    expect(result[1]!.end).toBe(20);
+  });
+
   it('极稀疏源行保真例外：单字 25 秒保留原始时间范围（源数据过稀，非算法缺陷）', () => {
     const result = groupTranscript([{ from: 0, to: 25, content: '甲' }]);
 

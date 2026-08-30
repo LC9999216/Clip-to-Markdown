@@ -90,7 +90,9 @@ function findCutIndex(
   const strongCut = bestCut((character) => STRONG_PUNCT.has(character));
   if (strongCut !== null) return strongCut;
 
-  // 拉丁句点：仅当后接空白（或文本结尾）时视为句末，避免切断小数、版本号或 URL
+  // 拉丁句点：仅当后接空白（或文本结尾）时视为句末，避免切断小数、版本号或 URL。
+  // 「文本结尾」分支无需显式判断：remaining ≤ hardLimit 时已整段收尾（:67），而候选窗口
+  // 的 last = min(total-2, highCut-1) < total-1，文本结尾句点不可能进入候选窗口，行为等价。
   const dotCut = bestCut((character, position) => character === '.' && isWhitespaceChar(codePoints[position + 1]));
   if (dotCut !== null) return dotCut;
 
@@ -105,15 +107,11 @@ function findCutIndex(
   return idealCut;
 }
 
-/** 分隔空白归入前段但不越过本段硬上限；保证每段至少一个非空白字符（不丢字、无纯空白段）。 */
-function advanceCut(codePoints: string[], offset: number, cut: number, hardLimitEnd: number): number {
+/** 分隔空白归入前段但不越过本段硬上限（不丢字；纯空白块由切分循环并入相邻含内容子段）。 */
+function advanceCut(codePoints: string[], cut: number, hardLimitEnd: number): number {
   const total = codePoints.length;
   let end = cut;
   while (end < total && end < hardLimitEnd && isWhitespaceChar(codePoints[end])) end += 1;
-  if (!sliceHasContent(codePoints, offset, end) && end < total) {
-    end += 1;
-    while (end < total && isWhitespaceChar(codePoints[end])) end += 1;
-  }
   return end;
 }
 
@@ -146,13 +144,27 @@ function splitSubtitleLine(line: BiliSubtitleLine): Array<{ start: number; end: 
 
   const segments: Array<{ start: number; end: number; text: string }> = [];
   let offset = 0;
+  // 纯空白块（行内超长空白串被硬上限截断时产生）不单独成段：
+  // 挂起后并入下一个含内容子段，起点取块首，时间仍按 code point 比例。
+  let pendingFrom = -1;
   while (offset < chars) {
     const rawCut = findCutIndex(codePoints, offset, targetLimit, hardLimit, limits.minCut, isCjk);
-    const cut = advanceCut(codePoints, offset, rawCut, offset + hardLimit);
-    const start = offset === 0 ? from : from + duration * (offset / chars);
-    const end = cut === chars ? to : from + duration * (cut / chars);
-    segments.push({ start, end, text: codePoints.slice(offset, cut).join('') });
+    const cut = advanceCut(codePoints, rawCut, offset + hardLimit);
+    if (!sliceHasContent(codePoints, offset, cut)) {
+      if (pendingFrom < 0) pendingFrom = offset;
+    } else {
+      const startOffset = pendingFrom >= 0 ? pendingFrom : offset;
+      const text = codePoints.slice(startOffset, cut).join('');
+      const start = startOffset === 0 ? from : from + duration * (startOffset / chars);
+      const end = cut === chars ? to : from + duration * (cut / chars);
+      segments.push({ start, end, text });
+      pendingFrom = -1;
+    }
     offset = cut;
+  }
+  if (pendingFrom >= 0 && segments.length > 0) {
+    // 行尾纯空白块：并入最后一个子段的文字，其 end 已精确等于 to
+    segments[segments.length - 1]!.text += codePoints.slice(pendingFrom).join('');
   }
   return segments;
 }

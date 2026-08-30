@@ -67,7 +67,23 @@
 
 ## 六、手工 Chrome 验收
 
-（待 Task 5 回填）
+**结论：未验证（环境无法加载扩展，非功能判负）。**
+
+- 环境：Windows + 系统 Chrome `151.0.7922.174`（`C:\Program Files\Google\Chrome\Application\chrome.exe`）。
+- 加载方式与错误（本会话与上一任务实测，结论一致）：
+  1. branded Chrome 自 137 起移除了 `--load-extension` 命令行支持——命令行中出现该 flag 但 `chrome://extensions` 扩展列表为空；
+  2. Playwright 自带 chromium 打开 `chrome://extensions` WebUI 会触发整个浏览器崩溃；
+  3. Playwright persistent context + 扩展 flag 组合注册不出任何扩展 Service Worker。
+- 因此 Task 5 的全部检查项（BV1dsut6AES4 官方中文轨细粒度节奏、点击跳转抽样、60 秒随播高亮、BV1Yku16CEzX AI 中文轨、翻译计数）**均未执行**，不能以单元测试代替手工验收结论。
+
+### 用户手工验收步骤
+
+1. 在 `chrome://extensions` 开启开发者模式 →「加载已解压的扩展程序」→ 选择本工作树的 `dist` 目录（先在仓库根运行 `npm run build` 确认产物最新），确认加载的是本 checkout 而非其他目录。
+2. 打开 `https://www.bilibili.com/video/BV1dsut6AES4/`，从侧栏右上角进入「字幕」页，检查：不再出现 14~18 秒一大段；长行被拆成约 4 秒小段（如 00:00、00:04、00:08、00:12…，实际节奏依源数据而变）；每段是一句可读文字；无空白行、无重复句；源字幕空档处无伪文字。
+3. 随机点击至少 5 个非首段字幕：播放器跳到该段显示的起始时间附近，不再总是跳回大段起点；高亮与播放位置一致。
+4. 连续播放 60 秒：高亮约每几秒随内容推进，同一大段不再持续高亮十几秒；无字幕停顿处允许无高亮；自动滚动不错位。
+5. 在已开启 AI 翻译且已配置的前提下打开 `https://www.bilibili.com/video/BV1Yku16CEzX/`：轨道显示"简体中文（AI 翻译）"；翻译结果同样被拆成短段；英文 ↔ AI 中文来回切换不重复发起翻译；翻译失败时保留官方英文。
+6. 把观察结果（前 8 个字幕起始时间、点击抽样、AI 请求次数）记录到本报告或反馈给开发者。
 
 ## 七、未验证项和已知限制
 

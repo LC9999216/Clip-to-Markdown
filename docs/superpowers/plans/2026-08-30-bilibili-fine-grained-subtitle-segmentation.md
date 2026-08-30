@@ -745,7 +745,7 @@ git diff --cached --check
 - Modify: `README.md`
 - Modify: `docs/progress/2026-08-30-bilibili-fine-grained-subtitle-segmentation.md`
 
-- [ ] **Step 1: 更新 README 字幕侧栏说明**
+- [x] **Step 1: 更新 README 字幕侧栏说明**
 
 在现有 B 站字幕功能段落增加简短说明：
 
@@ -756,7 +756,7 @@ git diff --cached --check
 
 不要扩写成 ASR 功能，也不要改变 AI 翻译的隐私/费用披露。
 
-- [ ] **Step 2: 完成进度报告**
+- [x] **Step 2: 完成进度报告**
 
 报告必须分开列出：
 
@@ -769,7 +769,7 @@ git diff --cached --check
 - 自动测试的实际文件数/用例数；
 - 手工 Chrome 验收证据或未验证原因。
 
-- [ ] **Step 3: 运行全量自动化门禁**
+- [x] **Step 3: 运行全量自动化门禁**
 
 ```powershell
 npm test
@@ -780,7 +780,7 @@ git diff --check
 
 Expected: 全部退出码 0；`git diff --check` 无输出。
 
-- [ ] **Step 4: 做输出不变量的额外审查**
+- [x] **Step 4: 做输出不变量的额外审查**
 
 使用测试或小型本地调用确认：
 
@@ -793,7 +793,7 @@ Expected: 全部退出码 0；`git diff --check` 无输出。
 - 字符密度足以细分的正常源行，其子段不超过 6 秒；
 - 极稀疏例外没有空段或重复字。
 
-- [ ] **Step 5: 检查范围和敏感信息**
+- [x] **Step 5: 检查范围和敏感信息**
 
 ```powershell
 git diff --name-only HEAD
@@ -806,7 +806,7 @@ Expected:
 - 仅出现本计划允许的文件和 3 个既有保护文件；
 - 新改文件不包含密钥、Authorization header 或 Provider 正文。
 
-- [ ] **Step 6: 请求独立代码审查**
+- [x] **Step 6: 请求独立代码审查**
 
 审查范围应包含从本任务首个提交到当前 HEAD 的 diff，重点询问：
 

@@ -1134,7 +1134,7 @@ rg -n "apiKey|Authorization|lastOutput|requestCompletion|analyzeContentV2" src/a
 
 逐项人工判读，不能只以“有/无命中”代替审查。
 
-- [ ] **Step 5: 请求独立代码审查**
+- [x] **Step 5: 请求独立代码审查**
 
 审查重点：
 
@@ -1151,23 +1151,18 @@ rg -n "apiKey|Authorization|lastOutput|requestCompletion|analyzeContentV2" src/a
 
 所有 Critical/Important 必须修复并复跑全量门禁；Minor 要么修复，要么在报告中写明理由。
 
-- [ ] **Step 6: 提交文档与审查修复**
+执行结果（2026-08-30）：已由独立 Codex 任务完成只读代码审查，结论为 0 Critical、0 Important，无需修改生产代码。审查确认 anchor 只改 `sourceQuote`、候选和相似度门槛、INITIAL/REPAIR/FRESH 共用验收门、最多 3 次线性请求、Provider 错误不进入 FRESH、以及 Background/SidePanel/Cache 生产代码未改动。审查时自动门禁为 39 个测试文件 / 643 个测试通过，typecheck、build、`git diff --check` 均通过。此前代理运行时阻塞的尝试仅作为历史记录保留，详见进度报告 §七。
+
+- [x] **Step 6: 文档收尾提交**
 
 ```powershell
-git add -- README.md docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md
+git add -- docs/superpowers/plans/2026-08-30-visual-summary-anchor-auto-recovery.md docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md
 git diff --cached --name-only
 git diff --cached --check
-git commit -m "docs: explain visual summary automatic recovery"
+git commit -m "docs: close visual recovery independent review"
 ```
 
-审查修复另做精确提交：
-
-```powershell
-git add -- src/analysis/anchor-recovery.ts src/analysis/schema.ts src/analysis/client.ts tests/anchor-recovery.test.ts tests/ai-client.test.ts tests/background.test.ts tests/sidepanel.test.ts docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md
-git diff --cached --name-only
-git diff --cached --check
-git commit -m "fix: address visual anchor recovery review"
-```
+本次独立审查没有 Critical/Important 发现，也没有审查修复代码；因此只提交上述两份文档，不暂存 README、生产代码、测试或三个保护文件。
 
 ---
 
@@ -1364,7 +1359,7 @@ git diff --cached --check
 - [x] 未修改 Source Block 提取、导航、字幕和 WBI。
 - [x] 未增加依赖。
 - [x] 全量测试、typecheck、build、diff-check 全绿。
-- [ ] 独立审查 Critical/Important 全部处置。
+- [x] 独立审查 Critical/Important 全部处置（0 Critical、0 Important，无需生产代码修复）。
 - [x] 三个保护文件哈希未变且未进入提交。
 - [x] Chrome/API 验收已记录或明确未验证。
 - [x] 未 merge、push、PR 或修改 main。

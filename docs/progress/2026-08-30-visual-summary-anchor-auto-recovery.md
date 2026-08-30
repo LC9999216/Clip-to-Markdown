@@ -79,7 +79,22 @@ npx vitest run tests/ai-client.test.ts
 
 ## 七、独立审查与处置
 
-**结论：独立审查未能完成——代理运行时环境阻塞（非代码判负）。** 计划 Task 6 Step 5 要求的独立代码审查经过了 6 次尝试，全部在完成前因代理运行时崩溃而失败：
+**结论：独立代码审查已完成（2026-08-30，由另一个独立 Codex 任务完成）。** 审查结果为 **0 Critical、0 Important**，无需修改生产代码。
+
+**审查范围与确认：**
+
+- anchor 恢复只允许修改 `sourceQuote`，不修改 `sourceBlockId`；
+- 候选句必须是对应 Block 的精确子串，并遵守唯一性、相似度 `>= 0.72`、领先第二名 `>= 0.08`、最短 6 code points、Quote `<= 140`；
+- INITIAL、REPAIR、FRESH 三阶段都经过同一套 `parse -> recover -> validate` 门禁；
+- FRESH 使用最初输入重新生成，不携带前两次失败输出；
+- 请求最多 3 次、线性执行，无递归或第 4 次请求；
+- HTTP、网络、鉴权、限流、超时错误不进入 FRESH 重试；
+- Background、SidePanel、Cache 的生产代码未被改动；
+- 独立审查核对时的自动门禁为 39 个测试文件 / 643 个测试通过，typecheck、build、`git diff --check` 均通过。
+
+审查处置：没有 Critical/Important 发现，因此没有审查修复生产代码；Task 6 Step 5 已完成，Step 6 仅做本报告与计划的文档收尾。
+
+**历史尝试（旧状态，仅保留审计记录，不代表当前结论）：** 在独立任务完成前，计划 Task 6 Step 5 曾经过 6 次尝试，因代理运行时崩溃未能交付正式报告：
 
 | # | 机制 | 配置 | 失败点 |
 |---|---|---|---|
@@ -90,11 +105,11 @@ npx vitest run tests/ai-client.test.ts
 | 5 | 新建最小代理 (3ff9e5a6) | 单文件、≤150 字、零命令 | 无声失败 |
 | 6 | send_message 恢复上一任务已成功交付审查的代理 (0868073f) | 复用已验证可靠的代理会话 | 无声失败 |
 
-六次失败横跨三种机制（新建代理×4、fork、旧代理恢复回合）与多轮目标回合，连"读一个文件回 150 字"的最小任务也失败——判定为代理运行时环境阻塞，而非审查内容问题。**部分独立证据**：第 1 任审查员在死亡前独立执行过测试验证并确认全部通过（"v3 全部通过"）；但其正式发现清单未能交付，不计为完成。
+六次历史失败横跨三种机制（新建代理×4、fork、旧代理恢复回合）与多轮目标回合，属于当时的代理运行时环境阻塞，而非代码判负。**部分历史独立证据**：第 1 任审查员在退出前独立执行过测试并确认全部通过（"v3 全部通过"），但当时正式发现清单未交付；该旧状态现已由本节开头记录的独立任务完成结论取代。
 
-**替代证据（明确标注：非独立审查）**：实现者在本会话中执行的对抗性自查，覆盖候选生成边界（空串/纯标点/连续标点/trim 后子串性/140 窗口）、dice 相同短路跨 Block 滥用不可行（块内搜索+跨 Block 唯一性兜底）、同分排序与 margin 语义（真同分必拒）、不可变性与引用保持、异常路径（repair fetch 抛错直接传播、finally clearTimeout 全覆盖、SyntaxError 区分）、V1 零改动机械化确认（diff 仅 3 个 hunk，均不在 V1 函数内）、`MAX_SOURCE_QUOTE_CHARS` 导出影响面（仅 schema 内部原用途+anchor-recovery 导入）。全部结论有对应测试锁定。
+**补充证据（明确标注：非独立审查）**：独立审查完成前，实现者还执行过对抗性自查，覆盖候选生成边界（空串/纯标点/连续标点/trim 后子串性/140 窗口）、dice 相同短路跨 Block 滥用不可行（块内搜索+跨 Block 唯一性兜底）、同分排序与 margin 语义（真同分必拒）、不可变性与引用保持、异常路径（repair fetch 抛错直接传播、finally clearTimeout 全覆盖、SyntaxError 区分）、V1 零改动机械化确认（diff 仅 3 个 hunk，均不在 V1 函数内）、`MAX_SOURCE_QUOTE_CHARS` 导出影响面（仅 schema 内部原用途+anchor-recovery 导入）。全部结论有对应测试锁定。
 
-**环境恢复后补做步骤**：任一机制重发独立审查 → 处置 Critical/Important（修复+复跑全量门禁）或记录 Minor 理由 → 勾选计划 §4"独立审查"项 → 若有代码修复则更新本报告。
+**收尾状态**：独立审查、Critical/Important 处置和自动门禁均已完成；本次只需提交两份文档，不产生审查修复代码提交。
 
 ## 八、Chrome/API 验收
 
@@ -142,8 +157,8 @@ npx vitest run tests/ai-client.test.ts
 | `1b25b72` | Task 5：Background 集成 3 测试 + Side Panel"重新生成"回归（生产 Background/SidePanel/Cache 零修改） |
 | `b9e94f0` | Task 6：README 费用披露 + 全量门禁记录 + 请求上限/敏感信息专项检查 |
 | `e6ae1e7` | Task 7：Chrome/API 验收如实标记未验证 + 手工验收步骤 |
-| `1c814ae` | §4 最终清单 25/26 勾选（唯一未勾：独立审查处置） |
-| （本提交） | 最终报告回填（§七审查阻塞记录、§十提交列表）+ Task 7 Step 5-9 勾选 |
+| `1c814ae` | §4 最终清单 25/26 勾选（当时唯一未勾：独立审查处置） |
+| （本次收尾提交） | 回填独立审查完成结论、更新计划勾选，并保留 Chrome/API 未验证声明 |
 
 **最终状态**：
 
@@ -151,4 +166,5 @@ npx vitest run tests/ai-client.test.ts
 - 提交范围 `36d11f9..HEAD`：恰好 10 个文件——README.md、2 份 docs、3 个 `src/analysis` 文件、4 个测试文件；**未触碰** `visual-summary.ts`、`sidepanel.ts`、`cache.ts`、`prompt.ts`、`source-blocks.ts`、`subtitle.ts`、平台适配器、字幕/WBI 文件；未新增依赖。
 - 保护文件（始终未提交，哈希前后一致）：`D13CE7BB…FBBE` / `D3002CB2…21E` / `96E0DB75…8CA7`；工作树最终状态仅这 3 个 M 文件。
 - 未 merge、未 push、未 PR、未改 main。
-- **唯一未完成交付物**：计划 §4"独立审查 Critical/Important 全部处置"——因代理运行时环境阻塞未完成（详见 §七），清单对应项保持未勾选。
+- **代码、自动测试和独立审查均已完成**；独立审查结果为 0 Critical、0 Important，无需生产代码修复。
+- **唯一未完成交付物**：真实 Chrome/API 验收仍未验证，原因和手工步骤见 §八；不得将其写成已通过。

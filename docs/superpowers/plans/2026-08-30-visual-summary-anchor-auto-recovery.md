@@ -1079,7 +1079,7 @@ git commit -m "test: cover visual summary recovery integration"
 - Modify: `README.md`
 - Modify: `docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md`
 
-- [ ] **Step 1: 更新 README 使用与费用披露**
+- [x] **Step 1: 更新 README 使用与费用披露**
 
 在一图速览“使用要点”增加：
 
@@ -1089,7 +1089,7 @@ git commit -m "test: cover visual summary recovery integration"
 
 保留“只有用户主动触发才发送正文”的语义：三阶段都属于同一次用户主动操作，不得改写成后台自动分析页面。
 
-- [ ] **Step 2: 完成进度报告**
+- [x] **Step 2: 完成进度报告**
 
 必须记录：
 
@@ -1103,7 +1103,7 @@ git commit -m "test: cover visual summary recovery integration"
 - 自动化门禁实际数量；
 - Chrome/API 验收或未验证原因。
 
-- [ ] **Step 3: 运行全量门禁**
+- [x] **Step 3: 运行全量门禁**
 
 ```powershell
 npm test
@@ -1114,7 +1114,7 @@ git diff --check
 
 Expected：全部退出码 0。记录实际文件数和测试数，不沿用旧的 38/613。
 
-- [ ] **Step 4: 做请求上限与敏感信息专项检查**
+- [x] **Step 4: 做请求上限与敏感信息专项检查**
 
 通过测试和 diff 确认：
 
@@ -1172,6 +1172,8 @@ git commit -m "fix: address visual anchor recovery review"
 ---
 
 ## Task 7：真实验收与最终交付
+
+**执行结果（2026-08-30）：Step 1–4 全部未执行（未验证）**——双重限制：①本机 Chrome `151.0.7922.174` 无法加载解压扩展（branded ≥137 移除 `--load-extension`，Playwright chromium 打开 chrome://extensions 崩溃，persistent context 注册不出扩展 Service Worker）；②真实验收需调用用户付费 Provider，未经明确费用授权不擅自调用。证据与完整手工验收步骤见进度报告 §八；以下复选框保持未勾选以如实反映。Step 5–8（可离线完成的部分）已执行。
 
 **Files:**
 

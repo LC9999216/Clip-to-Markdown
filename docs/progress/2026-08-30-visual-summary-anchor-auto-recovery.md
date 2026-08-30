@@ -83,7 +83,22 @@ npx vitest run tests/ai-client.test.ts
 
 ## 八、Chrome/API 验收
 
-（待 Task 7 回填）
+**结论：未验证（双重环境限制，非功能判负）。**
+
+1. **扩展加载受限**：本机系统 Chrome `151.0.7922.174`（branded Chrome ≥137 已移除 `--load-extension` 命令行支持；Playwright chromium 打开 `chrome://extensions` WebUI 触发整体崩溃；persistent context + 扩展 flag 注册不出扩展 Service Worker——本会话与上一任务实测一致）。
+2. **费用授权缺失**：真实验收需调用用户配置的付费 Provider。未经明确费用授权不擅自反复调用，避免意外扣费。
+
+因此 Task 7 的检查项（本地恢复/repair/fresh 的真实 Provider 行为、请求计数核对）**均未执行**；自动化测试（643 用例，含三阶段请求计数、fresh 请求体、共享超时、缓存行为）是当前唯一的行为证据，但不能替代真实验收。
+
+### 用户手工验收步骤（需自担 AI 费用）
+
+1. `npm run build` 后在 `chrome://extensions`（开发者模式）加载本工作树的 `dist` 目录，确认加载的是本 checkout。
+2. 配置并启用 AI 服务后，打开一篇受支持的长文章，按 `Ctrl + Shift + Y` 生成一图速览。**正常情况：Provider 收到且仅收到 1 次请求**。
+3. 构造本地恢复场景（可选，需能改写模型输出或使用易改写模型）：让模型返回带轻微标点/空格差异的 `sourceQuote` → 扩展应仍显示结果，Provider 仍只有 1 次请求（本地恢复不产生新请求）。
+4. 构造校验失败场景：观察 Network 面板中 AI endpoint 的请求数——初次失败自动 repair（第 2 次）、repair 仍失败自动 fresh（第 3 次）、此后**绝不出现第 4 次**；每次请求间隔与 30 秒总超时一致。
+5. 三次都失败时，侧栏显示最终错误（含"首次校验/自动修复后/全新生成后"三段诊断）与"重新生成"按钮；点击"重新生成"才发起新一轮请求。
+6. HTTP 401/429/网络断开场景：请求次数不增加（直接报错），错误码稳定（AI_AUTH_FAILED / AI_RATE_LIMITED / AI_NETWORK_ERROR）。
+7. 成功后刷新侧栏不重复请求（缓存命中）；点击"重新生成"（force）才重新请求。
 
 ## 九、未验证项与已知限制
 

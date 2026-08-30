@@ -72,7 +72,10 @@ npx vitest run tests/ai-client.test.ts
 
 ## 六、自动化门禁
 
-（待回填）
+- **Task 2 后**：`npx vitest run tests/anchor-recovery.test.ts tests/analysis-schema.test.ts` → 59/59 通过。
+- **Task 4 后**：`npx vitest run tests/ai-client.test.ts tests/anchor-recovery.test.ts tests/analysis-schema.test.ts` → 102/102 通过（7 个红灯全部转绿，36 个既有用例零回归）；typecheck 0。
+- **Task 5 后**：`npx vitest run tests/background.test.ts tests/sidepanel.test.ts tests/visual-summary.test.ts tests/analysis-cache.test.ts` → 103/103 通过。
+- **Task 6 全量（全新运行）**：`npm test` 39 文件 / **643 测试**全过；typecheck 0；build 0；`git diff --check` 0。
 
 ## 七、独立审查与处置
 
@@ -84,7 +87,13 @@ npx vitest run tests/ai-client.test.ts
 
 ## 九、未验证项与已知限制
 
-（待回填）
+**请求与敏感信息专项检查（Task 6 Step 4）：**
+
+- 单次 `analyzeContentV2` 内 `requestCompletion` 恰好 3 处调用点（initial/repair/fresh），无递归（`analyzeContentV2` 定义仅 1 处）；Provider 错误在各自阶段直接传播，有专用测试锁定。
+- fresh 请求复用 `initialMessages` 对象，物理上不可能携带旧输出或 repair 错误（专用测试断言第 3 个请求的 messages 与第 1 个逐字相等，且不含"你上次的输出/具体错误如下"）。
+- `apiKey` 仅用于 Bearer 请求头与配置存在性检查；诊断消息只包含校验 problem 字符串（240 code point 截断 + Block ID 脱敏），不包含 API Key、Provider 正文；缓存只写入通过三阶段校验的 summary（Background 在 `analyzeContentV2` resolve 后才写缓存）。
+
+**已知限制（保守失败的边界）：** 本地恢复只在对应 Block 内部匹配——若 AI 把内容张冠李戴到错误 Block（Block ID 本身合法但引用的是其他 Block 的句子），恢复会因相似度低或跨 Block 唯一性失败而保守拒绝，这可能导致后续 repair/fresh 请求。该行为是 §0.5 安全合同（不猜测 Block ID）的直接结果。Quote 过短（归一化 <6 code points）同样不做模糊恢复。返回的 Quote 一定是 Block 原文精确子串，永远不会是"改写后的句子"。
 
 ## 十、提交记录和最终状态
 

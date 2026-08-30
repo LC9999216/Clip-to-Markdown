@@ -79,7 +79,22 @@ npx vitest run tests/ai-client.test.ts
 
 ## 七、独立审查与处置
 
-（待 Task 6 回填）
+**结论：独立审查未能完成——代理运行时环境阻塞（非代码判负）。** 计划 Task 6 Step 5 要求的独立代码审查经过了 6 次尝试，全部在完成前因代理运行时崩溃而失败：
+
+| # | 机制 | 配置 | 失败点 |
+|---|---|---|---|
+| 1 | 新建深度审查代理 (1912cc2e) | 全量许可：读文件+只读 git+vitest+typecheck | 独立执行测试已通过（其结言"v3 全部通过"），死于最后的安全检查与报告交付 |
+| 2 | 新建聚焦静态代理 (73a2be61) | 静态+单测试文件 | 中途夭折 |
+| 3 | 新建紧凑代理 (c329b093) | 结论先行、≤600 字、最多 1 个测试文件 | 无声失败 |
+| 4 | subagent_fork（继承会话上下文，零命令） | 纯读代码对抗审查 | 立即失败，无输出 |
+| 5 | 新建最小代理 (3ff9e5a6) | 单文件、≤150 字、零命令 | 无声失败 |
+| 6 | send_message 恢复上一任务已成功交付审查的代理 (0868073f) | 复用已验证可靠的代理会话 | 无声失败 |
+
+六次失败横跨三种机制（新建代理×4、fork、旧代理恢复回合）与多轮目标回合，连"读一个文件回 150 字"的最小任务也失败——判定为代理运行时环境阻塞，而非审查内容问题。**部分独立证据**：第 1 任审查员在死亡前独立执行过测试验证并确认全部通过（"v3 全部通过"）；但其正式发现清单未能交付，不计为完成。
+
+**替代证据（明确标注：非独立审查）**：实现者在本会话中执行的对抗性自查，覆盖候选生成边界（空串/纯标点/连续标点/trim 后子串性/140 窗口）、dice 相同短路跨 Block 滥用不可行（块内搜索+跨 Block 唯一性兜底）、同分排序与 margin 语义（真同分必拒）、不可变性与引用保持、异常路径（repair fetch 抛错直接传播、finally clearTimeout 全覆盖、SyntaxError 区分）、V1 零改动机械化确认（diff 仅 3 个 hunk，均不在 V1 函数内）、`MAX_SOURCE_QUOTE_CHARS` 导出影响面（仅 schema 内部原用途+anchor-recovery 导入）。全部结论有对应测试锁定。
+
+**环境恢复后补做步骤**：任一机制重发独立审查 → 处置 Critical/Important（修复+复跑全量门禁）或记录 Minor 理由 → 勾选计划 §4"独立审查"项 → 若有代码修复则更新本报告。
 
 ## 八、Chrome/API 验收
 
@@ -112,4 +127,28 @@ npx vitest run tests/ai-client.test.ts
 
 ## 十、提交记录和最终状态
 
-（待回填）
+**分支**：`codex/bilibili-subtitle-sidepanel`（工作树 `C:\Users\HP\OneDrive\桌面\example\clip2md\.worktrees\bilibili-subtitle-sidepanel`）
+**基线**：`36d11f9`（上一任务完成态；开始时核对无前移）
+
+**提交列表（按序）**：
+
+| 提交 | 内容 |
+|---|---|
+| `e7e1b41` | 计划 + 报告骨架（Task 0：基线核对、保护哈希记录、613 测试基线全绿） |
+| `064af94` | Task 1 红灯合同：anchor-recovery 16 用例（模块不存在导入失败） |
+| `ea2ac89` | Task 2 实现：`src/analysis/anchor-recovery.ts` + schema 导出 `MAX_SOURCE_QUOTE_CHARS`（绿灯 59/59） |
+| `466806d` | Task 3 红灯合同：三阶段 7 用例失败、36 既有用例零回归 |
+| `e08d881` | Task 4 实现：`analyzeContentV2` 三阶段状态机 + `parseRecoverAndValidateV2` 统一验收门 |
+| `1b25b72` | Task 5：Background 集成 3 测试 + Side Panel"重新生成"回归（生产 Background/SidePanel/Cache 零修改） |
+| `b9e94f0` | Task 6：README 费用披露 + 全量门禁记录 + 请求上限/敏感信息专项检查 |
+| `e6ae1e7` | Task 7：Chrome/API 验收如实标记未验证 + 手工验收步骤 |
+| `1c814ae` | §4 最终清单 25/26 勾选（唯一未勾：独立审查处置） |
+| （本提交） | 最终报告回填（§七审查阻塞记录、§十提交列表）+ Task 7 Step 5-9 勾选 |
+
+**最终状态**：
+
+- 自动化门禁（全新运行）：`npm test` 39 文件 / **643 测试**全过；`npm run typecheck` 0；`npm run build` 0；`git diff --check` 0。
+- 提交范围 `36d11f9..HEAD`：恰好 10 个文件——README.md、2 份 docs、3 个 `src/analysis` 文件、4 个测试文件；**未触碰** `visual-summary.ts`、`sidepanel.ts`、`cache.ts`、`prompt.ts`、`source-blocks.ts`、`subtitle.ts`、平台适配器、字幕/WBI 文件；未新增依赖。
+- 保护文件（始终未提交，哈希前后一致）：`D13CE7BB…FBBE` / `D3002CB2…21E` / `96E0DB75…8CA7`；工作树最终状态仅这 3 个 M 文件。
+- 未 merge、未 push、未 PR、未改 main。
+- **唯一未完成交付物**：计划 §4"独立审查 Critical/Important 全部处置"——因代理运行时环境阻塞未完成（详见 §七），清单对应项保持未勾选。

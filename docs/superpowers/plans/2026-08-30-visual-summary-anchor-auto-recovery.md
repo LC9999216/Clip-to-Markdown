@@ -1222,7 +1222,7 @@ https://www.bilibili.com/video/BV1eUhM6hEdn/
 - 结构定位是否成功；
 - 通过/失败/未验证及原因。
 
-- [ ] **Step 5: 最终保护文件哈希复核**
+- [x] **Step 5: 最终保护文件哈希复核**
 
 ```powershell
 Get-FileHash -Algorithm SHA256 -LiteralPath 'src/adapters/bilibili/subtitle-service.ts','tests/adapters/bilibili-subtitle-service.test.ts','tests/adapters/bilibili.test.ts'
@@ -1230,7 +1230,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath 'src/adapters/bilibili/subtitle-serv
 
 必须与 Task 0 开始时一致。不同则停止交付并调查，不得直接回退用户修改。
 
-- [ ] **Step 6: 最后一次全量门禁**
+- [x] **Step 6: 最后一次全量门禁**
 
 在所有审查修复和文档更新后重新运行：
 
@@ -1241,7 +1241,7 @@ npm run build
 git diff --check
 ```
 
-- [ ] **Step 7: 核对范围和提交**
+- [x] **Step 7: 核对范围和提交**
 
 ```powershell
 git status --short
@@ -1257,7 +1257,7 @@ Expected：
 - 无 merge commit；
 - 未 push、未创建 PR、未修改 main。
 
-- [ ] **Step 8: 提交最终报告**
+- [x] **Step 8: 提交最终报告**
 
 ```powershell
 git add -- docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md
@@ -1266,7 +1266,7 @@ git diff --cached --check
 git commit -m "docs: finalize visual anchor recovery verification"
 ```
 
-- [ ] **Step 9: 最终交付摘要必须包含**
+- [x] **Step 9: 最终交付摘要必须包含**
 
 1. branch、起始 HEAD、最终 HEAD；
 2. 提交数量和逐提交说明；

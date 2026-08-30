@@ -5,11 +5,13 @@
  * - 不使用 SDK；仅对官方 DeepSeek V4 结构化分析启用 response_format；
  * - AbortController 30 秒超时；
  * - HTTP 错误映射为稳定错误码，不把第三方 API 完整错误正文展示给用户；
- * - 最多一次 repair（JSON 解析或 Schema 校验失败时重试）；
+ * - V1 最多一次 repair；V2 先本地恢复，再允许一次 repair 和一次 fresh generation；
+ * - V2 单次主动分析最多三次 Provider 请求，三阶段共享 30 秒总超时；
  * - API Key 只从 AiSettings 读取，绝不进入日志或 UI。
  */
 
 import type { AiSettings } from '../core/ai-settings';
+import { recoverVisualSummaryAnchors } from './anchor-recovery';
 import { buildAnalysisPrompt, buildAnalysisPromptV2 } from './prompt';
 import {
   parseVisualSummary,
@@ -78,10 +80,15 @@ function safeDiagnosticProblem(problem: string): string {
     : redacted;
 }
 
-function invalidResponseMessage(firstProblems: string[], repairedProblems: string[]): string {
-  const first = firstProblems.map(safeDiagnosticProblem).join('；');
-  const repaired = repairedProblems.map(safeDiagnosticProblem).join('；');
-  return `AI 返回的分析结果未通过校验。首次校验：${first}。自动修复后：${repaired}。请重新生成。`;
+function invalidResponseMessage(
+  firstProblems: string[],
+  repairedProblems: string[],
+  freshProblems: string[],
+): string {
+  const format = (problems: string[]) => problems.map(safeDiagnosticProblem).join('；');
+  return `AI 返回的分析结果未通过校验。首次校验：${format(firstProblems)}。`
+    + `自动修复后：${format(repairedProblems)}。`
+    + `全新生成后：${format(freshProblems)}。请重新生成。`;
 }
 
 export interface AiChatMessage {
@@ -282,52 +289,89 @@ function parseContentV2(content: string): VisualSummaryV2 {
 }
 
 /**
- * V2 分析内容：结构校验 + 语义 Anchor 校验。
- * 解析或校验失败时携带错误列表做一次 repair；再失败抛 AI_INVALID_RESPONSE。
+ * V2 三阶段统一验收门：解析 → 本地保守恢复 → 严格 Anchor 校验。
+ * 三个阶段（initial / repair / fresh）必须调用同一函数，任何阶段都不得绕过。
+ */
+function parseRecoverAndValidateV2(content: string, input: AnalysisInput): VisualSummaryV2 {
+  const parsed = parseContentV2(content);
+  const recovered = recoverVisualSummaryAnchors(parsed, input);
+  const problems = validateVisualSummaryAnchors(recovered, input);
+  if (problems.length > 0) throw new VisualSummaryValidationError(problems);
+  return recovered;
+}
+
+function invalidV2Response(): VisualAnalysisRequestError {
+  return new VisualAnalysisRequestError(
+    'AI_INVALID_RESPONSE',
+    'AI 返回的分析结果无法解析或原文引用不符，请重新生成。',
+  );
+}
+
+/**
+ * V2 分析内容：结构校验 + 语义 Anchor 校验，三阶段状态机。
+ *
+ * Stage 1 INITIAL：原始 prompt；Stage 2 REPAIR：一次（携带问题列表与上次输出）；
+ * Stage 3 FRESH：一次（重新使用原始 prompt，不携带旧输出或 repair 错误）。
+ * 每个阶段统一经过 parseRecoverAndValidateV2 验收门；三阶段共享同一
+ * 30 秒 AbortController 总预算；非校验错误（HTTP/网络/超时）直接传播，不重试；
+ * 三次校验都失败才返回带三段诊断的 AI_INVALID_RESPONSE。
  */
 export async function analyzeContentV2(input: AnalysisInput, settings: AiSettings): Promise<VisualSummaryV2> {
   const prompt = buildAnalysisPromptV2(input);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  const initialMessages: AiChatMessage[] = [
+    { role: 'system', content: prompt.system },
+    { role: 'user', content: prompt.user },
+  ];
 
   try {
-    const firstMessages: AiChatMessage[] = [
-      { role: 'system', content: prompt.system },
-      { role: 'user', content: prompt.user },
-    ];
-    let content = await requestCompletion(settings, firstMessages, controller.signal, { structuredOutput: true });
-    let firstProblems: string[] | null = null;
+    const firstContent = await requestCompletion(
+      settings,
+      initialMessages,
+      controller.signal,
+      { structuredOutput: true },
+    );
+    try {
+      return parseRecoverAndValidateV2(firstContent, input);
+    } catch (firstError) {
+      const firstProblems = validationProblems(firstError);
+      if (!firstProblems) throw invalidV2Response();
 
-    for (let attempt = 0; attempt <= 1; attempt++) {
+      const repairMessages: AiChatMessage[] = [
+        { role: 'system', content: `${prompt.system}\n\n${buildRepairPromptV2(firstProblems, firstContent)}` },
+        { role: 'user', content: prompt.user },
+      ];
+      const repairedContent = await requestCompletion(
+        settings,
+        repairMessages,
+        controller.signal,
+        { structuredOutput: true },
+      );
       try {
-        const summary = parseContentV2(content);
-        const anchorProblems = validateVisualSummaryAnchors(summary, input);
-        if (anchorProblems.length > 0) throw new VisualSummaryValidationError(anchorProblems);
-        return summary;
-      } catch (error) {
-        const problems = validationProblems(error);
-        if (attempt === 0 && problems) {
-          firstProblems = problems;
-          const repairMessages: AiChatMessage[] = [
-            { role: 'system', content: `${prompt.system}\n\n${buildRepairPromptV2(problems, content)}` },
-            { role: 'user', content: prompt.user },
-          ];
-          content = await requestCompletion(settings, repairMessages, controller.signal, { structuredOutput: true });
-          continue;
-        }
-        if (attempt === 1 && firstProblems && problems) {
+        return parseRecoverAndValidateV2(repairedContent, input);
+      } catch (repairedError) {
+        const repairedProblems = validationProblems(repairedError);
+        if (!repairedProblems) throw invalidV2Response();
+
+        const freshContent = await requestCompletion(
+          settings,
+          initialMessages,
+          controller.signal,
+          { structuredOutput: true },
+        );
+        try {
+          return parseRecoverAndValidateV2(freshContent, input);
+        } catch (freshError) {
+          const freshProblems = validationProblems(freshError);
+          if (!freshProblems) throw invalidV2Response();
           throw new VisualAnalysisRequestError(
             'AI_INVALID_RESPONSE',
-            invalidResponseMessage(firstProblems, problems),
+            invalidResponseMessage(firstProblems, repairedProblems, freshProblems),
           );
         }
-        throw new VisualAnalysisRequestError(
-          'AI_INVALID_RESPONSE',
-          'AI 返回的分析结果无法解析或原文引用不符，请重新生成。',
-        );
       }
     }
-    throw new VisualAnalysisRequestError('AI_INVALID_RESPONSE', 'AI 返回的分析结果无法解析，请重新生成。');
   } finally {
     clearTimeout(timer);
   }

@@ -736,7 +736,7 @@ git commit -m "feat: recover visual summary quotes from source blocks"
 - Modify: `tests/ai-client.test.ts`
 - Modify later: `src/analysis/client.ts`
 
-- [ ] **Step 1: 添加“初次输出本地恢复，仅一次请求”测试**
+- [x] **Step 1: 添加“初次输出本地恢复，仅一次请求”测试**
 
 构造初次 JSON：Block ID 正确，但 Quote 只有标点/空白轻微差异。断言：
 
@@ -747,11 +747,11 @@ expect(fetchMock).toHaveBeenCalledTimes(1);
 expect(validateVisualSummaryAnchors(result, V2_INPUT)).toEqual([]);
 ```
 
-- [ ] **Step 2: 保留“首次失败、repair 成功，两次请求”测试**
+- [x] **Step 2: 保留“首次失败、repair 成功，两次请求”测试**
 
 沿用 `B999` 初次输出和合法 repair 输出。断言仍为 2 次，证明本地恢复不猜 Block ID。
 
-- [ ] **Step 3: 将旧“repair 失败最多两次”测试改成“fresh 成功三次”红灯**
+- [x] **Step 3: 将旧“repair 失败最多两次”测试改成“fresh 成功三次”红灯**
 
 Mock 顺序：
 
@@ -768,7 +768,7 @@ expect(fetchMock).toHaveBeenCalledTimes(3);
 
 当前实现应在第二次后抛错，因此测试必须先红。
 
-- [ ] **Step 4: 添加“第三次是全新原始请求”测试**
+- [x] **Step 4: 添加“第三次是全新原始请求”测试**
 
 解析三个 fetch body：
 
@@ -786,15 +786,15 @@ expect(body.response_format).toEqual({ type: 'json_object' });
 expect(body.max_tokens).toBe(4096);
 ```
 
-- [ ] **Step 5: 添加“repair 输出可被本地恢复，无第三次请求”测试**
+- [x] **Step 5: 添加“repair 输出可被本地恢复，无第三次请求”测试**
 
 初次使用不可修复 `B999`；repair 使用正确 `B001` 但轻微改写 Quote。期望本地恢复后成功，fetch 恰好 2 次。
 
-- [ ] **Step 6: 添加“fresh 输出也经过本地恢复”测试**
+- [x] **Step 6: 添加“fresh 输出也经过本地恢复”测试**
 
 前两次不可修复；第三次 Block ID 正确、Quote 有轻微差异。期望第三阶段本地恢复后返回严格合法结果。
 
-- [ ] **Step 7: 添加“三次均失败才最终报错”测试**
+- [x] **Step 7: 添加“三次均失败才最终报错”测试**
 
 Mock 三个不同的非法输出，断言：
 
@@ -809,7 +809,7 @@ expect(fetchMock).toHaveBeenCalledTimes(3);
 
 错误不得包含完整 Provider 响应正文、API Key 或超长不受信任 Block ID。
 
-- [ ] **Step 8: 添加 Provider 错误不自动重试测试**
+- [x] **Step 8: 添加 Provider 错误不自动重试测试**
 
 至少覆盖：
 
@@ -819,7 +819,7 @@ expect(fetchMock).toHaveBeenCalledTimes(3);
 - fresh 阶段 5xx：总计 3 次，`AI_PROVIDER_ERROR`；
 - 共享 AbortController 超时：不突破 30 秒总预算。
 
-- [ ] **Step 9: 运行目标测试并记录红灯**
+- [x] **Step 9: 运行目标测试并记录红灯**
 
 ```powershell
 npx vitest run tests/ai-client.test.ts
@@ -827,7 +827,7 @@ npx vitest run tests/ai-client.test.ts
 
 Expected：新增本地恢复/第三阶段用例失败；现有合法、HTTP、V1 repair 测试继续通过。
 
-- [ ] **Step 10: 提交 Client 红灯测试**
+- [x] **Step 10: 提交 Client 红灯测试**
 
 ```powershell
 git add -- tests/ai-client.test.ts docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md

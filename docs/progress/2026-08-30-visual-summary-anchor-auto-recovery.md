@@ -42,9 +42,23 @@ Error: Failed to resolve import "../src/analysis/anchor-recovery" from "tests/an
 
 失败原因 = `src/analysis/anchor-recovery.ts` 尚不存在（计划预期的红灯形态），非测试语法或 fixture 错误。测试合同共 15 个用例：轻微改写恢复、合法零修改（toBe 同一性）、空白/全半角标点归一化恢复 ×3、不存在 Block ID 拒绝、低相似度拒绝、歧义（margin < 0.08）拒绝、跨 Block 重复拒绝、短 Quote（<6 code points）拒绝、300 字长句 140 窗口候选、扩展汉字（U+20000 区）强句末候选保留标点、不可变性（summary/keyPoints 引用、sourceBlocks 不变）、无 sourceBlocks 返回原对象、无 anchor 条目原样保留、部分成功只替换成功项且整体仍被 Validator 拒绝。
 
-**Task 3（三阶段状态机合同）：**
+**Task 3（三阶段状态机合同，2026-08-30）：**
 
-（待回填）
+```text
+npx vitest run tests/ai-client.test.ts
+→ Test Files 1 failed (1) / Tests 7 failed | 36 passed (43)
+```
+
+7 个红灯（当前两阶段实现无法满足）：
+1. 初次与 repair 均失败时第三次 fresh 成功（当前第 2 次后即抛错）；
+2. 初次输出 Quote 轻微差异本地恢复成功仅 1 次请求（当前触发 repair 共 2 次后失败）；
+3. repair 输出可本地恢复时不发起第 3 次请求（当前失败抛错）；
+4. fresh 输出也经本地恢复（当前无第三阶段）；
+5. 第三次请求为全新原始 prompt（当前无第三阶段）；
+6. 三阶段全败返回含"首次校验/自动修复后/全新生成后"三段诊断（当前仅两段）；
+7. fresh 阶段 5xx 总计恰好 3 次（当前无第 3 次）。
+
+36 个现有用例继续通过：V1 全部（成功/HTTP/超时/一次 repair）、V2 合法路径、repair 请求内容、超长 BlockId 脱敏、240 截断、401/429 单次直传、repair 网络失败传播、共享 30 秒 AbortController 预算。
 
 ## 五、实现摘要
 

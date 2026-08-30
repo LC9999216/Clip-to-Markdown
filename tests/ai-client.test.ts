@@ -10,6 +10,7 @@ const SETTINGS: AiSettings = {
   apiKey: 'sk-test',
   model: 'deepseek-chat',
   outputLanguage: 'zh-CN',
+  translateBilibiliSubtitles: false,
 };
 
 const INPUT: AnalysisInput = {

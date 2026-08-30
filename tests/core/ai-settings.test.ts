@@ -14,6 +14,7 @@ describe('AiSettings 默认值', () => {
       apiKey: '',
       model: '',
       outputLanguage: 'zh-CN',
+      translateBilibiliSubtitles: false,
     });
   });
 

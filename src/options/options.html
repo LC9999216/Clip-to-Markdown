@@ -140,7 +140,7 @@
         <div class="details-body ai-fields">
           <label class="checkbox">
             <input id="ai-enabled" name="ai-enabled" type="checkbox" />
-            <span>启用一图速览</span>
+            <span>启用 AI 功能（一图速览与字幕翻译）</span>
           </label>
 
           <div class="field">
@@ -187,6 +187,18 @@
               spellcheck="false"
             />
           </div>
+
+          <label class="checkbox">
+            <input
+              id="ai-bilibili-subtitle-translation"
+              name="ai-bilibili-subtitle-translation"
+              type="checkbox"
+            />
+            <span>B站无简中轨时自动翻译为简体中文</span>
+          </label>
+          <p class="hint">
+            开启后，英文字幕文本会发送到上方配置的 AI 服务，可能产生费用；不会发送音频或视频。
+          </p>
 
           <div class="inline-actions">
             <button id="ai-authorize-btn" type="button" class="secondary-button">授权并测试</button>

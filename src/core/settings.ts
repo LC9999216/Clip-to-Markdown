@@ -27,7 +27,7 @@ export type { ObsidianFrontmatterSettings, ObsidianSettings } from './obsidian-s
 export { DEFAULT_AI_SETTINGS } from './ai-settings';
 export type { AiSettings } from './ai-settings';
 
-export const SETTINGS_VERSION = 3 as const;
+export const SETTINGS_VERSION = 4 as const;
 export const DEFAULT_FILENAME_TEMPLATE = '{date}-{title}';
 
 export interface SaveSettings {
@@ -135,6 +135,9 @@ function normalizeAiSettings(raw: unknown): AiSettings {
     apiKey: readString(value.apiKey)?.trim() ?? '',
     model: readString(value.model)?.trim() ?? '',
     outputLanguage: DEFAULT_AI_SETTINGS.outputLanguage,
+    translateBilibiliSubtitles: typeof value.translateBilibiliSubtitles === 'boolean'
+      ? value.translateBilibiliSubtitles
+      : false,
   };
 }
 

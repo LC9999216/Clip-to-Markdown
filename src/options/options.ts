@@ -39,6 +39,9 @@ const toggleApiKeyBtn = document.getElementById('toggle-api-key') as HTMLButtonE
 const obsidianSummaryStateEl = document.getElementById('obsidian-summary-state') as HTMLSpanElement;
 
 const aiEnabledInput = document.getElementById('ai-enabled') as HTMLInputElement;
+const aiBilibiliSubtitleTranslationInput = document.getElementById(
+  'ai-bilibili-subtitle-translation',
+) as HTMLInputElement;
 const aiEndpointInput = document.getElementById('ai-endpoint') as HTMLInputElement;
 const aiApiKeyInput = document.getElementById('ai-api-key') as HTMLInputElement;
 const aiModelInput = document.getElementById('ai-model') as HTMLInputElement;
@@ -124,6 +127,7 @@ function readFormSettings() {
       endpoint: aiEndpointInput.value,
       apiKey: aiApiKeyInput.value,
       model: aiModelInput.value,
+      translateBilibiliSubtitles: aiBilibiliSubtitleTranslationInput.checked,
     },
   };
 }
@@ -306,6 +310,7 @@ async function init(): Promise<void> {
     input.checked = currentSettings.obsidian.frontmatter[name];
   }
   aiEnabledInput.checked = currentSettings.ai.enabled;
+  aiBilibiliSubtitleTranslationInput.checked = currentSettings.ai.translateBilibiliSubtitles;
   aiEndpointInput.value = currentSettings.ai.endpoint;
   aiApiKeyInput.value = currentSettings.ai.apiKey;
   aiModelInput.value = currentSettings.ai.model;

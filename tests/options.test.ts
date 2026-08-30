@@ -142,6 +142,7 @@ describe('Clip2MD 设置页结构', () => {
   'initial-setup-guide',
   'ai-settings',
   'ai-enabled',
+  'ai-bilibili-subtitle-translation',
   'ai-endpoint',
   'ai-api-key',
   'toggle-ai-api-key',
@@ -276,7 +277,7 @@ describe('表单保存状态', () => {
       expect(document.getElementById('save-status')?.textContent).toBe('设置已保存');
       expect(saveButton.disabled).toBe(true);
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 3,
+        settingsVersion: 4,
         save: {
           subfolder: 'Clip2MD/知乎',
         },
@@ -351,7 +352,7 @@ describe('Obsidian 高级设置', () => {
         expect.any(Function),
       );
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 3,
+        settingsVersion: 4,
         obsidian: { apiKey: 'secret-key' },
       });
       expect(document.getElementById('obsidian-status')?.textContent)
@@ -415,7 +416,7 @@ describe('AI 一图速览设置', () => {
         expect.any(Function),
       );
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 3,
+        settingsVersion: 4,
         ai: {
           enabled: true,
           endpoint: 'https://api.deepseek.com/chat/completions',
@@ -493,7 +494,7 @@ describe('AI 一图速览设置', () => {
       expect(document.getElementById('ai-status')?.textContent).toContain('连接成功');
       expect(document.getElementById('ai-status')?.textContent).toContain('deepseek-chat');
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 3,
+        settingsVersion: 4,
         ai: { apiKey: 'sk-secret', model: 'deepseek-chat' },
       });
     });
@@ -511,6 +512,35 @@ describe('AI 一图速览设置', () => {
     await vi.waitFor(() => {
       expect(document.getElementById('ai-status')?.textContent).toContain('API Key 无效');
       expect(document.getElementById('ai-status')?.dataset.kind).toBe('error');
+    });
+  });
+
+  it('明确告知字幕会外发且保存用户的自动翻译选择', async () => {
+    mockStoredSettings['clip2md.settings'] = {
+      settingsVersion: 4,
+      ai: {
+        enabled: true,
+        endpoint: 'https://api.deepseek.com/chat/completions',
+        apiKey: 'sk-test',
+        model: 'deepseek-chat',
+        outputLanguage: 'zh-CN',
+        translateBilibiliSubtitles: false,
+      },
+    };
+    await bootOptions();
+
+    const input = document.getElementById('ai-bilibili-subtitle-translation') as HTMLInputElement;
+    expect(input.checked).toBe(false);
+    expect(input.closest('label')?.textContent).toContain('B站无简中轨时自动翻译');
+    expect(document.getElementById('ai-settings')?.textContent).toContain('可能产生费用');
+
+    input.checked = true;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    (document.getElementById('save-btn') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => {
+      const saved = mockStoredSettings['clip2md.settings'] as { ai: { translateBilibiliSubtitles: boolean } };
+      expect(saved.ai.translateBilibiliSubtitles).toBe(true);
     });
   });
 });

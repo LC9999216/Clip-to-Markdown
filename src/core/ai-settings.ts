@@ -18,6 +18,8 @@ export interface AiSettings {
   model: string;
   /** 输出语言，V1 固定为简体中文 */
   outputLanguage: 'zh-CN';
+  /** B站没有官方中文轨时，是否允许把英文字幕发送到 AI 服务翻译 */
+  translateBilibiliSubtitles: boolean;
 }
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
@@ -26,6 +28,7 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   apiKey: '',
   model: '',
   outputLanguage: 'zh-CN',
+  translateBilibiliSubtitles: false,
 };
 
 const ALLOWED_INSECURE_HOSTS = new Set(['localhost', '127.0.0.1']);

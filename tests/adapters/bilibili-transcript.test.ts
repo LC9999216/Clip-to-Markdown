@@ -204,6 +204,11 @@ describe('B站字幕细粒度分段', () => {
     expect(result.every((segment) => segment.end >= segment.start)).toBe(true);
   });
 
+  it('空输入与空白字幕行仍被过滤', () => {
+    expect(groupTranscript([])).toEqual([]);
+    expect(groupTranscript(null as unknown as BiliSubtitleLine[])).toEqual([]);
+  });
+
   it('空白字幕行仍被过滤，有效行时间端点保留', () => {
     const result = groupTranscript([
       { from: 0, to: 1, content: '   ' },

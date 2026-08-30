@@ -84,13 +84,15 @@ function invalidResponseMessage(firstProblems: string[], repairedProblems: strin
   return `AI 返回的分析结果未通过校验。首次校验：${first}。自动修复后：${repaired}。请重新生成。`;
 }
 
-interface ChatMessage {
+export interface AiChatMessage {
   role: 'system' | 'user';
   content: string;
 }
 
-interface CompletionRequestOptions {
+export interface TextCompletionOptions {
   structuredOutput?: boolean;
+  temperature?: number;
+  maxTokens?: number;
 }
 
 function isOfficialDeepSeekV4(settings: AiSettings): boolean {
@@ -123,9 +125,9 @@ function mapHttpError(status: number): VisualAnalysisRequestError {
 
 async function requestCompletion(
   settings: AiSettings,
-  messages: ChatMessage[],
+  messages: AiChatMessage[],
   signal: AbortSignal,
-  options: CompletionRequestOptions = {},
+  options: TextCompletionOptions = {},
 ): Promise<string> {
   const isDeepSeekV4 = isOfficialDeepSeekV4(settings);
   const useDeepSeekJsonMode = isDeepSeekV4 && options.structuredOutput === true;
@@ -140,8 +142,8 @@ async function requestCompletion(
       body: JSON.stringify({
         model: settings.model,
         messages,
-        temperature: 0.2,
-        max_tokens: useDeepSeekJsonMode ? 4096 : 1400,
+        temperature: options.temperature ?? 0.2,
+        max_tokens: options.maxTokens ?? (useDeepSeekJsonMode ? 4096 : 1400),
         ...(isDeepSeekV4 ? { thinking: { type: 'disabled' } } : {}),
         ...(useDeepSeekJsonMode ? { response_format: { type: 'json_object' } } : {}),
       }),
@@ -172,7 +174,7 @@ async function requestCompletion(
 }
 
 /** 有限清除 ```json / ``` 代码块围栏。 */
-function stripJsonFence(content: string): string {
+export function stripJsonFence(content: string): string {
   const trimmed = content.trim();
   const fenceStart = /^```(?:json)?\s*[\r\n]/i;
   if (fenceStart.test(trimmed) && /```\s*$/.test(trimmed)) {
@@ -197,7 +199,7 @@ export async function analyzeContent(input: AnalysisInput, settings: AiSettings)
   const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
 
   try {
-    const firstMessages: ChatMessage[] = [
+    const firstMessages: AiChatMessage[] = [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ];
@@ -212,7 +214,7 @@ export async function analyzeContent(input: AnalysisInput, settings: AiSettings)
           error instanceof SyntaxError ||
           (error instanceof Error && error.name === 'SyntaxError');
         if (attempt === 0 && isParseFailure) {
-          const repairMessages: ChatMessage[] = [
+          const repairMessages: AiChatMessage[] = [
             { role: 'system', content: `${prompt.system}\n\n${REPAIR_SYSTEM_PROMPT}` },
             { role: 'user', content: prompt.user },
           ];
@@ -240,12 +242,30 @@ export async function testAiConnection(settings: AiSettings): Promise<{ model: s
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
   try {
-    const messages: ChatMessage[] = [
+    const messages: AiChatMessage[] = [
       { role: 'system', content: '你是连通性测试。请只回复一个词：OK。' },
       { role: 'user', content: 'ping' },
     ];
     await requestCompletion(settings, messages, controller.signal);
     return { model: settings.model };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * 受控文本 completion：供字幕翻译等模块复用既有 HTTP 实现、
+ * 超时和错误映射，不复制第二套请求代码。
+ */
+export async function completeText(
+  settings: AiSettings,
+  messages: AiChatMessage[],
+  options: TextCompletionOptions = {},
+): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  try {
+    return await requestCompletion(settings, messages, controller.signal, options);
   } finally {
     clearTimeout(timer);
   }
@@ -271,7 +291,7 @@ export async function analyzeContentV2(input: AnalysisInput, settings: AiSetting
   const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
 
   try {
-    const firstMessages: ChatMessage[] = [
+    const firstMessages: AiChatMessage[] = [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ];
@@ -288,7 +308,7 @@ export async function analyzeContentV2(input: AnalysisInput, settings: AiSetting
         const problems = validationProblems(error);
         if (attempt === 0 && problems) {
           firstProblems = problems;
-          const repairMessages: ChatMessage[] = [
+          const repairMessages: AiChatMessage[] = [
             { role: 'system', content: `${prompt.system}\n\n${buildRepairPromptV2(problems, content)}` },
             { role: 'user', content: prompt.user },
           ];

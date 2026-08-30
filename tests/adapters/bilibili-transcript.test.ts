@@ -156,6 +156,19 @@ describe('B站字幕细粒度分段', () => {
     expect(result[0]!.end).toBeCloseTo(8 * 17 / 23, 10);
   });
 
+  it('hardLimit 小于 minCut 时切点窗口为空仍稳步前进（每段恰好 6 秒）', () => {
+    // 7 字 / 42 秒：duration/chars = 6 不触发稀疏例外；targetByTime=max(1,0)=1 → hardLimit=1 < minCut=6
+    const content = '甲乙丙丁戊己庚';
+    const result = groupTranscript([{ from: 0, to: 42, content }]);
+
+    expect(result).toHaveLength(7);
+    expect(result.map((segment) => Array.from(segment.text).length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect(result.every((segment) => segment.end - segment.start <= 6 + EPSILON)).toBe(true);
+    expect(result[0]).toMatchObject({ start: 0, end: 6 });
+    expect(result.at(-1)).toMatchObject({ start: 36, end: 42 });
+    expect(result.map((segment) => segment.text).join('')).toBe(content);
+  });
+
   it('极稀疏源行保真例外：单字 25 秒保留原始时间范围（源数据过稀，非算法缺陷）', () => {
     const result = groupTranscript([{ from: 0, to: 25, content: '甲' }]);
 

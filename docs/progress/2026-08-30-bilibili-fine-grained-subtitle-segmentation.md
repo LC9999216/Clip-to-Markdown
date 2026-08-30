@@ -97,4 +97,19 @@
 
 ## 八、提交记录与最终工作树状态
 
-（待回填）
+提交范围 `2c72489..HEAD`（分支 `codex/bilibili-subtitle-sidepanel`，未 merge/push/PR/改 main）：
+
+| 提交 | 内容 |
+|---|---|
+| `45f1279` | docs: plan fine-grained bilibili subtitle segmentation（计划+报告骨架） |
+| `75b8063` | test: define fine-grained subtitle segmentation（15 用例红灯合同） |
+| `92e9499` | feat: segment bilibili subtitles into short timed cues（groupTranscript 重写） |
+| `bf4f5fc` | test: use close-to boundaries in segmentation expectations（计划 4.3 浮点断言） |
+| `66e085b` | test: cover short subtitle timing interactions（6 个页面集成用例） |
+| `7263a61` | docs: document fine-grained subtitle timing（README+报告） |
+| `9aac37c` | docs: record chrome acceptance as unverified（验收未验证记录） |
+| `1e2405d` | fix: bound whitespace absorption by segment hard limit（自查修复+红灯测试） |
+| `f7730cd` | test: keep empty-input invariant in segmentation suite |
+| `c03f01c` | test: lock degenerate cut-window progress invariant |
+
+最终工作树：仅 3 个既有未提交保护文件（哈希与开始时一致，未进入任何提交）。

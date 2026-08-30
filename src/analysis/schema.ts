@@ -199,7 +199,7 @@ const MIN_STRUCTURE_ITEMS = 1;
 const MAX_STRUCTURE_ITEMS = 10;
 const MAX_STRUCTURE_TITLE_CHARS = 40;
 const SOURCE_BLOCK_ID_RE = /^B\d{3,}$/;
-const MAX_SOURCE_QUOTE_CHARS = 140;
+export const MAX_SOURCE_QUOTE_CHARS = 140;
 
 function isStructureItem(raw: unknown): raw is { title: unknown; sourceBlockId?: unknown; sourceQuote?: unknown } {
   return isRecord(raw) && 'title' in raw;

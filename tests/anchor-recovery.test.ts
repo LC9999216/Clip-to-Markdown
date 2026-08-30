@@ -173,7 +173,8 @@ describe('recoverVisualSummaryAnchors 保守重匹配', () => {
       sourceBlocks: [{ id: 'B003', kind: 'paragraph', text: blockText }],
     };
     const original = summary([
-      { title: '扩展汉字', sourceBlockId: 'B003', sourceQuote: '𠁁'.repeat(35) },
+      // 34 个 𠁁 + 1 个 𠀀：非 Block 精确子串，但与第二句高度相似
+      { title: '扩展汉字', sourceBlockId: 'B003', sourceQuote: `${'𠁁'.repeat(34)}𠀀` },
     ]);
 
     const recovered = recoverVisualSummaryAnchors(original, hanInput);

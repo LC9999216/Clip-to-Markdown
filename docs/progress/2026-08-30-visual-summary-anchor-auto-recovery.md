@@ -48,7 +48,9 @@ Error: Failed to resolve import "../src/analysis/anchor-recovery" from "tests/an
 
 ## 五、实现摘要
 
-（待 Task 2/4 回填）
+**`src/analysis/anchor-recovery.ts`（新建，纯函数模块）：** `comparisonText`（normalizeBlockText → NFKC → 小写 → 删除 `\p{P}\p{S}\s`，仅用于比较）；`collectQuoteCandidates`（强句末 `。！？!?；;` 分段保留标点 → 超长再按弱标点 `，,、：:` → 仍超长按 140 code points 固定窗口；去重、过滤 <6 code points、`blockText.includes` 证明精确子串）；`diceSimilarity`（code point bigram Sørensen–Dice，相同比较文本直接 1，<2 code points 返回 0）；`findReplacementQuote`（最高分 ≥ 0.72、领先第二名 ≥ 0.08、同分按原文顺序稳定排序、候选仅出现在一个 sent Block）；`recoverVisualSummaryAnchors`（逐条目：Block ID 不存在 / Quote 已是精确子串 / 无高置信度候选 → 原样保留；有替换才返回新对象，否则返回原对象引用）。阈值常量 0.72/0.08/6 与计划一致，未新增依赖。
+
+**`src/analysis/schema.ts`：** 仅将 `MAX_SOURCE_QUOTE_CHARS = 140` 导出（`parseVisualSummaryV2` 截断行为未变）。
 
 ## 六、自动化门禁
 

@@ -505,7 +505,7 @@ git commit -m "test: define conservative visual anchor recovery"
 - Modify: `src/analysis/schema.ts`
 - Test: `tests/anchor-recovery.test.ts`
 
-- [ ] **Step 1: 从 Schema 导出唯一 Quote 上限**
+- [x] **Step 1: 从 Schema 导出唯一 Quote 上限**
 
 将：
 
@@ -521,7 +521,7 @@ export const MAX_SOURCE_QUOTE_CHARS = 140;
 
 不得改变 `parseVisualSummaryV2` 的截断行为。
 
-- [ ] **Step 2: 建立模块类型和比较归一化**
+- [x] **Step 2: 建立模块类型和比较归一化**
 
 ```ts
 import { normalizeBlockText } from './source-blocks';
@@ -549,7 +549,7 @@ function comparisonText(raw: string): string {
 
 `NFKC` 只用于比较，绝不能作为返回给 UI/导航的 Quote。
 
-- [ ] **Step 3: 实现 code point 安全的候选生成**
+- [x] **Step 3: 实现 code point 安全的候选生成**
 
 实现私有函数：
 
@@ -621,7 +621,7 @@ function collectQuoteCandidates(blockText: string): string[] {
 
 不得生成跨 Block 候选。
 
-- [ ] **Step 4: 实现 bigram Dice**
+- [x] **Step 4: 实现 bigram Dice**
 
 ```ts
 function bigramCounts(value: string): Map<string, number> {
@@ -654,7 +654,7 @@ function diceSimilarity(left: string, right: string): number {
 
 测试不得通过把阈值降低到容易误配的水平。
 
-- [ ] **Step 5: 实现唯一高置信度候选选择**
+- [x] **Step 5: 实现唯一高置信度候选选择**
 
 ```ts
 function findReplacementQuote(
@@ -679,7 +679,7 @@ function findReplacementQuote(
 
 排序相同分数时必须保持候选原文顺序，不得随机。
 
-- [ ] **Step 6: 实现公开纯函数**
+- [x] **Step 6: 实现公开纯函数**
 
 ```ts
 function hasAnchor(
@@ -710,7 +710,7 @@ export function recoverVisualSummaryAnchors(
 }
 ```
 
-- [ ] **Step 7: 运行恢复模块与 Schema 测试**
+- [x] **Step 7: 运行恢复模块与 Schema 测试**
 
 ```powershell
 npx vitest run tests/anchor-recovery.test.ts tests/analysis-schema.test.ts
@@ -718,7 +718,7 @@ npx vitest run tests/anchor-recovery.test.ts tests/analysis-schema.test.ts
 
 Expected：全部通过，原 Schema 严格性测试不回退。
 
-- [ ] **Step 8: 提交恢复模块**
+- [x] **Step 8: 提交恢复模块**
 
 ```powershell
 git add -- src/analysis/anchor-recovery.ts src/analysis/schema.ts tests/anchor-recovery.test.ts docs/progress/2026-08-30-visual-summary-anchor-auto-recovery.md

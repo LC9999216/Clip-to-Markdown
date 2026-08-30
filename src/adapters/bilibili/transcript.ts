@@ -146,6 +146,8 @@ function splitSubtitleLine(line: BiliSubtitleLine): Array<{ start: number; end: 
   let offset = 0;
   // 纯空白块（行内超长空白串被硬上限截断时产生）不单独成段：
   // 挂起后并入下一个含内容子段，起点取块首，时间仍按 code point 比例。
+  // 有意取舍：合并段的时间因此可超过 6 秒硬上限——纯空白的时间必须挂在可见
+  // 文字上，"没有空文字段"（计划 §0.4）优先于"≤6 秒"（见进度报告 §七）。
   let pendingFrom = -1;
   while (offset < chars) {
     const rawCut = findCutIndex(codePoints, offset, targetLimit, hardLimit, limits.minCut, isCjk);

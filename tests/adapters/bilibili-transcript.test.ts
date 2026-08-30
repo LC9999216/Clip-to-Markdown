@@ -184,6 +184,41 @@ describe('B站字幕细粒度分段', () => {
     expect(result[0]!.end).toBe(result[1]!.start);
     expect(result[0]!.end).toBeCloseTo(20 * 10 / 35, 10);
     expect(result[1]!.end).toBe(20);
+    // 有意取舍：合并段因吸收纯空白时间而超过 6 秒（"无空文字段"优先）
+    expect(result[1]!.end - result[1]!.start).toBeGreaterThan(6 + EPSILON);
+  });
+
+  it('拉丁句点后跟空白被选为切点（正例）', () => {
+    const content = 'x'.repeat(13) + '. ' + 'y'.repeat(15);
+    const result = groupTranscript([{ from: 0, to: 10, content }]);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]!.text).toBe('x'.repeat(13) + '. ');
+    expect(result[1]!.text).toBe('y'.repeat(15));
+    expect(result[0]!.end).toBe(result[1]!.start);
+    expect(result[0]!.end).toBeCloseTo(5, 10);
+    expect(result.map((segment) => segment.text).join('')).toBe(content);
+  });
+
+  it('强标点同距并列时取较后者（标点归前段）', () => {
+    // '。' 在 10 和 12，候选切点 11/13 距 idealCut=12 等距 → 取 13
+    const content = '甲'.repeat(10) + '。乙。' + '丙'.repeat(8);
+    const result = groupTranscript([{ from: 0, to: 7, content }]);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]!.text).toBe('甲'.repeat(10) + '。乙。');
+    expect(result[1]!.text).toBe('丙'.repeat(8));
+    expect(result[0]!.end).toBe(result[1]!.start);
+    expect(result[0]!.end).toBeCloseTo(7 * 13 / 21, 10);
+  });
+
+  it('from/to 为 NaN 或 ±Infinity 时折叠为非负有限区间', () => {
+    expect(groupTranscript([{ from: Number.NaN, to: Number.POSITIVE_INFINITY, content: '测试' }])).toEqual([
+      { id: 'S0001', start: 0, end: 0, text: '测试' },
+    ]);
+    expect(groupTranscript([{ from: 5, to: Number.NEGATIVE_INFINITY, content: '你好' }])).toEqual([
+      { id: 'S0001', start: 5, end: 5, text: '你好' },
+    ]);
   });
 
   it('极稀疏源行保真例外：单字 25 秒保留原始时间范围（源数据过稀，非算法缺陷）', () => {

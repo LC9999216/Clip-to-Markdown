@@ -110,6 +110,8 @@
 
 审查修复后复跑：`npx vitest run tests/adapters/bilibili-transcript.test.ts` 19/19；`npm test` 38 文件 / **610 测试**全过；typecheck 0。
 
+**第二路独立静态审查（交叉验证）处置：** 结论"9 条合同全部符合、0 Critical"；其 Important-1（未提交测试期望 [10,28]）与"transcript.ts 被回退/工作树漂移"经实证为**快照错位误报**——`git diff HEAD` 证明工作树与 HEAD 零差异（仅 3 个保护文件按约保持未提交），HEAD 测试期望本就是 [10,25]/22 空格且 610/610 全绿；其"保护文件被改"即任务开始前已存在的用户修改，属保护对象本身。有效增量为 Minor-3/4 断言缺口：已补 3 个边界测试（拉丁句点切点正例、强标点同距取后、NaN/±Infinity 折叠）、合并段 >6 秒取舍的代码注释与显式断言（22 用例），最终全量 **38 文件 / 613 测试**全过，typecheck/build/diff-check 全 0。
+
 ## 九、提交记录与最终工作树状态
 
 提交范围 `2c72489..HEAD`（分支 `codex/bilibili-subtitle-sidepanel`，未 merge/push/PR/改 main）：

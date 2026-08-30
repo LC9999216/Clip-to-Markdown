@@ -10,7 +10,7 @@ import {
   tabsSendMessageMock,
 } from './setup';
 import type { ContentDocument } from '../src/core/schema';
-import { isFetchJsonRequest } from '../src/types/messages';
+import { isFetchJsonRequest, isTranslateBilibiliSubtitlesRequest } from '../src/types/messages';
 
 const SETTINGS_KEY = 'clip2md.settings';
 
@@ -161,7 +161,7 @@ describe('background DOWNLOAD handler', () => {
 });
 
 const AI_SETTINGS_FIXTURE: Record<string, unknown> = {
-  settingsVersion: 3,
+  settingsVersion: 4,
   save: { subfolder: '', saveAs: false },
   filename: { template: '{date}-{title}' },
   obsidian: {
@@ -184,6 +184,7 @@ const AI_SETTINGS_FIXTURE: Record<string, unknown> = {
     apiKey: 'sk-test',
     model: 'deepseek-chat',
     outputLanguage: 'zh-CN',
+    translateBilibiliSubtitles: true,
   },
 };
 
@@ -338,5 +339,231 @@ describe('background SAVE_CURRENT_TAB handler (Phase 8)', () => {
       { url: 'https://evil.example.com/' },
     );
     expect(resp).toEqual({ success: false, error: expect.stringContaining('不受信任') });
+  });
+});
+
+// ---- B站字幕 AI 翻译 ----
+
+const TRANSLATE = {
+  type: 'TRANSLATE_BILIBILI_SUBTITLES',
+  payload: {
+    sourceTrackId: 'ai-en',
+    lines: [{ from: 0, to: 2, content: 'Hello' }],
+  },
+};
+
+const TRUSTED_SENDER = { url: 'chrome-extension://test-extension-id/subtitle.html' };
+
+function translateSettings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const fixture = structuredClone(AI_SETTINGS_FIXTURE);
+  Object.assign((fixture.ai as Record<string, unknown>), overrides);
+  return fixture;
+}
+
+describe('TRANSLATE_BILIBILI_SUBTITLES payload guard', () => {
+  it('接受合法载荷', () => {
+    expect(isTranslateBilibiliSubtitlesRequest(TRANSLATE)).toBe(true);
+  });
+
+  it.each([
+    { sourceTrackId: '', lines: [{ from: 0, to: 2, content: 'Hello' }] },
+    { sourceTrackId: 'ai-en', lines: [] },
+    { sourceTrackId: 'ai-en', lines: [{ from: -1, to: 2, content: 'Hello' }] },
+    { sourceTrackId: 'ai-en', lines: [{ from: 0, to: 2, content: '' }] },
+  ])('拒绝非法字幕翻译载荷 %#', (payload) => {
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload,
+    })).toBe(false);
+  });
+
+  it('拒绝带额外字段或行结构不精确的载荷', () => {
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: {
+        sourceTrackId: 'ai-en',
+        lines: [{ from: 0, to: 2, content: 'Hello' }],
+        title: '页面标题',
+      },
+    })).toBe(false);
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: {
+        sourceTrackId: 'ai-en',
+        lines: [{ from: 0, to: 2, content: 'Hello', url: 'https://evil.example.com' }],
+      },
+    })).toBe(false);
+  });
+
+  it('强制行数、字符数、时间与 ID 上限', () => {
+    const line = { from: 0, to: 1, content: 'x' };
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en', lines: Array.from({ length: 5000 }, () => ({ ...line })) },
+    })).toBe(true);
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en', lines: Array.from({ length: 5001 }, () => ({ ...line })) },
+    })).toBe(false);
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en', lines: [{ from: 0, to: 1, content: 'a'.repeat(2000) }] },
+    })).toBe(true);
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en', lines: [{ from: 0, to: 1, content: 'a'.repeat(2001) }] },
+    })).toBe(false);
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'a'.repeat(128), lines: [{ ...line }] },
+    })).toBe(true);
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'a'.repeat(129), lines: [{ ...line }] },
+    })).toBe(false);
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en', lines: [{ from: 86400, to: 86400, content: 'x' }] },
+    })).toBe(true);
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en', lines: [{ from: 0, to: 86401, content: 'x' }] },
+    })).toBe(false);
+    expect(isTranslateBilibiliSubtitlesRequest({
+      type: 'TRANSLATE_BILIBILI_SUBTITLES',
+      payload: { sourceTrackId: 'ai-en', lines: [{ from: 3, to: 2, content: 'x' }] },
+    })).toBe(false);
+  });
+});
+
+describe('background TRANSLATE_BILIBILI_SUBTITLES handler', () => {
+  it('非扩展 sender 被拒绝且不调用 AI fetch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resp = await dispatchRuntimeMessage(TRANSLATE, { url: 'https://www.bilibili.com/video/BV1xx/' });
+
+    expect(resp).toEqual({ success: false, code: 'AI_PROVIDER_ERROR', error: expect.stringContaining('不受信任') });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('另一个扩展的 sender 被拒绝且不调用 AI fetch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resp = await dispatchRuntimeMessage(TRANSLATE, { url: 'chrome-extension://evil-extension/subtitle.html' });
+
+    expect(resp).toEqual({ success: false, code: 'AI_PROVIDER_ERROR', error: expect.stringContaining('不受信任') });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('翻译开关关闭 → AI_TRANSLATION_DISABLED 且不调用 AI fetch', async () => {
+    mockStoredSettings['clip2md.settings'] = translateSettings({ translateBilibiliSubtitles: false });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+
+    expect(resp).toEqual({ success: false, code: 'AI_TRANSLATION_DISABLED', error: expect.any(String) });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('AI 总开关关闭 → AI_TRANSLATION_DISABLED', async () => {
+    mockStoredSettings['clip2md.settings'] = translateSettings({ enabled: false });
+    const resp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+    expect(resp).toMatchObject({ success: false, code: 'AI_TRANSLATION_DISABLED' });
+  });
+
+  it('AI 字段不完整 → AI_NOT_CONFIGURED 且不调用 AI fetch', async () => {
+    mockStoredSettings['clip2md.settings'] = translateSettings({ apiKey: '' });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+
+    expect(resp).toEqual({ success: false, code: 'AI_NOT_CONFIGURED', error: expect.any(String) });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('Endpoint 主机权限未授予 → AI_HOST_NOT_GRANTED 且不调用 AI fetch', async () => {
+    mockStoredSettings['clip2md.settings'] = translateSettings();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    // permissionsContainsMock 默认返回 false
+
+    const resp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+
+    expect(resp).toEqual({ success: false, code: 'AI_HOST_NOT_GRANTED', error: expect.any(String) });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('已开启、已配置、已授权 → 只调用一次 AI 并返回保留时间码的中文行', async () => {
+    mockStoredSettings['clip2md.settings'] = translateSettings();
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    const fetchMock = vi.fn().mockResolvedValue(okAiContent(JSON.stringify({
+      translations: [{ id: 'L0001', text: '你好' }],
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+
+    expect(resp).toEqual({ success: true, lines: [{ from: 0, to: 2, content: '你好' }] });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    [401, 'AI_AUTH_FAILED'],
+    [404, 'AI_ENDPOINT_OR_MODEL_NOT_FOUND'],
+    [429, 'AI_RATE_LIMITED'],
+    [503, 'AI_PROVIDER_ERROR'],
+  ])('HTTP %i 映射到稳定错误码且不返回 provider 原始正文', async (status, code) => {
+    mockStoredSettings['clip2md.settings'] = translateSettings();
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status,
+      json: async () => ({ error: { message: 'secret-provider-detail sk-internal-key' } }),
+    }));
+
+    const resp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+
+    expect(resp).toMatchObject({ success: false, code });
+    expect(JSON.stringify(resp)).not.toContain('secret-provider-detail');
+    expect(JSON.stringify(resp)).not.toContain('sk-internal-key');
+    vi.unstubAllGlobals();
+  });
+
+  it('超时与网络错误映射到 AI_TIMEOUT / AI_NETWORK_ERROR', async () => {
+    mockStoredSettings['clip2md.settings'] = translateSettings();
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new DOMException('aborted', 'AbortError'))
+      .mockRejectedValueOnce(new TypeError('fetch failed'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const timeoutResp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+    expect(timeoutResp).toMatchObject({ success: false, code: 'AI_TIMEOUT' });
+
+    const networkResp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+    expect(networkResp).toMatchObject({ success: false, code: 'AI_NETWORK_ERROR' });
+    vi.unstubAllGlobals();
+  });
+
+  it('AI 两次输出均非法 → AI_INVALID_RESPONSE', async () => {
+    mockStoredSettings['clip2md.settings'] = translateSettings();
+    permissionsContainsMock.mockImplementation((_permissions, callback) => callback?.(true));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okAiContent('not-json')));
+
+    const resp = await dispatchRuntimeMessage(TRANSLATE, TRUSTED_SENDER);
+
+    expect(resp).toMatchObject({ success: false, code: 'AI_INVALID_RESPONSE' });
+    vi.unstubAllGlobals();
   });
 });

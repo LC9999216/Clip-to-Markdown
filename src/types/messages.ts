@@ -5,6 +5,7 @@
 
 import type { ContentDocument, PlatformContentType, PlatformId } from '../core/schema';
 import type { AnalysisSourceBlock, VisualAnalysisState } from '../analysis/types';
+import type { BiliSubtitleLine } from '../adapters/bilibili/subtitle-types';
 import type { VisualNavigationErrorCode, VisualSourceAnchor } from './visual-source';
 
 // ---------- 请求 ----------
@@ -103,6 +104,34 @@ export type SaveCurrentTabResponse =
   | { success: true; filename: string }
   | { success: false; error: string };
 
+/**
+ * B站字幕 AI 翻译（仅扩展自身页面可发起）。
+ * payload 只含源轨 ID 与英文字幕行；时间码、BV 号、URL、标题、作者不进入消息。
+ */
+export type SubtitleTranslationErrorCode =
+  | 'AI_TRANSLATION_DISABLED'
+  | 'AI_NOT_CONFIGURED'
+  | 'AI_HOST_NOT_GRANTED'
+  | 'AI_AUTH_FAILED'
+  | 'AI_ENDPOINT_OR_MODEL_NOT_FOUND'
+  | 'AI_RATE_LIMITED'
+  | 'AI_PROVIDER_ERROR'
+  | 'AI_TIMEOUT'
+  | 'AI_NETWORK_ERROR'
+  | 'AI_INVALID_RESPONSE';
+
+export type TranslateBilibiliSubtitlesRequest = {
+  type: 'TRANSLATE_BILIBILI_SUBTITLES';
+  payload: {
+    sourceTrackId: string;
+    lines: BiliSubtitleLine[];
+  };
+};
+
+export type TranslateBilibiliSubtitlesResponse =
+  | { success: true; lines: BiliSubtitleLine[] }
+  | { success: false; code: SubtitleTranslationErrorCode; error: string };
+
 export type ContentRequest =
   | StatusRequest
   | ExtractRequest
@@ -119,7 +148,8 @@ export type RuntimeMessage =
   | StartVisualAnalysisRequest
   | GetVisualAnalysisStateRequest
   | TestAiRequest
-  | SaveCurrentTabRequest;
+  | SaveCurrentTabRequest
+  | TranslateBilibiliSubtitlesRequest;
 
 // ---------- offscreen 消息 ----------
 
@@ -297,5 +327,66 @@ export function isSaveCurrentTabRequest(m: unknown): m is SaveCurrentTabRequest 
   if (m.type !== 'SAVE_CURRENT_TAB') return false;
   if (!isRecord(m.payload)) return false;
   return typeof m.payload.tabId === 'number' && Number.isInteger(m.payload.tabId);
+}
+
+// ---- B站字幕翻译守卫 ----
+
+const MAX_TRANSLATE_REQUEST_LINES = 5000;
+const MAX_TRANSLATE_LINE_CHARS = 2000;
+const MAX_TRANSLATE_TOTAL_CHARS = 400_000;
+const MAX_SUBTITLE_SECONDS = 86_400;
+const MAX_SOURCE_TRACK_ID_CHARS = 128;
+
+function isTranslatableSubtitleLine(line: unknown): line is BiliSubtitleLine {
+  if (!isRecord(line) || !hasExactKeys(line, ['from', 'to', 'content'])) return false;
+  const { from, to, content } = line;
+  if (typeof from !== 'number' || !Number.isFinite(from) || from < 0 || from > MAX_SUBTITLE_SECONDS) return false;
+  if (typeof to !== 'number' || !Number.isFinite(to) || to < from || to > MAX_SUBTITLE_SECONDS) return false;
+  if (typeof content !== 'string' || content === '') return false;
+  return Array.from(content).length <= MAX_TRANSLATE_LINE_CHARS;
+}
+
+function isTranslatedSubtitleLine(line: unknown): line is BiliSubtitleLine {
+  return isTranslatableSubtitleLine(line);
+}
+
+export function isTranslateBilibiliSubtitlesRequest(m: unknown): m is TranslateBilibiliSubtitlesRequest {
+  if (!isRecord(m) || m.type !== 'TRANSLATE_BILIBILI_SUBTITLES') return false;
+  if (!isRecord(m.payload) || !hasExactKeys(m.payload, ['sourceTrackId', 'lines'])) return false;
+  const { sourceTrackId, lines } = m.payload;
+  if (typeof sourceTrackId !== 'string' || sourceTrackId === '') return false;
+  if (Array.from(sourceTrackId).length > MAX_SOURCE_TRACK_ID_CHARS) return false;
+  if (!Array.isArray(lines) || lines.length === 0 || lines.length > MAX_TRANSLATE_REQUEST_LINES) return false;
+  let totalChars = 0;
+  for (const line of lines) {
+    if (!isTranslatableSubtitleLine(line)) return false;
+    totalChars += Array.from(line.content).length;
+    if (totalChars > MAX_TRANSLATE_TOTAL_CHARS) return false;
+  }
+  return true;
+}
+
+/** 校验 Background 返回的翻译行；不可信数据不能直接渲染。 */
+export function isTranslateBilibiliSubtitlesResponse(m: unknown): m is TranslateBilibiliSubtitlesResponse {
+  if (!isRecord(m) || typeof m.success !== 'boolean') return false;
+  if (m.success === true) {
+    if (!Array.isArray(m.lines) || m.lines.length === 0 || m.lines.length > MAX_TRANSLATE_REQUEST_LINES) {
+      return false;
+    }
+    return m.lines.every((line) => isTranslatedSubtitleLine(line));
+  }
+  const codes: readonly string[] = [
+    'AI_TRANSLATION_DISABLED',
+    'AI_NOT_CONFIGURED',
+    'AI_HOST_NOT_GRANTED',
+    'AI_AUTH_FAILED',
+    'AI_ENDPOINT_OR_MODEL_NOT_FOUND',
+    'AI_RATE_LIMITED',
+    'AI_PROVIDER_ERROR',
+    'AI_TIMEOUT',
+    'AI_NETWORK_ERROR',
+    'AI_INVALID_RESPONSE',
+  ];
+  return codes.includes(m.code as string) && typeof m.error === 'string';
 }
 

@@ -4,10 +4,12 @@
  */
 
 import { downloadMarkdown } from '../core/downloader';
+import { getAiOriginPattern } from '../core/ai-settings';
 import { sanitizeFilenamePart } from '../core/filename';
 import { loadSettings, resolveDownloadPath } from '../core/settings';
 import { saveToObsidian, testObsidian } from './obsidian';
-import { testAiConnection } from '../analysis/client';
+import { testAiConnection, VisualAnalysisRequestError } from '../analysis/client';
+import { translateBilibiliSubtitleLines } from '../analysis/subtitle-translation';
 import { getVisualAnalysisState, startVisualAnalysis } from './visual-summary';
 import { runSave } from './quick-save';
 import {
@@ -19,7 +21,9 @@ import {
   isStartVisualAnalysisRequest,
   isTestAiRequest,
   isTestObsidianRequest,
+  isTranslateBilibiliSubtitlesRequest,
   type FetchJsonCredentials,
+  type TranslateBilibiliSubtitlesResponse,
 } from '../types/messages';
 import './quick-save';
 import './visual-summary-command';
@@ -68,6 +72,67 @@ function isAllowedSender(sender: chrome.runtime.MessageSender): boolean {
     return hostAllowed(u.hostname);
   } catch {
     return false;
+  }
+}
+
+/**
+ * 字幕翻译只接受当前扩展自身的页面（side panel / options / popup）。
+ * 不复用 isAllowedSender 的宽松判定，网页 content script 与其他扩展一律拒绝。
+ */
+function isTrustedExtensionSender(sender: chrome.runtime.MessageSender): boolean {
+  const url = sender.url ?? '';
+  try {
+    const u = new URL(url);
+    return u.protocol === 'chrome-extension:' && u.hostname === chrome.runtime.id;
+  } catch {
+    return false;
+  }
+}
+
+/** 查询运行时主机权限是否已授予（不发起权限申请）。 */
+function hasOriginPermission(pattern: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.permissions.contains({ origins: [pattern] }, (granted) => {
+      resolve(!chrome.runtime.lastError && granted === true);
+    });
+  });
+}
+
+/**
+ * 受信任扩展页的字幕翻译管道：
+ * 开关 → 配置完整性 → 主机权限 → 分批 AI 翻译。绝不返回 provider 原始错误正文。
+ */
+async function handleTranslateBilibiliSubtitles(payload: {
+  sourceTrackId: string;
+  lines: Array<{ from: number; to: number; content: string }>;
+}): Promise<TranslateBilibiliSubtitlesResponse> {
+  const settings = await loadSettings();
+  const { ai } = settings;
+  if (ai.enabled !== true || ai.translateBilibiliSubtitles !== true) {
+    return {
+      success: false,
+      code: 'AI_TRANSLATION_DISABLED',
+      error: 'B站字幕自动翻译未开启，请在设置中开启。',
+    };
+  }
+  if (ai.endpoint === '' || ai.apiKey === '' || ai.model === '') {
+    return { success: false, code: 'AI_NOT_CONFIGURED', error: '字幕翻译需要先配置并启用AI服务。' };
+  }
+  const pattern = getAiOriginPattern(ai.endpoint);
+  if (pattern === null) {
+    return { success: false, code: 'AI_NOT_CONFIGURED', error: 'AI Endpoint 非法，请检查设置。' };
+  }
+  if (!(await hasOriginPermission(pattern))) {
+    return { success: false, code: 'AI_HOST_NOT_GRANTED', error: 'AI接口尚未授权，请在设置中授权并测试。' };
+  }
+  try {
+    const lines = await translateBilibiliSubtitleLines(payload.lines, ai);
+    return { success: true, lines };
+  } catch (error) {
+    if (error instanceof VisualAnalysisRequestError) {
+      return { success: false, code: error.code, error: error.message };
+    }
+    return { success: false, code: 'AI_PROVIDER_ERROR', error: 'AI字幕翻译服务暂时不可用。' };
   }
 }
 
@@ -196,6 +261,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .then((settings) => testAiConnection(settings.ai))
       .then(({ model }) => sendResponse({ success: true, model }))
       .catch((e) => sendResponse({ success: false, error: String(e) }));
+    return true;
+  }
+
+  // ---- B站字幕 AI 翻译（仅当前扩展自身页面可发起） ----
+  if (messageType(msg) === 'TRANSLATE_BILIBILI_SUBTITLES') {
+    if (!isTranslateBilibiliSubtitlesRequest(msg)) {
+      sendResponse({ success: false, code: 'AI_INVALID_RESPONSE', error: '非法字幕翻译载荷。' });
+      return false;
+    }
+    if (!isTrustedExtensionSender(sender)) {
+      sendResponse({
+        success: false,
+        code: 'AI_PROVIDER_ERROR',
+        error: '来自不受信任页面的字幕翻译请求已被拒绝。',
+      });
+      return false;
+    }
+    handleTranslateBilibiliSubtitles(msg.payload)
+      .then((resp) => sendResponse(resp))
+      .catch(() => sendResponse({
+        success: false,
+        code: 'AI_PROVIDER_ERROR',
+        error: 'AI字幕翻译服务暂时不可用。',
+      }));
     return true;
   }
 

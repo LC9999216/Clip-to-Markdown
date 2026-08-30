@@ -1,172 +1,174 @@
 import type { BiliSubtitleLine, BiliTranscriptSegment } from './subtitle-types';
 
-const MAX_DURATION_SECONDS = 20;
-const CJK_RE = /\p{Script=Han}/u;
-const NATURAL_END_RE = /[。！？!?；;，,、:：.!?]/u;
+// ---- 展示分段固定规格（不进入设置页） ----
+// 正常字幕约 4 秒一小段；字符密度足够时每段最长不超过 6 秒。
+const TARGET_DURATION_SECONDS = 4;
+const MAX_DURATION_SECONDS = 6;
 
-interface GroupLimits {
-  min: number;
-  ideal: number;
+const CJK_LIMITS = {
+  minCut: 6,
+  target: 24,
+  max: 28,
+} as const;
+
+const LATIN_LIMITS = {
+  minCut: 12,
+  target: 56,
+  max: 72,
+} as const;
+
+const HAN_RE = /\p{Script=Han}/u;
+const WHITESPACE_RE = /\s/u;
+const STRONG_PUNCT = new Set(['。', '！', '？', '”', '’', '!', '?', '；', ';']);
+const WEAK_PUNCT = new Set(['，', ',', '、', '：', ':']);
+
+interface SegmentLimits {
+  minCut: number;
+  target: number;
   max: number;
 }
 
-interface TimedChunk {
-  text: string;
-  start: number;
-  end: number;
-  forceBoundary: boolean;
+function containsHan(text: string): boolean {
+  return HAN_RE.test(text);
 }
 
-function limitsFor(lines: BiliSubtitleLine[]): GroupLimits {
-  const isChinese = lines.some((line) => CJK_RE.test(line.content));
-  return isChinese
-    ? { min: 30, ideal: 90, max: 160 }
-    : { min: 60, ideal: 180, max: 320 };
+function getSegmentLimits(text: string): SegmentLimits {
+  return containsHan(text) ? CJK_LIMITS : LATIN_LIMITS;
 }
 
-function isNaturalEnd(character: string | undefined): boolean {
-  return character !== undefined && NATURAL_END_RE.test(character);
+function isWhitespaceChar(character: string | undefined): boolean {
+  return character !== undefined && WHITESPACE_RE.test(character);
 }
 
-function timestampForCharacter(from: number, to: number, totalCharacters: number, characterOffset: number): number {
-  if (totalCharacters <= 0) return from;
-  return from + (to - from) * (characterOffset / totalCharacters);
-}
-
-function makeChunk(
-  chars: string[],
-  from: number,
-  to: number,
-  totalCharacters: number,
-  startOffset: number,
-  endOffset: number,
-  forceBoundary: boolean,
-): TimedChunk {
-  return {
-    text: chars.slice(startOffset, endOffset).join(''),
-    start: timestampForCharacter(from, to, totalCharacters, startOffset),
-    end: timestampForCharacter(from, to, totalCharacters, endOffset),
-    forceBoundary,
-  };
-}
-
-/** Find the latest sentence/phrase boundary in the inclusive character range. */
-function findNaturalCut(chars: string[], startOffset: number, endOffset: number, minLength: number): number | null {
-  const first = startOffset + minLength - 1;
-  const last = Math.min(chars.length - 1, endOffset - 1);
-  for (let index = last; index >= first; index -= 1) {
-    if (isNaturalEnd(chars[index])) return index + 1;
+function sliceHasContent(codePoints: string[], start: number, end: number): boolean {
+  for (let index = start; index < end; index += 1) {
+    if (!isWhitespaceChar(codePoints[index])) return true;
   }
-  return null;
-}
-
-function splitLongLine(line: BiliSubtitleLine, limits: GroupLimits): TimedChunk[] {
-  const chars = Array.from(line.content);
-  const characterCount = chars.length;
-  const duration = Math.max(0, line.to - line.from);
-  const durationCharacterLimit = duration > MAX_DURATION_SECONDS
-    ? Math.max(1, Math.floor(characterCount * MAX_DURATION_SECONDS / duration))
-    : characterCount;
-  const hardLimit = Math.max(1, Math.min(limits.max, durationCharacterLimit));
-  const needsHardSplit = characterCount > limits.max || duration > MAX_DURATION_SECONDS;
-
-  // If the span has fewer characters than 20-second windows, keep the
-  // characters in leading windows and represent the trailing remainder with
-  // empty timing-only chunks. This preserves the full source time range
-  // without duplicating or dropping sparse subtitle text.
-  const timedWindowCount = Math.ceil(duration / MAX_DURATION_SECONDS);
-  if (duration > MAX_DURATION_SECONDS && characterCount < timedWindowCount) {
-    return Array.from({ length: timedWindowCount }, (_, index) => ({
-      text: index < characterCount ? chars[index]! : '',
-      start: line.from + Math.min(index * MAX_DURATION_SECONDS, duration),
-      end: line.from + Math.min((index + 1) * MAX_DURATION_SECONDS, duration),
-      forceBoundary: true,
-    }));
-  }
-
-  if (!needsHardSplit && characterCount <= limits.ideal) {
-    return [makeChunk(chars, line.from, line.to, characterCount, 0, characterCount, false)];
-  }
-
-  // A line that fits below the hard limit only needs an internal cut when a
-  // natural boundary occurs before the hard maximum. Otherwise keep its
-  // original line boundary intact.
-  if (!needsHardSplit) {
-    const naturalCut = findNaturalCut(chars, 0, limits.max, limits.min);
-    if (!naturalCut || naturalCut >= characterCount) {
-      return [makeChunk(chars, line.from, line.to, characterCount, 0, characterCount, false)];
-    }
-    return [
-      makeChunk(chars, line.from, line.to, characterCount, 0, naturalCut, false),
-      makeChunk(chars, line.from, line.to, characterCount, naturalCut, characterCount, false),
-    ];
-  }
-
-  const chunks: TimedChunk[] = [];
-  let offset = 0;
-  while (offset < characterCount) {
-    const endLimit = needsHardSplit ? Math.min(characterCount, offset + hardLimit) : characterCount;
-    const naturalCut = findNaturalCut(chars, offset, endLimit, limits.min);
-    const endOffset = naturalCut && naturalCut > offset ? naturalCut : endLimit;
-    chunks.push(makeChunk(chars, line.from, line.to, characterCount, offset, endOffset, needsHardSplit));
-    offset = endOffset;
-  }
-  return chunks;
-}
-
-function flush(
-  chunks: TimedChunk[],
-  result: BiliTranscriptSegment[],
-): void {
-  if (chunks.length === 0) return;
-  result.push({
-    id: `S${String(result.length + 1).padStart(4, '0')}`,
-    start: chunks[0]!.start,
-    end: chunks[chunks.length - 1]!.end,
-    text: chunks.map((chunk) => chunk.text).join(''),
-  });
-  chunks.length = 0;
+  return false;
 }
 
 /**
- * Group subtitle lines into stable display segments without changing text order
- * or the original first/last timestamps.
+ * 按固定优先级选择切点：
+ * 1) 强句末标点；2) 后跟空白的拉丁句点（避开小数/版本号/URL）；3) 弱标点；
+ * 4) 拉丁空白边界；5) 都没有时在 targetLimit 处硬切。
+ * 候选必须位于 [offset + min(minCut, remaining-1), offset + hardLimit]；
+ * 同优先级取距 offset+targetLimit 最近者，距离相同取较后者（标点归入前段）。
+ */
+function findCutIndex(
+  codePoints: string[],
+  offset: number,
+  targetLimit: number,
+  hardLimit: number,
+  minCut: number,
+  isCjk: boolean,
+): number {
+  const total = codePoints.length;
+  const remaining = total - offset;
+  if (remaining <= hardLimit) return total;
+
+  const lowCut = offset + Math.min(minCut, remaining - 1);
+  const highCut = offset + hardLimit;
+  const idealCut = offset + targetLimit;
+
+  const bestCut = (matches: (character: string, position: number) => boolean): number | null => {
+    let best: number | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    const first = Math.max(offset, lowCut - 1);
+    const last = Math.min(total - 2, highCut - 1);
+    for (let position = first; position <= last; position += 1) {
+      if (!matches(codePoints[position]!, position)) continue;
+      const cut = position + 1;
+      const distance = Math.abs(cut - idealCut);
+      if (distance <= bestDistance) {
+        bestDistance = distance;
+        best = cut;
+      }
+    }
+    return best;
+  };
+
+  const strongCut = bestCut((character) => STRONG_PUNCT.has(character));
+  if (strongCut !== null) return strongCut;
+
+  // 拉丁句点：仅当后接空白（或文本结尾）时视为句末，避免切断小数、版本号或 URL
+  const dotCut = bestCut((character, position) => character === '.' && isWhitespaceChar(codePoints[position + 1]));
+  if (dotCut !== null) return dotCut;
+
+  const weakCut = bestCut((character) => WEAK_PUNCT.has(character));
+  if (weakCut !== null) return weakCut;
+
+  if (!isCjk) {
+    const whitespaceCut = bestCut((character) => isWhitespaceChar(character));
+    if (whitespaceCut !== null) return whitespaceCut;
+  }
+
+  return idealCut;
+}
+
+/** 分隔空白归入前段；同时保证每段至少包含一个非空白字符（不丢字、无纯空白段）。 */
+function advanceCut(codePoints: string[], offset: number, cut: number): number {
+  const total = codePoints.length;
+  let end = cut;
+  while (end < total && isWhitespaceChar(codePoints[end])) end += 1;
+  if (!sliceHasContent(codePoints, offset, end) && end < total) {
+    end += 1;
+    while (end < total && isWhitespaceChar(codePoints[end])) end += 1;
+  }
+  return end;
+}
+
+/** 把一条源字幕行拆成展示子段：时间按累计 code point 比例分配，首尾时间精确保留。 */
+function splitSubtitleLine(line: BiliSubtitleLine): Array<{ start: number; end: number; text: string }> {
+  const codePoints = Array.from(String(line.content ?? ''));
+  if (codePoints.length === 0) return [];
+
+  const from = Number.isFinite(line.from) ? Math.max(0, line.from) : 0;
+  const to = Number.isFinite(line.to) ? Math.max(from, line.to) : from;
+  const duration = to - from;
+  const chars = codePoints.length;
+  const limits = getSegmentLimits(line.content);
+  const isCjk = containsHan(line.content);
+
+  // 极稀疏源行保真例外：平均一个不可再分的 code point 已超过 6 秒，
+  // 无法拆出更有意义的字幕；不重复文字、不造空段，保留原始时间范围。
+  if (duration > MAX_DURATION_SECONDS && duration / chars > MAX_DURATION_SECONDS) {
+    return [{ start: from, end: to, text: line.content }];
+  }
+
+  const targetByTime = duration > 0
+    ? Math.max(1, Math.floor(chars * TARGET_DURATION_SECONDS / duration))
+    : limits.target;
+  const maxByTime = duration > 0
+    ? Math.max(targetByTime, Math.floor(chars * MAX_DURATION_SECONDS / duration))
+    : limits.max;
+  const targetLimit = Math.min(limits.target, targetByTime);
+  const hardLimit = Math.max(targetLimit, Math.min(limits.max, maxByTime));
+
+  const segments: Array<{ start: number; end: number; text: string }> = [];
+  let offset = 0;
+  while (offset < chars) {
+    const rawCut = findCutIndex(codePoints, offset, targetLimit, hardLimit, limits.minCut, isCjk);
+    const cut = advanceCut(codePoints, offset, rawCut);
+    const start = offset === 0 ? from : from + duration * (offset / chars);
+    const end = cut === chars ? to : from + duration * (cut / chars);
+    segments.push({ start, end, text: codePoints.slice(offset, cut).join('') });
+    offset = cut;
+  }
+  return segments;
+}
+
+/**
+ * 把字幕行分成稳定的展示段：逐条源行独立处理，绝不跨源行合并；
+ * 源行之间的真实时间空档保持为空档。
  */
 export function groupTranscript(raw: BiliSubtitleLine[]): BiliTranscriptSegment[] {
   const lines = (raw ?? []).filter((line) => String(line.content ?? '').trim().length > 0);
-  if (lines.length === 0) return [];
-
-  const limits = limitsFor(lines);
-  const chunks = lines.flatMap((line) => splitLongLine(line, limits));
-  const result: BiliTranscriptSegment[] = [];
-  const current: TimedChunk[] = [];
-  let currentCharacters = 0;
-
-  for (const chunk of chunks) {
-    const chunkCharacters = Array.from(chunk.text).length;
-    const currentStart = current[0]?.start;
-    const wouldExceedDuration = current.length > 0 && currentStart !== undefined
-      && chunk.end - currentStart > MAX_DURATION_SECONDS;
-    const wouldExceedCharacters = currentCharacters > 0 && currentCharacters + chunkCharacters > limits.max;
-    if (wouldExceedDuration || wouldExceedCharacters) {
-      flush(current, result);
-      currentCharacters = 0;
-    }
-
-    current.push(chunk);
-    currentCharacters += chunkCharacters;
-
-    const endsNaturally = isNaturalEnd(Array.from(chunk.text).at(-1));
-    const elapsed = current[0] ? chunk.end - current[0].start : 0;
-    const shouldFlush = chunk.forceBoundary
-      || elapsed >= MAX_DURATION_SECONDS
-      || currentCharacters >= limits.max
-      || (currentCharacters >= limits.min && (currentCharacters >= limits.ideal || endsNaturally));
-    if (shouldFlush) {
-      flush(current, result);
-      currentCharacters = 0;
-    }
-  }
-  flush(current, result);
-  return result;
+  return lines
+    .flatMap(splitSubtitleLine)
+    .map((segment, index) => ({
+      id: `S${String(index + 1).padStart(4, '0')}`,
+      start: segment.start,
+      end: segment.end,
+      text: segment.text,
+    }));
 }

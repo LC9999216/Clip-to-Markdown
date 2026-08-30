@@ -44,7 +44,18 @@
 
 ## 四、实现摘要
 
-（待 Task 2 回填）
+`src/adapters/bilibili/transcript.ts` 全量重写（净减约 40 行），删除旧的跨行聚合状态（`current`/`flush`/20 秒窗口/90–320 字阈值/timing-only 空段），替换为：
+
+- **固定常量**：`TARGET_DURATION_SECONDS = 4`、`MAX_DURATION_SECONDS = 6`；中文 `{minCut:6, target:24, max:28}`、拉丁 `{minCut:12, target:56, max:72}`（模块私有，不进设置页）。
+- **语言判定**：`/\p{Script=Han}/u`（支持扩展汉字），全部按 `Array.from` 的 code point 计数。
+- **按时长调整**：`targetByTime = max(1, floor(chars×4/duration))`、`maxByTime = max(targetByTime, floor(chars×6/duration))`；`targetLimit = min(languageTarget, targetByTime)`、`hardLimit = max(targetLimit, min(languageMax, maxByTime))`。
+- **切点优先级**（`findCutIndex`）：强句末 `。！？”’!?；;` → 后跟空白的拉丁句点（保护小数/版本号/URL）→ 弱标点 `，,、：:` → 拉丁空白边界 → `targetLimit` 硬切；候选位于 `[offset+min(minCut, remaining−1), offset+hardLimit]`，同优先级取距 `offset+targetLimit` 最近、同距取较后（标点归前段）；剩余 ≤ hardLimit 直接收尾。
+- **空白处理**（`advanceCut`）：分隔空白归入前段，且保证每段至少一个非空白字符——不丢字、无纯空白段。
+- **极稀疏例外**：`duration > 6 且 duration/chars > 6` 时保留单个非空展示段与原始时间范围（进入切分循环前判断）。
+- **时间分配**：`from + duration×(offset/chars)`；首段 start 精确等于 `from`、末段 end 精确等于 `to`、相邻子段共享同一表达式（IEEE 精确相等）；`to < from` 规范为非负区间，`from === to` 不产生 NaN。
+- **`groupTranscript`**：过滤空白行 → 逐行 `flatMap(splitSubtitleLine)` → 全局顺序编号 `S0001…`。
+
+**未修改** `src/subtitle/subtitle.ts`：官方轨与 AI 虚拟轨在 `renderReady` 中调用同一 `groupTranscript`（subtitle.ts:499），点击跳转/播放高亮消费返回的 `start/end`，接口未变；全量测试 38 文件 / 600 用例零失败证明无调用方缺陷。未新增设置、消息协议、依赖、网络或 AI 请求。
 
 ## 五、自动化验证
 

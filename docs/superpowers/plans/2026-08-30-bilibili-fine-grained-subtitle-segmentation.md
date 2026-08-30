@@ -640,7 +640,7 @@ git commit -m "feat: segment bilibili subtitles into short timed cues"
 - Modify: `tests/subtitle-page.test.ts`
 - Modify only if proven necessary: `src/subtitle/subtitle.ts`
 
-- [ ] **Step 1: 添加官方中文字幕长行集成用例**
+- [x] **Step 1: 添加官方中文字幕长行集成用例**
 
 复用现有字幕页测试 harness，让官方字幕资源返回一条 0~14 秒、84 个中文 code point 的字幕。
 
@@ -652,7 +652,7 @@ git commit -m "feat: segment bilibili subtitles into short timed cues"
 - 4 行文字按顺序拼接等于源文字；
 - 轨道选择仍显示官方中文轨名称。
 
-- [ ] **Step 2: 添加 AI 中文虚拟轨的相同分段用例**
+- [x] **Step 2: 添加 AI 中文虚拟轨的相同分段用例**
 
 让源轨为英文，翻译 handler 返回一条 0~14 秒、84 个中文 code point 的翻译结果。
 
@@ -666,11 +666,11 @@ git commit -m "feat: segment bilibili subtitles into short timed cues"
 
 这个测试证明无需修改翻译协议或让 AI 返回更多时间码。
 
-- [ ] **Step 3: 添加点击第三段跳转测试**
+- [x] **Step 3: 添加点击第三段跳转测试**
 
 点击 `data-start="8"` 的第三个 row，断言发给播放器桥接的 seek 时间为 8 秒，而不是原始大段的 0 秒或下一源行时间。
 
-- [ ] **Step 4: 添加播放高亮短段测试**
+- [x] **Step 4: 添加播放高亮短段测试**
 
 模拟播放时间：
 
@@ -682,11 +682,11 @@ git commit -m "feat: segment bilibili subtitles into short timed cues"
 
 沿用现有半秒轮询/消息机制，不为测试引入第二套时钟。
 
-- [ ] **Step 5: 添加真实空档集成用例**
+- [x] **Step 5: 添加真实空档集成用例**
 
 官方两条源字幕分别为 0~2 秒、10~12 秒。模拟播放 5 秒，断言没有 row 高亮；页面只显示两个 row，没有 2~10 秒的空占位行。
 
-- [ ] **Step 6: 添加轨道切换与缓存回归断言**
+- [x] **Step 6: 添加轨道切换与缓存回归断言**
 
 在现有 AI 测试中补充或复用断言：
 
@@ -695,7 +695,7 @@ git commit -m "feat: segment bilibili subtitles into short timed cues"
 - 刷新语义保持现有实现；
 - 失败的 AI 翻译仍回退官方英文，不将英文分段冒充“中文（AI）”。
 
-- [ ] **Step 7: 运行集成测试并确认红/绿过程**
+- [x] **Step 7: 运行集成测试并确认红/绿过程**
 
 先在仅新增测试、尚未做任何可能的 `subtitle.ts` 修改时运行：
 
@@ -710,7 +710,7 @@ Expected: 如果 Task 2 已正确保持接口，测试应直接通过。若失�
 3. 只有第三种情况才最小修改 `src/subtitle/subtitle.ts`；
 4. 禁止为了测试方便复制生产逻辑到页面层。
 
-- [ ] **Step 8: 如需修改页面代码，先补精确失败测试再修复**
+- [x] **Step 8: 如需修改页面代码，先补精确失败测试再修复**（无需修改：测试一次通过，未触碰 `subtitle.ts`）
 
 允许的最小修复仅限：
 
@@ -720,7 +720,7 @@ Expected: 如果 Task 2 已正确保持接口，测试应直接通过。若失�
 
 不得重写页面状态机、轨道偏好或翻译缓存。
 
-- [ ] **Step 9: 提交字幕页集成覆盖**
+- [x] **Step 9: 提交字幕页集成覆盖**
 
 如果生产页面无需修改：
 

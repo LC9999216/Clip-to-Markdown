@@ -33,8 +33,10 @@ type MessageListener = (
   sender: unknown,
   sendResponse: (resp: unknown) => void,
 ) => boolean | void;
+type InstalledListener = (details: chrome.runtime.InstalledDetails) => void;
 
 const runtimeListeners: MessageListener[] = [];
+const installedListeners: InstalledListener[] = [];
 const storageChangeListeners: Array<(
   changes: Record<string, chrome.storage.StorageChange>,
   areaName: chrome.storage.AreaName,
@@ -73,10 +75,14 @@ export async function dispatchRuntimeMessage(msg: unknown, sender: unknown = {})
   return undefined;
 }
 
+export function dispatchInstalled(details: chrome.runtime.InstalledDetails): void {
+  for (const listener of [...installedListeners]) listener(details);
+}
+
 // ---- 各 API 的 mock（导出便于测试按需配置）----
 
 export const runtimeSendMessageMock = vi.fn();
-export const openOptionsPageMock = vi.fn();
+export const openOptionsPageMock = vi.fn(async () => {});
 export const notificationsCreateMock = vi.fn(
   (options: { title?: string; message?: string }, cb?: (id: string) => void) => {
     currentLastError = null; // 模拟「本次调用成功」的 lastError 作用域
@@ -177,6 +183,12 @@ export function dispatchCommand(command: string, tab?: chrome.tabs.Tab): void {
 const chromeMock = {
   runtime: {
     id: 'test-extension-id',
+    OnInstalledReason: {
+      INSTALL: 'install',
+      UPDATE: 'update',
+      CHROME_UPDATE: 'chrome_update',
+      SHARED_MODULE_UPDATE: 'shared_module_update',
+    },
     get lastError() {
       return currentLastError;
     },
@@ -187,6 +199,13 @@ const chromeMock = {
       removeListener: (l: MessageListener) => {
         const i = runtimeListeners.indexOf(l);
         if (i >= 0) runtimeListeners.splice(i, 1);
+      },
+    },
+    onInstalled: {
+      addListener: (listener: InstalledListener) => installedListeners.push(listener),
+      removeListener: (listener: InstalledListener) => {
+        const index = installedListeners.indexOf(listener);
+        if (index >= 0) installedListeners.splice(index, 1);
       },
     },
     sendMessage: runtimeSendMessageMock,
@@ -326,6 +345,7 @@ beforeEach(() => {
   chromeCalls.sidePanelOpens.length = 0;
   currentLastError = null;
   openOptionsPageMock.mockReset();
+  openOptionsPageMock.mockImplementation(async () => {});
   runtimeSendMessageMock.mockReset();
   tabsQueryMock.mockReset();
   tabsQueryMock.mockImplementation(defaultTabsQuery);

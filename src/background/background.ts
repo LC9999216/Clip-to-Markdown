@@ -157,6 +157,11 @@ async function handleTranslateBilibiliSubtitles(payload: {
   }
 }
 
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason !== chrome.runtime.OnInstalledReason.INSTALL) return;
+  void chrome.runtime.openOptionsPage().catch(() => undefined);
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // ---- 下载 Markdown 文件 ----
   if (isDownloadRequest(msg)) {

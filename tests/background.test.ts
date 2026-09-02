@@ -2,9 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import '../src/background/background';
 import {
   chromeCalls,
+  dispatchInstalled,
   dispatchRuntimeMessage,
   mockSessionStorage,
   mockStoredSettings,
+  openOptionsPageMock,
   permissionsContainsMock,
   tabsQueryMock,
   tabsSendMessageMock,
@@ -18,6 +20,23 @@ const DOWNLOAD = {
   type: 'DOWNLOAD',
   payload: { markdown: '# hi', filename: 'tweet.md' },
 };
+
+describe('background first-install setup', () => {
+  it('opens the options page exactly once after a fresh install', () => {
+    dispatchInstalled({ reason: chrome.runtime.OnInstalledReason.INSTALL });
+
+    expect(openOptionsPageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not open the options page after an extension update', () => {
+    dispatchInstalled({
+      reason: chrome.runtime.OnInstalledReason.UPDATE,
+      previousVersion: '0.1.0',
+    });
+
+    expect(openOptionsPageMock).not.toHaveBeenCalled();
+  });
+});
 
 function okJson(data: unknown): Response {
   return {

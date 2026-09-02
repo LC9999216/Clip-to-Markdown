@@ -1,4 +1,4 @@
- # GlanceClip
+ # Clip to Markdown
 
 **先看懂，再收藏。** 一款面向 **X、知乎、Bilibili、ChatGPT、小黑盒** 的 AI 浏览器阅读与 Markdown 剪藏助手。
 

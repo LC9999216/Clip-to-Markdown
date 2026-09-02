@@ -1,14 +1,12 @@
-# 👁️ GlanceClip
+ # GlanceClip
 
 **先看懂，再收藏。** 一款面向 **X、知乎、Bilibili、ChatGPT、小黑盒** 的 AI 浏览器阅读与 Markdown 剪藏助手。
 
 **[安装到 Chrome](https://chromewebstore.google.com/detail/clip-to-markdown/ncfnjmgfjnggekjomeflbnoihcmelhal)** · **[安装到 Edge](https://microsoftedge.microsoft.com/addons/detail/clip-to-markdown/cbjlhmmghfglniaohpodmpjhcinnbplj)**
 
-> README 展示名为 GlanceClip；商店和浏览器中的扩展名称仍为 **Clip to Markdown**。
-
 ## ✨ 核心功能
 
-### 一图速览
+### 一图速览（AI速览，快捷键可自行修改）
 
 按 `Ctrl + Shift + Y` 打开侧栏，快速获得：
 
@@ -53,7 +51,7 @@ B站视频或分 P 页面可以进入 **B站独立字幕页**：
 | ChatGPT | 用户与助手对话 | ✅ | ✅ | — |
 | 小黑盒 | 帖子、图文帖子 | ✅ | ✅ | — |
 
-## ⚡ 快速使用
+## ⚡ 快速使用（快捷键可自行修改）
 
 打开受支持平台的内容详情页，然后使用：
 

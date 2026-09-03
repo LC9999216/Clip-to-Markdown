@@ -5,3 +5,9 @@ coverage/
 .worktrees/
 *.log
 *.zip
+
+# Internal development notes are kept outside the public repository.
+/docs/progress/
+/docs/reports/
+/docs/superpowers/plans/
+/docs/superpowers/specs/

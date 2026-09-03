@@ -108,8 +108,8 @@ B站视频或分 P 页面可以进入 **B站独立字幕页**：
 需要 Chrome 116+ 或兼容的 Edge，以及 Node.js。
 
 ```bash
-git clone https://github.com/LC9999216/clip2md.git
-cd clip2md
+git clone https://github.com/LC9999216/Clip-to-Markdown.git
+cd Clip-to-Markdown
 npm ci
 npm run build
 ```

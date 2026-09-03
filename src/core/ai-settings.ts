@@ -14,7 +14,7 @@ export interface AiSettings {
   endpoint: string;
   /** API Key（仅 Background 读取） */
   apiKey: string;
-  /** 模型名，例如 deepseek-chat */
+  /** 默认 deepseek-v4-flash，可改为兼容模型 */
   model: string;
   /** 输出语言，V1 固定为简体中文 */
   outputLanguage: 'zh-CN';
@@ -24,9 +24,9 @@ export interface AiSettings {
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
   enabled: false,
-  endpoint: '',
+  endpoint: 'https://api.deepseek.com/chat/completions',
   apiKey: '',
-  model: '',
+  model: 'deepseek-v4-flash',
   outputLanguage: 'zh-CN',
   translateBilibiliSubtitles: false,
 };

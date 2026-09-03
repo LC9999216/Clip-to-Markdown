@@ -10,9 +10,9 @@ describe('AiSettings 默认值', () => {
   it('提供完整且禁用的默认值', () => {
     expect(DEFAULT_AI_SETTINGS).toEqual({
       enabled: false,
-      endpoint: '',
+      endpoint: 'https://api.deepseek.com/chat/completions',
       apiKey: '',
-      model: '',
+      model: 'deepseek-v4-flash',
       outputLanguage: 'zh-CN',
       translateBilibiliSubtitles: false,
     });

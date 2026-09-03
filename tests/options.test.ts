@@ -39,7 +39,10 @@ function fakeDirectoryHandle(name: string): FileSystemDirectoryHandle {
   return { name } as FileSystemDirectoryHandle;
 }
 
-async function bootOptions(handle: FileSystemDirectoryHandle | null = null): Promise<void> {
+async function bootOptions(
+  handle: FileSystemDirectoryHandle | null = null,
+  visualSummaryShortcut = 'Ctrl+Shift+Y',
+): Promise<void> {
   folderMocks.loadDirectoryHandle.mockResolvedValue(handle);
   folderMocks.saveDirectoryHandle.mockResolvedValue(undefined);
   folderMocks.clearDirectoryHandle.mockResolvedValue(undefined);
@@ -48,6 +51,7 @@ async function bootOptions(handle: FileSystemDirectoryHandle | null = null): Pro
     const commands = [
       { name: 'save-clip', shortcut: 'Ctrl+Shift+S' },
       { name: 'save-to-obsidian', shortcut: 'Alt+Shift+S' },
+      { name: 'visual-summary', shortcut: visualSummaryShortcut },
     ] as chrome.commands.Command[];
     callback?.(commands);
     return Promise.resolve(commands) as never;
@@ -89,6 +93,12 @@ beforeEach(() => {
 });
 
 describe('Clip2MD 设置页结构', () => {
+  it('为 AI 模型输入提供通用兼容模型提示', () => {
+    const modelInput = document.getElementById('ai-model') as HTMLInputElement;
+    expect(modelInput.placeholder).not.toContain('deepseek-chat');
+    expect(modelInput.placeholder).toContain('可填写其他兼容模型');
+  });
+
   it('按保存位置、快捷键、AI 一图速览、Obsidian、保存栏的优先级组织页面', () => {
     const form = document.getElementById('settings-form');
     expect(form).not.toBeNull();
@@ -117,6 +127,8 @@ describe('Clip2MD 设置页结构', () => {
       'shortcut-btn',
       'obsidian-shortcut-value',
       'obsidian-shortcut-btn',
+      'visual-summary-shortcut-value',
+      'visual-summary-shortcut-btn',
       'subfolder',
       'save-as',
       'filename-template',
@@ -158,6 +170,12 @@ describe('Clip2MD 设置页结构', () => {
 
     expect((document.getElementById('obsidian-api-key') as HTMLInputElement).type).toBe('password');
     expect(document.getElementById('save-status')?.getAttribute('aria-live')).toBe('polite');
+    expect(document.getElementById('shortcut-btn')?.getAttribute('aria-label'))
+      .toBe('修改普通保存快捷键');
+    expect(document.getElementById('obsidian-shortcut-btn')?.getAttribute('aria-label'))
+      .toBe('修改保存到 Obsidian 快捷键');
+    expect(document.getElementById('visual-summary-shortcut-btn')?.getAttribute('aria-label'))
+      .toBe('修改一图速览快捷键');
   });
 
   it('展示 V0.2 品牌、默认文件名模板、About 链接与运行时版本', async () => {
@@ -171,6 +189,43 @@ describe('Clip2MD 设置页结构', () => {
     expect(document.querySelector('a[href="https://github.com/LC9999216/clip2md/issues"]')).not.toBeNull();
     expect(document.querySelector('a[href="mailto:luochengco_0707@qq.com"]')).not.toBeNull();
     expect(document.querySelector('a[href="https://github.com/LC9999216/clip2md/blob/main/LICENSE"]')).not.toBeNull();
+  });
+});
+
+describe('快捷键设置', () => {
+  it('展示一图速览快捷键及说明，并点击修改只打开一次官方快捷键页', async () => {
+    await bootOptions(null);
+
+    const item = document.getElementById('visual-summary-shortcut-value')?.closest('.shortcut-item');
+    expect(item?.textContent).toContain('一图速览');
+    expect(item?.textContent).toContain('打开侧栏并生成当前页面速览');
+    expect(item?.textContent).toContain('Ctrl+Shift+Y');
+
+    const tabsCreate = vi.mocked(chrome.tabs.create);
+    tabsCreate.mockClear();
+    (document.getElementById('visual-summary-shortcut-btn') as HTMLButtonElement).click();
+
+    expect(tabsCreate).toHaveBeenCalledOnce();
+    expect(tabsCreate).toHaveBeenCalledWith({ url: 'chrome://extensions/shortcuts' });
+  });
+
+  it('一图速览未绑定时显示现有未绑定提示', async () => {
+    await bootOptions(null, '');
+    expect(document.getElementById('visual-summary-shortcut-value')?.textContent)
+      .toBe('当前：未绑定（点击右侧按钮绑定）');
+  });
+
+  it('读取快捷键失败时三项都显示读取失败', async () => {
+    commandsGetAllMock.mockImplementation(() => {
+      throw new Error('commands unavailable');
+    });
+    await import('../src/options/options');
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    await vi.waitFor(() => {
+      expect(document.getElementById('shortcut-value')?.textContent).toContain('读取失败');
+      expect(document.getElementById('obsidian-shortcut-value')?.textContent).toContain('读取失败');
+      expect(document.getElementById('visual-summary-shortcut-value')?.textContent).toContain('读取失败');
+    });
   });
 });
 
@@ -277,7 +332,7 @@ describe('表单保存状态', () => {
       expect(document.getElementById('save-status')?.textContent).toBe('设置已保存');
       expect(saveButton.disabled).toBe(true);
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 4,
+        settingsVersion: 5,
         save: {
           subfolder: 'Clip2MD/知乎',
         },
@@ -352,7 +407,7 @@ describe('Obsidian 高级设置', () => {
         expect.any(Function),
       );
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 4,
+        settingsVersion: 5,
         obsidian: { apiKey: 'secret-key' },
       });
       expect(document.getElementById('obsidian-status')?.textContent)
@@ -379,6 +434,50 @@ describe('Obsidian 高级设置', () => {
 });
 
 describe('AI 一图速览设置', () => {
+  it('初始化旧配置时渲染 DeepSeek 默认值，保持 API Key 为空且 AI 未启用', async () => {
+    await bootOptions(null);
+
+    expect((document.getElementById('ai-endpoint') as HTMLInputElement).value)
+      .toBe('https://api.deepseek.com/chat/completions');
+    expect((document.getElementById('ai-model') as HTMLInputElement).value)
+      .toBe('deepseek-v4-flash');
+    expect((document.getElementById('ai-api-key') as HTMLInputElement).value).toBe('');
+    expect((document.getElementById('ai-enabled') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('全新用户初始化时渲染 DeepSeek 默认值，保持 API Key 为空且 AI 未启用', async () => {
+    delete mockStoredSettings['clip2md.settings'];
+
+    await bootOptions(null);
+
+    expect((document.getElementById('ai-endpoint') as HTMLInputElement).value)
+      .toBe('https://api.deepseek.com/chat/completions');
+    expect((document.getElementById('ai-model') as HTMLInputElement).value)
+      .toBe('deepseek-v4-flash');
+    expect((document.getElementById('ai-api-key') as HTMLInputElement).value).toBe('');
+    expect((document.getElementById('ai-enabled') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('初始化时保留合法非空的自定义 AI endpoint 与 model', async () => {
+    mockStoredSettings['clip2md.settings'] = {
+      settingsVersion: 4,
+      ai: {
+        enabled: true,
+        endpoint: 'https://api.openai.com/v1/chat/completions',
+        apiKey: 'sk-custom',
+        model: 'gpt-5-mini',
+        outputLanguage: 'zh-CN',
+        translateBilibiliSubtitles: false,
+      },
+    };
+
+    await bootOptions(null);
+
+    expect((document.getElementById('ai-endpoint') as HTMLInputElement).value)
+      .toBe('https://api.openai.com/v1/chat/completions');
+    expect((document.getElementById('ai-model') as HTMLInputElement).value).toBe('gpt-5-mini');
+  });
+
   it('AI API Key 支持显示/隐藏，且不把显示状态视为表单修改', async () => {
     await bootOptions(null);
     const input = document.getElementById('ai-api-key') as HTMLInputElement;
@@ -416,7 +515,7 @@ describe('AI 一图速览设置', () => {
         expect.any(Function),
       );
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 4,
+        settingsVersion: 5,
         ai: {
           enabled: true,
           endpoint: 'https://api.deepseek.com/chat/completions',
@@ -494,7 +593,7 @@ describe('AI 一图速览设置', () => {
       expect(document.getElementById('ai-status')?.textContent).toContain('连接成功');
       expect(document.getElementById('ai-status')?.textContent).toContain('deepseek-chat');
       expect(mockStoredSettings['clip2md.settings']).toMatchObject({
-        settingsVersion: 4,
+        settingsVersion: 5,
         ai: { apiKey: 'sk-secret', model: 'deepseek-chat' },
       });
     });

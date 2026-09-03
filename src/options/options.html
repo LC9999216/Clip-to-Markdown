@@ -98,7 +98,7 @@
         <div class="settings-card__header">
           <div>
             <h2 id="shortcut-title">快捷键</h2>
-            <p class="card-description">可分别为普通保存和 Obsidian 保存设置快捷键</p>
+            <p class="card-description">可分别为普通保存、Obsidian 保存和一图速览设置快捷键</p>
           </div>
         </div>
         <div class="shortcut-list">
@@ -109,7 +109,7 @@
               <small>保存当前页面为 Markdown</small>
             </div>
             <kbd id="shortcut-value">加载中…</kbd>
-            <button id="shortcut-btn" type="button" class="text-button">修改</button>
+            <button id="shortcut-btn" type="button" class="text-button" aria-label="修改普通保存快捷键">修改</button>
           </div>
           <div class="shortcut-item">
             <span class="shortcut-icon obsidian-shortcut-icon" aria-hidden="true">O</span>
@@ -118,7 +118,16 @@
               <small>跳过下载，直接发送到 Obsidian</small>
             </div>
             <kbd id="obsidian-shortcut-value">加载中…</kbd>
-            <button id="obsidian-shortcut-btn" type="button" class="text-button">修改</button>
+            <button id="obsidian-shortcut-btn" type="button" class="text-button" aria-label="修改保存到 Obsidian 快捷键">修改</button>
+          </div>
+          <div class="shortcut-item">
+            <span class="shortcut-icon" aria-hidden="true">✦</span>
+            <div>
+              <strong>一图速览</strong>
+              <small>打开侧栏并生成当前页面速览</small>
+            </div>
+            <kbd id="visual-summary-shortcut-value">加载中…</kbd>
+            <button id="visual-summary-shortcut-btn" type="button" class="text-button" aria-label="修改一图速览快捷键">修改</button>
           </div>
         </div>
         <p class="card-footnote">快捷键由 Chrome 统一管理，点击“修改”前往快捷键页面自定义。</p>
@@ -183,7 +192,7 @@
               id="ai-model"
               name="ai-model"
               type="text"
-              placeholder="例如：deepseek-chat"
+              placeholder="可填写其他兼容模型"
               spellcheck="false"
             />
           </div>

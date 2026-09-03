@@ -27,7 +27,7 @@ export type { ObsidianFrontmatterSettings, ObsidianSettings } from './obsidian-s
 export { DEFAULT_AI_SETTINGS } from './ai-settings';
 export type { AiSettings } from './ai-settings';
 
-export const SETTINGS_VERSION = 4 as const;
+export const SETTINGS_VERSION = 5 as const;
 export const DEFAULT_FILENAME_TEMPLATE = '{date}-{title}';
 
 export interface SaveSettings {
@@ -124,16 +124,22 @@ function cloneDefaultSettings(): ClipSettings {
   };
 }
 
-/** 规范化 AI 设置：Endpoint 非法则清空、apiKey 去空白、outputLanguage 固定。 */
-function normalizeAiSettings(raw: unknown): AiSettings {
+/** 规范化 AI 设置：Endpoint 缺失补默认值，非空非法值清空。 */
+function normalizeAiSettings(raw: unknown, preserveExplicitBlankEndpoint: boolean): AiSettings {
   const value = isRecord(raw) ? raw : {};
+  const rawEndpoint = readString(value.endpoint);
+  const endpoint = rawEndpoint === undefined
+    ? DEFAULT_AI_SETTINGS.endpoint
+    : rawEndpoint.trim() === ''
+      ? preserveExplicitBlankEndpoint ? '' : DEFAULT_AI_SETTINGS.endpoint
+      : normalizeAiEndpoint(rawEndpoint) ?? '';
   return {
     enabled: typeof value.enabled === 'boolean'
       ? value.enabled
       : DEFAULT_AI_SETTINGS.enabled,
-    endpoint: normalizeAiEndpoint(readString(value.endpoint) ?? '') ?? '',
+    endpoint,
     apiKey: readString(value.apiKey)?.trim() ?? '',
-    model: readString(value.model)?.trim() ?? '',
+    model: readString(value.model)?.trim() || DEFAULT_AI_SETTINGS.model,
     outputLanguage: DEFAULT_AI_SETTINGS.outputLanguage,
     translateBilibiliSubtitles: typeof value.translateBilibiliSubtitles === 'boolean'
       ? value.translateBilibiliSubtitles
@@ -165,10 +171,13 @@ function normalizeFrontmatter(raw: unknown): ObsidianFrontmatterSettings {
   };
 }
 
-/** 把 V0.1 扁平设置或不完整的 V2 设置转换为完整的 V2 模型。 */
+/** 把旧版扁平或不完整设置转换为完整的当前模型。 */
 export function migrateSettings(raw: unknown): ClipSettings {
   if (!isRecord(raw)) return cloneDefaultSettings();
 
+  const sourceSettingsVersion = typeof raw.settingsVersion === 'number'
+    ? raw.settingsVersion
+    : 0;
   const save = isRecord(raw.save) ? raw.save : raw;
   const filename = isRecord(raw.filename) ? raw.filename : {};
   const obsidian = isRecord(raw.obsidian) ? raw.obsidian : {};
@@ -200,7 +209,7 @@ export function migrateSettings(raw: unknown): ClipSettings {
       noteDirectory,
       frontmatter: normalizeFrontmatter(obsidian.frontmatter),
     },
-    ai: normalizeAiSettings(raw.ai),
+    ai: normalizeAiSettings(raw.ai, sourceSettingsVersion >= SETTINGS_VERSION),
   };
 }
 
@@ -234,7 +243,7 @@ export function saveSettings(settings: ClipSettings): Promise<void> {
         apiKey: migrated.obsidian.apiKey.trim(),
         frontmatter: { ...migrated.obsidian.frontmatter },
       },
-      ai: normalizeAiSettings(migrated.ai),
+      ai: { ...migrated.ai },
     };
     try {
       chrome.storage.local.set({ [STORAGE_KEY]: normalized }, () => {

@@ -3,6 +3,7 @@ import {
   DEFAULT_FILENAME_TEMPLATE,
   DEFAULT_OBSIDIAN_SETTINGS,
   DEFAULT_SETTINGS,
+  SETTINGS_VERSION,
   loadSettings,
   migrateSettings,
   resolveDownloadPath,
@@ -61,15 +62,16 @@ describe('resolveDownloadPath', () => {
   });
 });
 
-describe('Settings V4', () => {
+describe('Settings V5', () => {
   it('默认设置包含版本、文件名模板、Obsidian 与 AI 默认值', () => {
-    expect(DEFAULT_SETTINGS.settingsVersion).toBe(4);
+    expect(SETTINGS_VERSION).toBe(5);
+    expect(DEFAULT_SETTINGS.settingsVersion).toBe(5);
     expect(DEFAULT_SETTINGS.filename.template).toBe(DEFAULT_FILENAME_TEMPLATE);
     expect(DEFAULT_SETTINGS.obsidian).toEqual(DEFAULT_OBSIDIAN_SETTINGS);
     expect(DEFAULT_SETTINGS.ai).toEqual(DEFAULT_AI_SETTINGS);
   });
 
-  it('把 V0.1 扁平设置迁移为 V3，并保留现有 Obsidian 配置、补齐 AI 默认值', () => {
+  it('把 V0.1 扁平设置迁移为 V5，并保留现有 Obsidian 配置、补齐 AI 默认值', () => {
     expect(migrateSettings({
       subfolder: 'Clip2MD/知乎',
       saveAs: true,
@@ -77,7 +79,7 @@ describe('Settings V4', () => {
       obsidianApiKey: ' secret ',
       noteFolder: 'Clippings',
     })).toEqual({
-      settingsVersion: 4,
+      settingsVersion: 5,
       save: { subfolder: 'Clip2MD/知乎', saveAs: true },
       filename: { template: DEFAULT_FILENAME_TEMPLATE },
       obsidian: {
@@ -90,7 +92,7 @@ describe('Settings V4', () => {
     });
   });
 
-  it('V2 迁移到 V4 时无损保留 save/filename/obsidian，只补 ai 默认值', () => {
+  it('V2 迁移到 V5 时无损保留 save/filename/obsidian，只补 ai 默认值', () => {
     const v2 = {
       settingsVersion: 2,
       save: { subfolder: 'Clippings/知乎', saveAs: true },
@@ -105,7 +107,7 @@ describe('Settings V4', () => {
     };
     const migrated = migrateSettings(v2);
 
-    expect(migrated.settingsVersion).toBe(4);
+    expect(migrated.settingsVersion).toBe(5);
     expect(migrated.save).toEqual(v2.save);
     expect(migrated.filename).toEqual(v2.filename);
     expect(migrated.obsidian).toEqual(v2.obsidian);
@@ -121,18 +123,90 @@ describe('Settings V4', () => {
       ai: { enabled: true },
     });
 
-    expect(settings.settingsVersion).toBe(4);
+    expect(settings.settingsVersion).toBe(5);
     expect(settings.save).toEqual({ subfolder: '', saveAs: true });
     expect(settings.filename).toEqual({ template: DEFAULT_FILENAME_TEMPLATE });
     expect(settings.obsidian.apiKey).toBe('key');
     expect(settings.ai).toEqual({
       enabled: true,
-      endpoint: '',
+      endpoint: 'https://api.deepseek.com/chat/completions',
       apiKey: '',
-      model: '',
+      model: 'deepseek-v4-flash',
       outputLanguage: 'zh-CN',
       translateBilibiliSubtitles: false,
     });
+  });
+
+  it('V4 配置中缺失或纯空白的 AI endpoint 与 model 回填默认值', () => {
+    const missing = migrateSettings({
+      settingsVersion: 4,
+      ai: {},
+    });
+    const blank = migrateSettings({
+      settingsVersion: 4,
+      ai: {
+        endpoint: '   ',
+        model: '\t',
+      },
+    });
+
+    expect(missing.settingsVersion).toBe(5);
+    expect(missing.ai.endpoint).toBe('https://api.deepseek.com/chat/completions');
+    expect(missing.ai.model).toBe('deepseek-v4-flash');
+    expect(blank.ai.endpoint).toBe('https://api.deepseek.com/chat/completions');
+    expect(blank.ai.model).toBe('deepseek-v4-flash');
+  });
+
+  it('V5 配置中显式空白的 AI endpoint 保持为空', () => {
+    const settings = migrateSettings({
+      settingsVersion: 5,
+      ai: {
+        endpoint: '   ',
+        model: '   ',
+      },
+    });
+
+    expect(settings.ai.endpoint).toBe('');
+    expect(settings.ai.model).toBe('deepseek-v4-flash');
+  });
+
+  it('V5 配置中缺失的 AI endpoint 仍回填默认值', () => {
+    const settings = migrateSettings({
+      settingsVersion: 5,
+      ai: {},
+    });
+
+    expect(settings.ai.endpoint).toBe('https://api.deepseek.com/chat/completions');
+  });
+
+  it('合法非空自定义 AI endpoint 与 model 不被默认值覆盖', () => {
+    const settings = migrateSettings({
+      settingsVersion: 4,
+      ai: {
+        endpoint: '  https://api.openai.com/v1/chat/completions  ',
+        model: '  gpt-5-mini  ',
+      },
+    });
+
+    expect(settings.ai.endpoint).toBe('https://api.openai.com/v1/chat/completions');
+    expect(settings.ai.model).toBe('gpt-5-mini');
+  });
+
+  it('迁移结果再次迁移保持不变', () => {
+    const raw = {
+      settingsVersion: 4,
+      ai: {
+        endpoint: 'http://example.com/chat/completions',
+        model: 'deepseek-chat',
+      },
+    };
+
+    const migrated = migrateSettings(raw);
+    expect(migrateSettings(migrated)).toEqual(migrated);
+  });
+
+  it('全新用户继续获得完整默认设置', () => {
+    expect(migrateSettings(undefined)).toEqual(DEFAULT_SETTINGS);
   });
 
   it('AI 字段在迁移时被规范化：endpoint 非法则清空、apiKey 去空白', () => {
@@ -157,7 +231,39 @@ describe('Settings V4', () => {
     });
   });
 
-  it('保存后可以读取完整的 V3 设置（含 AI 字段）', async () => {
+  it('非空非法 AI endpoint 保存并读取后仍保持为空', async () => {
+    await saveSettings({
+      ...DEFAULT_SETTINGS,
+      ai: {
+        ...DEFAULT_SETTINGS.ai,
+        endpoint: 'http://example.com/chat/completions',
+      },
+    });
+
+    expect((await loadSettings()).ai.endpoint).toBe('');
+  });
+
+  it('非空非法 AI endpoint 清空后，修改无关设置再保存仍保持为空', async () => {
+    await saveSettings({
+      ...DEFAULT_SETTINGS,
+      ai: {
+        ...DEFAULT_SETTINGS.ai,
+        endpoint: 'http://example.com/chat/completions',
+      },
+    });
+    const firstLoad = await loadSettings();
+
+    await saveSettings({
+      ...firstLoad,
+      save: { ...firstLoad.save, saveAs: true },
+    });
+
+    const secondLoad = await loadSettings();
+    expect(secondLoad.save.saveAs).toBe(true);
+    expect(secondLoad.ai.endpoint).toBe('');
+  });
+
+  it('保存后可以读取完整的 V5 设置（含 AI 字段）', async () => {
     const settings = {
       ...DEFAULT_SETTINGS,
       save: { subfolder: 'Notes', saveAs: true },
@@ -181,7 +287,7 @@ describe('Settings V4', () => {
     await expect(loadSettings()).resolves.toEqual(settings);
   });
 
-  it('V3 迁移到 V4 时字幕翻译默认关闭且其他 AI 字段无损', () => {
+  it('V3 迁移到 V5 时字幕翻译默认关闭且其他 AI 字段无损', () => {
     const migrated = migrateSettings({
       settingsVersion: 3,
       ai: {
@@ -193,7 +299,7 @@ describe('Settings V4', () => {
       },
     });
 
-    expect(migrated.settingsVersion).toBe(4);
+    expect(migrated.settingsVersion).toBe(5);
     expect(migrated.ai).toMatchObject({
       enabled: true,
       endpoint: 'https://api.deepseek.com/chat/completions',
@@ -204,7 +310,7 @@ describe('Settings V4', () => {
     });
   });
 
-  it('V4 保存并读取字幕翻译开关', async () => {
+  it('V5 保存并读取字幕翻译开关', async () => {
     await saveSettings({
       ...DEFAULT_SETTINGS,
       ai: { ...DEFAULT_SETTINGS.ai, translateBilibiliSubtitles: true },

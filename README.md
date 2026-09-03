@@ -17,7 +17,7 @@
 
 X 的可靠原文定位仅支持 X Article；普通推文没有可靠锚点时保持静态展示。
 
-![一图速览演示：在公开文章页触发分析，生成两句话摘要、核心观点与内容结构，点击结构条目定位并高亮原文](docs/assets/readme/visual-summary-demo.gif)
+![一图速览演示：在公开文章页触发分析，生成两句话摘要、核心观点与内容结构，点击结构条目定位并高亮原文](docs/assets/readme/visual-summary-demo.png)
 
 ### B站字幕阅读
 
@@ -28,7 +28,7 @@ B站视频或分 P 页面可以进入 **B站独立字幕页**：
 - 点击字幕跳转到对应时间，并保持原播放状态
 - 没有字幕时仍可保存标题、简介和章节
 
-![B站字幕阅读演示：打开独立字幕页，切换字幕轨，播放时当前句自动跟随高亮，点击字幕行跳转视频时间点](docs/assets/readme/bilibili-subtitle-demo.gif)
+![B站字幕阅读演示：打开独立字幕页，切换字幕轨，播放时当前句自动跟随高亮，点击字幕行跳转视频时间点](docs/assets/readme/bilibili-subtitle-demo.png)
 
 字幕功能不下载视频、不做本地或云端语音识别，也不做画面 OCR（**无ASR**）。
 
@@ -67,11 +67,12 @@ B站视频或分 P 页面可以进入 **B站独立字幕页**：
 
 ### AI 服务
 
-一图速览使用你自己配置的 OpenAI-Compatible API。在扩展设置页填写：
+一图速览使用 OpenAI-Compatible API。扩展设置页已预填以下配置：
 
-- Chat Completions Endpoint
-- API Key
-- Model
+- Endpoint：`https://api.deepseek.com/chat/completions`
+- Model：`deepseek-v4-flash`
+
+你只需填写自己的 API Key，并启用 AI 功能。Endpoint 和模型仍可修改为其他兼容 Endpoint/模型；扩展不会替你提供 API Key，需在设置页完成配置后再使用一图速览。
 
 只有主动生成一图速览时，当前内容文本才会发送到该服务。API Key 保存在浏览器本地，项目不自建内容服务器。
 

@@ -74,6 +74,12 @@ const shortcutValueEl = document.getElementById('shortcut-value') as HTMLSpanEle
 const shortcutBtn = document.getElementById('shortcut-btn') as HTMLButtonElement;
 const obsidianShortcutValueEl = document.getElementById('obsidian-shortcut-value') as HTMLSpanElement;
 const obsidianShortcutBtn = document.getElementById('obsidian-shortcut-btn') as HTMLButtonElement;
+const visualSummaryShortcutValueEl = document.getElementById(
+  'visual-summary-shortcut-value',
+) as HTMLSpanElement;
+const visualSummaryShortcutBtn = document.getElementById(
+  'visual-summary-shortcut-btn',
+) as HTMLButtonElement;
 
 type StatusKind = 'muted' | 'ok' | 'error';
 
@@ -247,9 +253,11 @@ async function refreshShortcut(): Promise<void> {
     };
     renderShortcut(shortcutValueEl, 'save-clip');
     renderShortcut(obsidianShortcutValueEl, 'save-to-obsidian');
+    renderShortcut(visualSummaryShortcutValueEl, 'visual-summary');
   } catch (e) {
     shortcutValueEl.textContent = `读取失败：${String(e)}`;
     obsidianShortcutValueEl.textContent = `读取失败：${String(e)}`;
+    visualSummaryShortcutValueEl.textContent = `读取失败：${String(e)}`;
   }
 }
 
@@ -513,6 +521,7 @@ chooseFolderBtn.addEventListener('click', () => void onChooseFolder());
 clearFolderBtn.addEventListener('click', () => void onClearFolder());
 shortcutBtn.addEventListener('click', onOpenShortcuts);
 obsidianShortcutBtn.addEventListener('click', onOpenShortcuts);
+visualSummaryShortcutBtn.addEventListener('click', onOpenShortcuts);
 testObsidianBtn.addEventListener('click', () => void onTestObsidian());
 toggleApiKeyBtn.addEventListener('click', onToggleApiKey);
 toggleAiApiKeyBtn.addEventListener('click', onToggleAiApiKey);

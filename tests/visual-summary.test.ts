@@ -255,6 +255,40 @@ describe('B站独立字幕页构建与入口', () => {
     expect(readme).toContain('无ASR');
     expect(readme).toContain('https://github.com/biuworks/bilibili-digest');
   });
+
+  it('README 使用 PNG 演示图并说明 AI 默认配置', () => {
+    const readme = read('README.md');
+    const visualSummaryImage = 'docs/assets/readme/visual-summary-demo.png';
+    const bilibiliSubtitleImage = 'docs/assets/readme/bilibili-subtitle-demo.png';
+    const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const pngInfo = (relativePath: string) => {
+      const bytes = readFileSync(resolve(root, relativePath));
+      const ihdrLength = bytes.readUInt32BE(8);
+      const ihdrType = bytes.subarray(12, 16).toString('ascii');
+      const width = bytes.readUInt32BE(16);
+      const height = bytes.readUInt32BE(20);
+      const iendType = bytes.subarray(-8, -4).toString('ascii');
+      return { bytes, ihdrLength, ihdrType, width, height, iendType };
+    };
+
+    expect(readme).toContain(visualSummaryImage);
+    expect(readme).toContain(bilibiliSubtitleImage);
+    expect(readme).not.toContain('visual-summary-demo.gif');
+    expect(readme).not.toContain('bilibili-subtitle-demo.gif');
+    expect(existsSync(resolve(root, visualSummaryImage))).toBe(true);
+    expect(existsSync(resolve(root, bilibiliSubtitleImage))).toBe(true);
+    const visualSummaryPng = pngInfo(visualSummaryImage);
+    const bilibiliSubtitlePng = pngInfo(bilibiliSubtitleImage);
+    expect(visualSummaryPng.bytes.subarray(0, 8)).toEqual(pngSignature);
+    expect(bilibiliSubtitlePng.bytes.subarray(0, 8)).toEqual(pngSignature);
+    expect(visualSummaryPng).toMatchObject({ ihdrLength: 13, ihdrType: 'IHDR', width: 1677, height: 1026, iendType: 'IEND' });
+    expect(bilibiliSubtitlePng).toMatchObject({ ihdrLength: 13, ihdrType: 'IHDR', width: 1919, height: 1079, iendType: 'IEND' });
+    expect(readme).toContain('https://api.deepseek.com/chat/completions');
+    expect(readme).toContain('deepseek-v4-flash');
+    expect(readme).toMatch(/填写自己的 API Key，并启用 AI 功能/);
+    expect(readme).toMatch(/其他兼容 Endpoint\/模型/);
+    expect(readme).not.toMatch(/预置 API Key|自动启用/);
+  });
 });
 
 function extractedDocument(text: string, contentType: 'tweet' | 'x-article' = 'tweet'): ContentDocument {

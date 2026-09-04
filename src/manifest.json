@@ -7,9 +7,7 @@
   "default_locale": "zh_CN",
   "permissions": ["activeTab", "downloads", "storage", "notifications", "offscreen", "sidePanel"],
   "optional_host_permissions": [
-    "https://*/*",
-    "http://localhost/*",
-    "http://127.0.0.1/*"
+    "https://*/*"
   ],
   "commands": {
     "save-clip": {

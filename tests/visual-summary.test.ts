@@ -34,6 +34,7 @@ describe('visual summary phase 1 shell', () => {
     const manifest = JSON.parse(read('src/manifest.json')) as {
       minimum_chrome_version?: string;
       permissions: string[];
+      host_permissions: string[];
       optional_host_permissions?: string[];
       side_panel?: { default_path?: string };
       commands: Record<string, {
@@ -45,11 +46,11 @@ describe('visual summary phase 1 shell', () => {
     expect(manifest.minimum_chrome_version).toBe('116');
     expect(manifest.permissions).toContain('sidePanel');
     expect(manifest.side_panel).toEqual({ default_path: 'sidepanel.html' });
-    expect(manifest.optional_host_permissions).toEqual([
-      'https://*/*',
+    expect(manifest.optional_host_permissions).toEqual(['https://*/*']);
+    expect(manifest.host_permissions).toEqual(expect.arrayContaining([
       'http://localhost/*',
       'http://127.0.0.1/*',
-    ]);
+    ]));
     expect(manifest.commands['visual-summary']).toEqual({
       suggested_key: {
         default: 'Ctrl+Shift+Y',

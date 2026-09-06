@@ -54,6 +54,29 @@ export async function loadDirectoryHandle(): Promise<FileSystemDirectoryHandle |
   }
 }
 
+/** 只读查询目录写权限；旧实现缺少权限 API 时沿用已授权行为。 */
+export async function queryDirectoryWritePermission(
+  handle: FileSystemDirectoryHandle,
+): Promise<PermissionState> {
+  if (typeof handle.queryPermission === 'function') {
+    return handle.queryPermission({ mode: 'readwrite' });
+  }
+  return 'granted';
+}
+
+/**
+ * 在用户点击触发的可见扩展页面中恢复目录写权限。
+ * requestPermission 必须直接由用户手势触发，不能在 service worker/offscreen 中调用。
+ */
+export async function requestDirectoryWritePermission(
+  handle: FileSystemDirectoryHandle,
+): Promise<PermissionState> {
+  if (typeof handle.requestPermission === 'function') {
+    return handle.requestPermission({ mode: 'readwrite' });
+  }
+  return queryDirectoryWritePermission(handle);
+}
+
 /** 清除已保存的目录句柄。 */
 export async function clearDirectoryHandle(): Promise<void> {
   const db = await openDb();
@@ -98,12 +121,11 @@ export async function writeMarkdownToDirectory(
 /**
  * 每次实际写入前确认 readwrite 权限：
  * - granted → 放行；
- * - prompt / denied → 抛错（快捷键/offscreen 不弹权限窗口，由调用方降级下载）；
+ * - prompt / denied → 抛错（快捷键/offscreen 不弹权限窗口，由调用方提示重新授权或报告失败）；
  * - queryPermission 不存在（测试桩/旧实现）→ 视为已授权。
  */
 async function ensureWritePermission(dir: FileSystemDirectoryHandle): Promise<void> {
-  if (typeof dir.queryPermission !== 'function') return;
-  const state = await dir.queryPermission({ mode: 'readwrite' });
+  const state = await queryDirectoryWritePermission(dir);
   if (state !== 'granted') {
     throw new Error('未获得该文件夹的写入权限。');
   }

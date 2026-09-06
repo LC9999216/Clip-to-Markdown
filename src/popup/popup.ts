@@ -5,7 +5,11 @@
  */
 
 import { prepareSave } from '../core/save-service';
-import { loadDirectoryHandle, writeMarkdownToDirectory } from '../core/custom-folder';
+import {
+  loadDirectoryHandle,
+  requestDirectoryWritePermission,
+  writeMarkdownToDirectory,
+} from '../core/custom-folder';
 import { InitialSetupRequiredError } from '../core/setup-state';
 import type {
   DownloadResponse,
@@ -20,6 +24,9 @@ const docTitle = document.getElementById('doc-title') as HTMLParagraphElement;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 const obsidianBtn = document.getElementById('obsidian-btn') as HTMLButtonElement;
 const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
+
+let currentDirectoryHandle: FileSystemDirectoryHandle | null = null;
+let directoryHandleLoadFailed = false;
 
 settingsBtn.addEventListener('click', () => {
   void chrome.runtime.openOptionsPage();
@@ -81,6 +88,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function init(): Promise<void> {
   setStatus('正在检测当前页面…');
+  try {
+    currentDirectoryHandle = await loadDirectoryHandle();
+  } catch {
+    directoryHandleLoadFailed = true;
+  }
   const tabId = await getActiveTabId();
   if (tabId == null) {
     setStatus('无法获取当前标签页。', 'error');
@@ -117,6 +129,28 @@ async function init(): Promise<void> {
 
 async function onSave(tabId: number): Promise<void> {
   saveBtn.disabled = true;
+  if (directoryHandleLoadFailed) {
+    saveBtn.textContent = '保存为 Markdown';
+    setStatus('读取自定义文件夹失败，文件没有保存到下载目录。请打开设置重新选择文件夹。', 'error');
+    return;
+  }
+
+  if (currentDirectoryHandle) {
+    saveBtn.textContent = '请求文件夹权限…';
+    try {
+      const permission = await requestDirectoryWritePermission(currentDirectoryHandle);
+      if (permission !== 'granted') {
+        saveBtn.textContent = '保存为 Markdown';
+        setStatus('未获得自定义文件夹写入权限，文件没有保存到下载目录。', 'error');
+        return;
+      }
+    } catch {
+      saveBtn.textContent = '保存为 Markdown';
+      setStatus('无法获得自定义文件夹写入权限，文件没有保存到下载目录。', 'error');
+      return;
+    }
+  }
+
   saveBtn.textContent = '提取中…';
 
   let extract: ExtractResponse;
@@ -149,23 +183,18 @@ async function onSave(tabId: number): Promise<void> {
   }
   const { markdown, filename } = prepared;
 
-  // 优先：若用户在设置里选了自定义文件夹，直接写入该目录（绕过下载目录）。
-  let fallbackNote = '';
+  // 已选择自定义文件夹时只写入该目录，失败也绝不静默改存下载目录。
   saveBtn.textContent = '保存中…';
-  try {
-    const dir = await loadDirectoryHandle();
-    if (dir) {
-      try {
-        const written = await writeMarkdownToDirectory(dir, filename, markdown);
-        saveBtn.textContent = '保存为 Markdown';
-        setStatus(`已保存：${dir.name}/${written}`, 'ok');
-        return;
-      } catch {
-        fallbackNote = '自定义文件夹写入失败，已改为保存到下载目录。';
-      }
+  if (currentDirectoryHandle) {
+    try {
+      const written = await writeMarkdownToDirectory(currentDirectoryHandle, filename, markdown);
+      saveBtn.textContent = '保存为 Markdown';
+      setStatus(`已保存：${currentDirectoryHandle.name}/${written}`, 'ok');
+    } catch {
+      saveBtn.textContent = '保存为 Markdown';
+      setStatus('自定义文件夹写入失败，文件没有保存到下载目录。请重新打开扩展后重试。', 'error');
     }
-  } catch {
-    fallbackNote = '自定义文件夹读取失败，已改为保存到下载目录。';
+    return;
   }
 
   saveBtn.textContent = '下载中…';
@@ -188,7 +217,7 @@ async function onSave(tabId: number): Promise<void> {
   }
 
   saveBtn.textContent = '保存为 Markdown';
-  setStatus(`${fallbackNote}已保存：${dl.filename}`, 'ok');
+  setStatus(`已保存：${dl.filename}`, 'ok');
 }
 
 async function onSaveToObsidian(tabId: number): Promise<void> {

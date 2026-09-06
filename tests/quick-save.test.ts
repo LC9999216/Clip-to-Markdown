@@ -3,6 +3,7 @@ import '../src/background/background';
 import '../src/content/content-script';
 import {
   chromeCalls,
+  actionOpenPopupMock,
   dispatchCommand,
   offscreenCloseDocumentMock,
   offscreenCreateDocumentMock,
@@ -104,7 +105,7 @@ describe('快捷键保存（save-clip）', () => {
     );
   });
 
-  it('权限被拒：不重建 offscreen、不重试，直接下载兜底并通知', async () => {
+  it('权限失效：不重建、不下载，打开保存面板让用户重新授权', async () => {
     setLocation('https://x.com/alice/status/123456');
     mountFixture('x', 'normal');
     vi.mocked(loadDirectoryHandle).mockResolvedValue({ name: 'notes' } as unknown as FileSystemDirectoryHandle);
@@ -116,15 +117,30 @@ describe('快捷键保存（save-clip）', () => {
     });
     dispatchCommand('save-clip');
 
-    await vi.waitFor(() => expect(chromeCalls.downloads.length).toBe(1));
+    await vi.waitFor(() => expect(chromeCalls.notifications.length).toBe(1));
     expect(offscreenCreateDocumentMock).not.toHaveBeenCalled();
     expect(runtimeSendMessageMock).toHaveBeenCalledTimes(1); // 不进行第二次发送
-    expect(chromeCalls.notifications.some((n) => n.message.includes('自定义文件夹写入失败，已保存到下载目录'))).toBe(
-      true,
-    );
+    expect(chromeCalls.downloads).toHaveLength(0);
+    expect(actionOpenPopupMock).toHaveBeenCalledOnce();
+    expect(chromeCalls.notifications[0]?.title).toBe('需要重新授权文件夹');
+    expect(chromeCalls.notifications[0]?.message).toContain('没有保存到下载目录');
   });
 
-  it('两次 offscreen 尝试都失败：最多两轮，只下载一次、只发一条最终通知', async () => {
+  it('读取已配置文件夹失败：不静默回退到下载', async () => {
+    setLocation('https://x.com/alice/status/123456');
+    mountFixture('x', 'normal');
+    vi.mocked(loadDirectoryHandle).mockRejectedValue(new Error('IndexedDB 暂时不可用'));
+    dispatchCommand('save-clip');
+
+    await vi.waitFor(() => expect(chromeCalls.notifications.length).toBe(1));
+    expect(chromeCalls.downloads).toHaveLength(0);
+    expect(chromeCalls.notifications[0]).toEqual({
+      title: '自定义文件夹读取失败',
+      message: '无法读取已配置的保存文件夹，文件没有保存到下载目录。请打开设置重新选择文件夹。',
+    });
+  });
+
+  it('两次 offscreen 生命周期尝试都失败：最多两轮且不下载', async () => {
     setLocation('https://x.com/alice/status/123456');
     mountFixture('x', 'normal');
     vi.mocked(loadDirectoryHandle).mockResolvedValue({ name: 'notes' } as unknown as FileSystemDirectoryHandle);
@@ -137,11 +153,11 @@ describe('快捷键保存（save-clip）', () => {
     });
     dispatchCommand('save-clip');
 
-    await vi.waitFor(() => expect(chromeCalls.downloads.length).toBe(1));
+    await vi.waitFor(() => expect(chromeCalls.notifications.length).toBe(1));
     expect(sendCount).toBe(2); // 最多两次发送
-    expect(chromeCalls.downloads.length).toBe(1);
+    expect(chromeCalls.downloads.length).toBe(0);
     expect(chromeCalls.notifications.length).toBe(1);
-    expect(chromeCalls.notifications[0]?.message).toContain('自定义文件夹写入失败，已保存到下载目录');
+    expect(chromeCalls.notifications[0]?.message).toContain('没有保存到下载目录');
   });
 
   it('Obsidian target 复用同一 filename engine 且不回退为下载', async () => {

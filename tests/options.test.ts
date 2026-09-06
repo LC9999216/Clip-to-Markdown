@@ -31,6 +31,8 @@ const folderMocks = vi.hoisted(() => ({
   loadDirectoryHandle: vi.fn(),
   saveDirectoryHandle: vi.fn(),
   clearDirectoryHandle: vi.fn(),
+  queryDirectoryWritePermission: vi.fn(),
+  requestDirectoryWritePermission: vi.fn(),
 }));
 
 vi.mock('../src/core/custom-folder', () => folderMocks);
@@ -42,10 +44,13 @@ function fakeDirectoryHandle(name: string): FileSystemDirectoryHandle {
 async function bootOptions(
   handle: FileSystemDirectoryHandle | null = null,
   visualSummaryShortcut = 'Ctrl+Shift+Y',
+  folderPermission: PermissionState = handle ? 'granted' : 'prompt',
 ): Promise<void> {
   folderMocks.loadDirectoryHandle.mockResolvedValue(handle);
   folderMocks.saveDirectoryHandle.mockResolvedValue(undefined);
   folderMocks.clearDirectoryHandle.mockResolvedValue(undefined);
+  folderMocks.queryDirectoryWritePermission.mockResolvedValue(folderPermission);
+  folderMocks.requestDirectoryWritePermission.mockResolvedValue('granted');
 
   commandsGetAllMock.mockImplementation((callback?: (commands: chrome.commands.Command[]) => void) => {
     const commands = [
@@ -80,6 +85,8 @@ beforeEach(() => {
   folderMocks.loadDirectoryHandle.mockReset();
   folderMocks.saveDirectoryHandle.mockReset();
   folderMocks.clearDirectoryHandle.mockReset();
+  folderMocks.queryDirectoryWritePermission.mockReset();
+  folderMocks.requestDirectoryWritePermission.mockReset();
   commandsGetAllMock.mockReset();
   runtimeSendMessageMock.mockReset();
   mountOptionsHtml();
@@ -252,6 +259,15 @@ describe('保存位置状态', () => {
     expect(document.getElementById('choose-folder')?.textContent).toBe('选择文件夹');
   });
 
+  it('目录句柄存在但权限失效时显示需授权，而不是已连接', async () => {
+    await bootOptions(fakeDirectoryHandle('AI工具箱'), 'Ctrl+Shift+Y', 'prompt');
+
+    expect(document.getElementById('folder-name')?.textContent).toBe('AI工具箱');
+    expect(document.getElementById('folder-connection-state')?.textContent).toBe('需授权');
+    expect(document.getElementById('folder-mode-description')?.textContent).toContain('保存前重新授权');
+    expect(document.getElementById('choose-folder')?.textContent).toBe('重新授权');
+  });
+
   it('新用户显示首次初始化引导，选择文件夹后解除普通保存门禁', async () => {
     delete mockStoredSettings['clip2md.settings'];
     delete mockStoredSettings[INITIAL_SETUP_KEY];
@@ -290,6 +306,7 @@ describe('保存位置状态', () => {
         queryPermission: vi.fn(async () => 'denied'),
       } as unknown as FileSystemDirectoryHandle)),
     });
+    folderMocks.requestDirectoryWritePermission.mockResolvedValue('denied');
 
     (document.getElementById('choose-folder') as HTMLButtonElement).click();
 

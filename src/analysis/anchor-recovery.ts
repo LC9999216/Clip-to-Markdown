@@ -146,6 +146,31 @@ function findReplacementQuote(
   return best.candidate;
 }
 
+/** Quote 是否恰好出现在一个 sent Block 中（跨块唯一）。 */
+function isUniqueAcrossBlocks(
+  quote: string,
+  allBlocks: AnalysisSourceBlock[],
+): boolean {
+  return allBlocks.filter((block) => block.text.includes(quote)).length === 1;
+}
+
+/**
+ * Quote 已精确存在于目标 Block 但跨块重复时，在同一 Block 内扩展为
+ * 包含该 Quote 的更长且跨块唯一的候选；恰好一个时返回，否则 null（歧义保守失败）。
+ */
+function findExactUniqueExpansion(
+  quote: string,
+  block: AnalysisSourceBlock,
+  allBlocks: AnalysisSourceBlock[],
+): string | null {
+  const candidates = collectQuoteCandidates(block.text).filter(
+    (candidate) =>
+      candidate.includes(quote) &&
+      isUniqueAcrossBlocks(candidate, allBlocks),
+  );
+  return candidates.length === 1 ? candidates[0]! : null;
+}
+
 function hasAnchor(
   item: VisualStructureItem,
 ): item is Extract<VisualStructureItem, { sourceBlockId: string; sourceQuote: string }> {
@@ -169,7 +194,18 @@ export function recoverVisualSummaryAnchors(
   const structure = summary.structure.map((item) => {
     if (!hasAnchor(item)) return item;
     const block = byId.get(item.sourceBlockId);
-    if (!block || block.text.includes(item.sourceQuote)) return item;
+    // Block 不存在 → 原样保留（由调用方 validator 报告，绝不猜测其他 ID）。
+    if (!block) return item;
+    // Quote 已在某个 Block 精确存在且跨块唯一 → 原样保留。
+    if (isUniqueAcrossBlocks(item.sourceQuote, input.sourceBlocks)) return item;
+    // Quote 在目标 Block 精确存在但跨块重复 → 尝试在同一块内扩展为更长且唯一的原文。
+    if (block.text.includes(item.sourceQuote)) {
+      const expansion = findExactUniqueExpansion(item.sourceQuote, block, input.sourceBlocks);
+      if (!expansion) return item;
+      changed = true;
+      return { ...item, sourceQuote: expansion };
+    }
+    // Quote 不在目标 Block → 沿用相似度恢复；不唯一或置信不足时保守失败。
     const replacement = findReplacementQuote(item.sourceQuote, block, input.sourceBlocks);
     if (!replacement) return item;
     changed = true;

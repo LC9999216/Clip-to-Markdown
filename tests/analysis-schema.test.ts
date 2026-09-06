@@ -431,4 +431,20 @@ describe('validateVisualSummaryAnchors', () => {
     const problems = validateVisualSummaryAnchors(noAnchor, V2_ZHIHU_INPUT);
     expect(problems.some((p) => p.includes('sourceBlockId'))).toBe(true);
   });
+
+  it('同一精确短引用同时存在于两个块时必须报告 not unique', () => {
+    const duplicateBlocks: AnalysisSourceBlock[] = [
+      { id: 'B001', kind: 'paragraph', text: '为什么要按工作职责划分 Agent' },
+      { id: 'B002', kind: 'paragraph', text: 'Agent 的使用边界很重要' },
+    ];
+    const input = { ...V2_ARTICLE_INPUT, sourceBlocks: duplicateBlocks };
+    const bad = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B001', sourceQuote: 'Agent' }],
+    };
+
+    const problems = validateVisualSummaryAnchors(bad, input);
+
+    expect(problems.some((p) => p.includes('is not unique across sent blocks'))).toBe(true);
+  });
 });

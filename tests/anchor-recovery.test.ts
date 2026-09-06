@@ -239,4 +239,69 @@ describe('recoverVisualSummaryAnchors 保守重匹配', () => {
       'structure[1].sourceQuote not found in block B015',
     ]);
   });
+
+  it('Quote 存在于目标块但跨块重复时，扩展为完整且唯一的原文', () => {
+    const duplicateInput: AnalysisInput = {
+      ...INPUT,
+      body: '[B010]\n为什么要按工作职责划分 Agent\n\n[B011]\nAgent 的使用边界很重要',
+      sourceBlocks: [
+        { id: 'B010', kind: 'heading', text: '为什么要按工作职责划分 Agent' },
+        { id: 'B011', kind: 'paragraph', text: 'Agent 的使用边界很重要' },
+      ],
+    };
+    const original = summary([
+      { title: '按职责划分', sourceBlockId: 'B010', sourceQuote: 'Agent' },
+    ]);
+
+    const recovered = recoverVisualSummaryAnchors(original, duplicateInput);
+
+    expect(recovered).not.toBe(original);
+    expect(recovered.structure[0]).toMatchObject({
+      sourceBlockId: 'B010',
+      sourceQuote: '为什么要按工作职责划分 Agent',
+    });
+    expect(validateVisualSummaryAnchors(recovered, duplicateInput)).toEqual([]);
+  });
+
+  it('两个块文本完全相同时不强行恢复', () => {
+    const identicalInput: AnalysisInput = {
+      ...INPUT,
+      body: '[B001]\n共同内容用于判断。\n\n[B002]\n共同内容用于判断。',
+      sourceBlocks: [
+        { id: 'B001', kind: 'paragraph', text: '共同内容用于判断。' },
+        { id: 'B002', kind: 'paragraph', text: '共同内容用于判断。' },
+      ],
+    };
+    const original = summary([
+      { title: '共同内容', sourceBlockId: 'B001', sourceQuote: '共同内容用于判断。' },
+    ]);
+
+    const recovered = recoverVisualSummaryAnchors(original, identicalInput);
+
+    expect(recovered).toBe(original);
+    expect(validateVisualSummaryAnchors(recovered, identicalInput)).toEqual([
+      'structure[0].sourceQuote is not unique across sent blocks',
+    ]);
+  });
+
+  it('同一目标块存在多个都包含短引用的唯一候选时保持失败', () => {
+    const ambiguousInput: AnalysisInput = {
+      ...INPUT,
+      body: '[B001]\n验证需求真实重要。验证需求实际重要。\n\n[B002]\n我们要验证需求的核心。',
+      sourceBlocks: [
+        { id: 'B001', kind: 'paragraph', text: '验证需求真实重要。验证需求实际重要。' },
+        { id: 'B002', kind: 'paragraph', text: '我们要验证需求的核心。' },
+      ],
+    };
+    const original = summary([
+      { title: '验证', sourceBlockId: 'B001', sourceQuote: '验证需求' },
+    ]);
+
+    const recovered = recoverVisualSummaryAnchors(original, ambiguousInput);
+
+    expect(recovered).toBe(original);
+    expect(validateVisualSummaryAnchors(recovered, ambiguousInput)).toEqual([
+      'structure[0].sourceQuote is not unique across sent blocks',
+    ]);
+  });
 });

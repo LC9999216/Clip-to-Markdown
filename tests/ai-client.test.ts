@@ -664,4 +664,99 @@ describe('analyzeContentV2 成功路径', () => {
     expect(signals[0]).toBe(signals[1]);
     expect(signals[0]!.aborted).toBe(true);
   });
+
+  it('首次输出使用跨块重复的短引用时本地恢复成功，仅一次请求', async () => {
+    const dupInput: AnalysisInput = {
+      ...V2_INPUT,
+      body: '[B010]\n为什么要按工作职责划分 Agent\n\n[B011]\nAgent 的使用边界很重要',
+      sourceBlocks: [
+        { id: 'B010', kind: 'heading', text: '为什么要按工作职责划分 Agent' },
+        { id: 'B011', kind: 'paragraph', text: 'Agent 的使用边界很重要' },
+      ],
+    };
+    const dupValid: VisualSummaryV2 = {
+      ...V2_VALID,
+      structure: [{ title: '划分', sourceBlockId: 'B010', sourceQuote: '为什么要按工作职责划分 Agent' }],
+    };
+    const firstOutput = {
+      ...dupValid,
+      structure: [{ title: '划分', sourceBlockId: 'B010', sourceQuote: 'Agent' }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(okContent(JSON.stringify(firstOutput)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await analyzeContentV2(dupInput, SETTINGS);
+
+    expect(result).toEqual(dupValid);
+    expect(result.structure[0]?.sourceQuote).toBe('为什么要按工作职责划分 Agent');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(validateVisualSummaryAnchors(result, dupInput)).toEqual([]);
+  });
+
+  it('首次引用错配、repair 返回完整标题时两次请求后成功', async () => {
+    const dupInput: AnalysisInput = {
+      ...V2_INPUT,
+      body: '[B010]\n为什么要按工作职责划分 Agent\n\n[B011]\nAgent 的使用边界很重要',
+      sourceBlocks: [
+        { id: 'B010', kind: 'heading', text: '为什么要按工作职责划分 Agent' },
+        { id: 'B011', kind: 'paragraph', text: 'Agent 的使用边界很重要' },
+      ],
+    };
+    const dupValid: VisualSummaryV2 = {
+      ...V2_VALID,
+      structure: [{ title: '划分', sourceBlockId: 'B010', sourceQuote: '为什么要按工作职责划分 Agent' }],
+    };
+    const firstBad = {
+      ...dupValid,
+      structure: [{ title: '划分', sourceBlockId: 'B999', sourceQuote: 'Agent' }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okContent(JSON.stringify(firstBad)))
+      .mockResolvedValueOnce(okContent(JSON.stringify(dupValid)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await analyzeContentV2(dupInput, SETTINGS);
+
+    expect(result).toEqual(dupValid);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('三阶段均不可信时仍返回三段诊断错误且不发起第四次请求', async () => {
+    const dupInput: AnalysisInput = {
+      ...V2_INPUT,
+      body: '[B001]\n验证需求真实重要。验证需求实际重要。\n\n[B002]\n我们要验证需求的核心。',
+      sourceBlocks: [
+        { id: 'B001', kind: 'paragraph', text: '验证需求真实重要。验证需求实际重要。' },
+        { id: 'B002', kind: 'paragraph', text: '我们要验证需求的核心。' },
+      ],
+    };
+    const firstBad = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B999', sourceQuote: 'Agent' }],
+    };
+    const repairedBad = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B001', sourceQuote: '验证需求' }],
+    };
+    const freshBad = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B001', sourceQuote: '验证需求' }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okContent(JSON.stringify(firstBad)))
+      .mockResolvedValueOnce(okContent(JSON.stringify(repairedBad)))
+      .mockResolvedValueOnce(okContent(JSON.stringify(freshBad)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await analyzeContentV2(dupInput, SETTINGS).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+
+    expect(error).toMatchObject({ code: 'AI_INVALID_RESPONSE' });
+    expect((error as Error).message).toContain('首次校验');
+    expect((error as Error).message).toContain('自动修复后');
+    expect((error as Error).message).toContain('全新生成后');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
 });

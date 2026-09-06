@@ -14,6 +14,13 @@ import {
 import type { ContentDocument } from '../src/core/schema';
 import { isFetchJsonRequest, isTranslateBilibiliSubtitlesRequest } from '../src/types/messages';
 
+// 此测试文件不提供 IndexedDB；显式模拟“未配置自定义文件夹”，
+// 避免把测试环境缺少浏览器 API 误当成已配置文件夹的读取故障。
+vi.mock('../src/core/custom-folder', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/core/custom-folder')>();
+  return { ...actual, loadDirectoryHandle: vi.fn(async () => null) };
+});
+
 const SETTINGS_KEY = 'clip2md.settings';
 
 const DOWNLOAD = {

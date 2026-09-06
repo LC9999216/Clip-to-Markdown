@@ -93,15 +93,20 @@ export async function runSave(target: SaveTarget, tabId?: number): Promise<SaveO
     }
   }
 
-  // 自定义文件夹优先（IndexedDB 在 SW 可用，异常视为未配置）
-  let hasCustom = false;
+  // 自定义文件夹优先。已配置文件夹的读取异常不能视为“未配置”，
+  // 否则快捷键会静默把文件写入 Downloads。
+  let directoryHandle: FileSystemDirectoryHandle | null;
   try {
-    hasCustom = !!(await loadDirectoryHandle());
-  } catch {
-    hasCustom = false;
+    directoryHandle = await loadDirectoryHandle();
+  } catch (error) {
+    console.error('读取自定义文件夹失败：', error);
+    return fail(
+      '自定义文件夹读取失败',
+      '无法读取已配置的保存文件夹，文件没有保存到下载目录。请打开设置重新选择文件夹。',
+    );
   }
 
-  if (hasCustom) {
+  if (directoryHandle) {
     try {
       const written = await writeViaOffscreen(filename, markdown);
       notify('已保存', written);
@@ -109,7 +114,17 @@ export async function runSave(target: SaveTarget, tabId?: number): Promise<SaveO
     } catch (e) {
       // 错误详情只写开发日志，用户通知不拼接冗长的 Error
       console.error('自定义文件夹写入失败：', e);
-      return downloadFallback(markdown, filename, '自定义文件夹写入失败，已保存到下载目录：', settings);
+      if (isDirectoryPermissionError(e)) {
+        const opened = await tryOpenSavePopup();
+        const nextStep = opened
+          ? '已打开扩展保存面板，请点击“保存为 Markdown”并允许写入。'
+          : '请点击工具栏中的 Clip to Markdown 图标，再点击“保存为 Markdown”并允许写入。';
+        return fail('需要重新授权文件夹', `${nextStep}文件没有保存到下载目录。`);
+      }
+      return fail(
+        '自定义文件夹保存失败',
+        '文件没有保存到下载目录。请点击扩展图标重试，或打开设置检查保存位置。',
+      );
     }
   }
 
@@ -256,6 +271,20 @@ function isLifecycleError(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e);
   if (LIFECYCLE_ERROR_MARKERS.some((m) => msg.includes(m))) return true;
   return (e as { code?: string } | null)?.code === OFFSCREEN_READY_TIMEOUT_CODE;
+}
+
+function isDirectoryPermissionError(error: unknown): boolean {
+  return String(error).includes('未获得该文件夹的写入权限');
+}
+
+async function tryOpenSavePopup(): Promise<boolean> {
+  if (typeof chrome.action?.openPopup !== 'function') return false;
+  try {
+    await chrome.action.openPopup();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ---------- 工具 ----------

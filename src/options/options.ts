@@ -17,6 +17,8 @@ import { validateFilenameTemplate } from '../core/filename';
 import {
   clearDirectoryHandle,
   loadDirectoryHandle,
+  queryDirectoryWritePermission,
+  requestDirectoryWritePermission,
   saveDirectoryHandle,
 } from '../core/custom-folder';
 import { isInitialSetupComplete, markInitialSetupComplete } from '../core/setup-state';
@@ -69,6 +71,8 @@ const initialSetupGuideEl = document.getElementById('initial-setup-guide') as HT
 
 let currentSettings: ClipSettings = DEFAULT_SETTINGS;
 let initialSetupComplete = false;
+let currentFolderHandle: FileSystemDirectoryHandle | null = null;
+let currentFolderPermission: PermissionState = 'prompt';
 
 const shortcutValueEl = document.getElementById('shortcut-value') as HTMLSpanElement;
 const shortcutBtn = document.getElementById('shortcut-btn') as HTMLButtonElement;
@@ -168,16 +172,22 @@ function renderInitialSetupState(): void {
   setDirty(form.dataset.dirty === 'true');
 }
 
-/** 根据目录句柄渲染保存位置卡片：文件夹名称、连接状态与备用下载区展开状态。 */
-function renderFolderState(handle: FileSystemDirectoryHandle | null): void {
+/** 根据目录句柄与真实权限渲染保存位置卡片。 */
+function renderFolderState(
+  handle: FileSystemDirectoryHandle | null,
+  permission: PermissionState = 'prompt',
+): void {
   const hasCustomFolder = handle !== null;
+  const isGranted = hasCustomFolder && permission === 'granted';
   folderNameEl.textContent = hasCustomFolder ? handle.name : '浏览器下载目录';
   folderModeDescriptionEl.textContent = hasCustomFolder
-    ? '自定义文件夹 · 绕过浏览器下载目录'
+    ? isGranted
+      ? '自定义文件夹 · 绕过浏览器下载目录'
+      : '已选择自定义文件夹 · 保存前重新授权'
     : '使用下方备用下载设置';
-  folderConnectionStateEl.textContent = hasCustomFolder ? '已连接' : '未选择';
-  folderConnectionStateEl.dataset.kind = hasCustomFolder ? 'ok' : 'muted';
-  chooseFolderBtn.textContent = hasCustomFolder ? '更改' : '选择文件夹';
+  folderConnectionStateEl.textContent = hasCustomFolder ? (isGranted ? '已连接' : '需授权') : '未选择';
+  folderConnectionStateEl.dataset.kind = isGranted ? 'ok' : hasCustomFolder ? 'error' : 'muted';
+  chooseFolderBtn.textContent = hasCustomFolder ? (isGranted ? '更改' : '重新授权') : '选择文件夹';
   clearFolderBtn.hidden = !hasCustomFolder;
   fallbackDownloadDetails.open = !hasCustomFolder;
   renderInitialSetupState();
@@ -187,9 +197,14 @@ function renderFolderState(handle: FileSystemDirectoryHandle | null): void {
 async function refreshFolderState(): Promise<FileSystemDirectoryHandle | null> {
   try {
     const handle = await loadDirectoryHandle();
-    renderFolderState(handle);
+    const permission = handle ? await queryDirectoryWritePermission(handle) : 'prompt';
+    currentFolderHandle = handle;
+    currentFolderPermission = permission;
+    renderFolderState(handle, permission);
     return handle;
   } catch (error) {
+    currentFolderHandle = null;
+    currentFolderPermission = 'prompt';
     renderFolderState(null);
     setFolderStatus(`读取文件夹失败：${String(error)}`, 'error');
     return null;
@@ -197,6 +212,22 @@ async function refreshFolderState(): Promise<FileSystemDirectoryHandle | null> {
 }
 
 async function onChooseFolder(): Promise<void> {
+  if (currentFolderHandle && currentFolderPermission !== 'granted') {
+    try {
+      const permission = await requestDirectoryWritePermission(currentFolderHandle);
+      currentFolderPermission = permission;
+      renderFolderState(currentFolderHandle, permission);
+      if (permission === 'granted') {
+        setFolderStatus(`已重新授权「${currentFolderHandle.name}」。`, 'ok');
+      } else {
+        setFolderStatus('未获得该文件夹的写入权限。', 'error');
+      }
+    } catch (error) {
+      setFolderStatus(`重新授权失败：${String(error)}`, 'error');
+    }
+    return;
+  }
+
   if (typeof window.showDirectoryPicker !== 'function') {
     setFolderStatus('当前浏览器不支持选择文件夹（需要 Chrome 105 及以上）。', 'error');
     return;
@@ -205,7 +236,7 @@ async function onChooseFolder(): Promise<void> {
   try {
     const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
     // 只有拿到 granted 才保存句柄；denied/prompt 不保存新句柄，保留原有已配置句柄
-    const permission = await requestWritePermission(handle);
+    const permission = await requestDirectoryWritePermission(handle);
     if (permission !== 'granted') {
       setFolderStatus('未获得该文件夹的写入权限。', 'error');
       return;
@@ -222,17 +253,6 @@ async function onChooseFolder(): Promise<void> {
     }
     setFolderStatus(`选择文件夹失败：${String(e)}`, 'error');
   }
-}
-
-/** 请求 readwrite 权限；无权限 API（测试桩/旧实现）时视为已授权 */
-async function requestWritePermission(handle: FileSystemDirectoryHandle): Promise<PermissionState> {
-  if (typeof handle.requestPermission === 'function') {
-    return handle.requestPermission({ mode: 'readwrite' });
-  }
-  if (typeof handle.queryPermission === 'function') {
-    return handle.queryPermission({ mode: 'readwrite' });
-  }
-  return 'granted';
 }
 
 async function onClearFolder(): Promise<void> {

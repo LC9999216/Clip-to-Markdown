@@ -83,6 +83,7 @@ export function dispatchInstalled(details: chrome.runtime.InstalledDetails): voi
 
 export const runtimeSendMessageMock = vi.fn();
 export const openOptionsPageMock = vi.fn(async () => {});
+export const actionOpenPopupMock = vi.fn(async () => {});
 export const notificationsCreateMock = vi.fn(
   (options: { title?: string; message?: string }, cb?: (id: string) => void) => {
     currentLastError = null; // 模拟「本次调用成功」的 lastError 作用域
@@ -305,6 +306,7 @@ const chromeMock = {
     create: notificationsCreateMock,
   },
   action: {
+    openPopup: actionOpenPopupMock,
     setBadgeText: setBadgeTextMock,
     setBadgeBackgroundColor: setBadgeBackgroundColorMock,
   },
@@ -346,6 +348,8 @@ beforeEach(() => {
   currentLastError = null;
   openOptionsPageMock.mockReset();
   openOptionsPageMock.mockImplementation(async () => {});
+  actionOpenPopupMock.mockReset();
+  actionOpenPopupMock.mockImplementation(async () => {});
   runtimeSendMessageMock.mockReset();
   tabsQueryMock.mockReset();
   tabsQueryMock.mockImplementation(defaultTabsQuery);

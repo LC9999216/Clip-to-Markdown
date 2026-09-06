@@ -263,6 +263,29 @@ describe('recoverVisualSummaryAnchors 保守重匹配', () => {
     expect(validateVisualSummaryAnchors(recovered, duplicateInput)).toEqual([]);
   });
 
+  it('短标题中的重复 Quote 可扩展为不足 6 字但跨块唯一的完整标题', () => {
+    const shortHeadingInput: AnalysisInput = {
+      ...INPUT,
+      body: '[B001]\n章一概述\n\n[B002]\n概述后续安排',
+      sourceBlocks: [
+        { id: 'B001', kind: 'heading', text: '章一概述' },
+        { id: 'B002', kind: 'paragraph', text: '概述后续安排' },
+      ],
+    };
+    const original = summary([
+      { title: '章一概述', sourceBlockId: 'B001', sourceQuote: '概述' },
+    ]);
+
+    const recovered = recoverVisualSummaryAnchors(original, shortHeadingInput);
+
+    expect(recovered).not.toBe(original);
+    expect(recovered.structure[0]).toMatchObject({
+      sourceBlockId: 'B001',
+      sourceQuote: '章一概述',
+    });
+    expect(validateVisualSummaryAnchors(recovered, shortHeadingInput)).toEqual([]);
+  });
+
   it('两个块文本完全相同时不强行恢复', () => {
     const identicalInput: AnalysisInput = {
       ...INPUT,

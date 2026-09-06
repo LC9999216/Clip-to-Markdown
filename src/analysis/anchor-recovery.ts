@@ -62,10 +62,13 @@ function hardChunks(text: string): string[] {
 /**
  * 从单个 Block 生成候选 Quote：
  * 强句末分段（保留标点）→ 超长再按弱标点 → 仍超长按 140 窗口；
- * 丢弃空候选与归一化后 <6 code points 的候选，稳定去重，
+ * 丢弃空候选与归一化后过短的候选，稳定去重，
  * 最后用 blockText.includes 证明每个候选都是原文精确子串。
  */
-function collectQuoteCandidates(blockText: string): string[] {
+function collectQuoteCandidates(
+  blockText: string,
+  minComparisonChars = MIN_COMPARISON_CHARS,
+): string[] {
   const candidates: string[] = [];
   const strongPieces = splitAtBoundaries(blockText, STRONG_END);
   for (const strongPiece of strongPieces.length > 0 ? strongPieces : [blockText.trim()]) {
@@ -87,7 +90,7 @@ function collectQuoteCandidates(blockText: string): string[] {
   return candidates.filter((candidate) => {
     if (seen.has(candidate)) return false;
     seen.add(candidate);
-    return Array.from(comparisonText(candidate)).length >= MIN_COMPARISON_CHARS
+    return Array.from(comparisonText(candidate)).length >= minComparisonChars
       && Array.from(candidate).length <= MAX_SOURCE_QUOTE_CHARS
       && blockText.includes(candidate);
   });
@@ -142,7 +145,7 @@ function findReplacementQuote(
   const second = ranked[1];
   if (!best || best.score < MIN_RECOVERY_SCORE) return null;
   if (second && best.score - second.score < MIN_SCORE_MARGIN) return null;
-  if (allBlocks.filter((item) => item.text.includes(best.candidate)).length !== 1) return null;
+  if (!isUniqueAcrossBlocks(best.candidate, allBlocks)) return null;
   return best.candidate;
 }
 
@@ -151,7 +154,13 @@ function isUniqueAcrossBlocks(
   quote: string,
   allBlocks: AnalysisSourceBlock[],
 ): boolean {
-  return allBlocks.filter((block) => block.text.includes(quote)).length === 1;
+  let found = false;
+  for (const block of allBlocks) {
+    if (!block.text.includes(quote)) continue;
+    if (found) return false;
+    found = true;
+  }
+  return found;
 }
 
 /**
@@ -163,7 +172,7 @@ function findExactUniqueExpansion(
   block: AnalysisSourceBlock,
   allBlocks: AnalysisSourceBlock[],
 ): string | null {
-  const candidates = collectQuoteCandidates(block.text).filter(
+  const candidates = collectQuoteCandidates(block.text, 1).filter(
     (candidate) =>
       candidate.includes(quote) &&
       isUniqueAcrossBlocks(candidate, allBlocks),

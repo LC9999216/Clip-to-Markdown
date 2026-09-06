@@ -50,6 +50,10 @@ function buildRepairPromptV2(problems: string[], lastOutput: string): string {
   return `你上一次返回的数据不符合要求，具体错误如下：
 ${problems.map((p) => `- ${p}`).join('\n')}
 
+修复指引：
+- 错误是 "is not unique across sent blocks" → 保持正确块编号，在同一块内扩展为更长且唯一的原文。
+- 错误是 "not found in block" → 从声明块逐字复制；若引用实际属于其他块，同时修正 ID 和 Quote。
+
 你上次的输出：
 ${lastOutput.slice(0, 3000)}
 

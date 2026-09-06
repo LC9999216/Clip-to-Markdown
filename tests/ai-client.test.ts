@@ -296,6 +296,26 @@ describe('buildAnalysisPromptV2', () => {
     expect(user).toContain('[B001]');
     expect(user).toContain('这是第一段正文。');
   });
+
+  it('system 明确要求 sourceQuote 是块内连续原文子串并逐字复制', () => {
+    const { system } = buildAnalysisPromptV2(V2_INPUT);
+    expect(system).toContain('sourceQuote 必须是 sourceBlockId 对应块中的连续原文子串，逐字复制，不得改写。');
+  });
+
+  it('system 明确要求 sourceQuote 在全部原文块中只出现一次', () => {
+    const { system } = buildAnalysisPromptV2(V2_INPUT);
+    expect(system).toContain('sourceQuote 必须在本次提供的全部原文块中只出现一次。');
+  });
+
+  it('system 明确标题块与正文块使用各自编号的规则', () => {
+    const { system } = buildAnalysisPromptV2(V2_INPUT);
+    expect(system).toContain('引用标题块时复制完整标题；引用标题后的正文时使用正文块编号。');
+  });
+
+  it('system 禁止使用跨块重复的短词作为引用', () => {
+    const { system } = buildAnalysisPromptV2(V2_INPUT);
+    expect(system).toContain('不要使用 Agent、Codex 等可能在多个块中重复出现的短词作为引用。');
+  });
 });
 
 describe('analyzeContentV2 成功路径', () => {
@@ -352,6 +372,24 @@ describe('analyzeContentV2 成功路径', () => {
     const repairBody = JSON.parse(fetchMock.mock.calls[1]![1]!.body as string);
     expect(repairBody.messages[0].content).toContain('B999');
     expect(repairBody.messages[0].content).toContain('不存在');
+  });
+
+  it('repair 提示包含“不唯一”与“错配”引用的修复指引', async () => {
+    const badAnchor = {
+      ...V2_VALID,
+      structure: [{ title: 'x', sourceBlockId: 'B999', sourceQuote: '不存在' }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okContent(JSON.stringify(badAnchor)))
+      .mockResolvedValueOnce(okContent(JSON.stringify(V2_VALID)));
+    vi.stubGlobal('fetch', fetchMock);
+    await analyzeContentV2(V2_INPUT, SETTINGS);
+    const repairBody = JSON.parse(fetchMock.mock.calls[1]![1]!.body as string);
+    const system = repairBody.messages[0].content as string;
+    expect(system).toContain('保持正确块编号');
+    expect(system).toContain('在同一块内扩展为更长且唯一的原文');
+    expect(system).toContain('从声明块逐字复制');
+    expect(system).toContain('同时修正 ID 和 Quote');
   });
 
   it('初次与 repair 均校验失败时，第三次 fresh generation 成功', async () => {

@@ -759,4 +759,64 @@ describe('analyzeContentV2 成功路径', () => {
     expect((error as Error).message).toContain('全新生成后');
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it('首次输出引用取自其他块但可在声明块内恢复时，本地恢复成功且仅一次请求', async () => {
+    const wrongBlockInput: AnalysisInput = {
+      ...V2_INPUT,
+      body: '[B010]\n用 Codex 打造数字员工团队\n\n[B011]\nCodex 打造的数字员工团队很高效',
+      sourceBlocks: [
+        { id: 'B010', kind: 'heading', text: '用 Codex 打造数字员工团队' },
+        { id: 'B011', kind: 'paragraph', text: 'Codex 打造的数字员工团队很高效' },
+      ],
+    };
+    const validWrongBlock: VisualSummaryV2 = {
+      ...V2_VALID,
+      structure: [{ title: '数字员工', sourceBlockId: 'B010', sourceQuote: '用 Codex 打造数字员工团队' }],
+    };
+    const firstOutput = {
+      ...validWrongBlock,
+      structure: [{ title: '数字员工', sourceBlockId: 'B010', sourceQuote: 'Codex 打造的数字员工团队' }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(okContent(JSON.stringify(firstOutput)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await analyzeContentV2(wrongBlockInput, SETTINGS);
+
+    expect(result).toEqual(validWrongBlock);
+    expect(result.structure[0]?.sourceQuote).toBe('用 Codex 打造数字员工团队');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(validateVisualSummaryAnchors(result, wrongBlockInput)).toEqual([]);
+  });
+
+  it('标题/正文错配触发 sourceQuote not found 诊断并经 repair 修正后两次请求成功', async () => {
+    const mismatchInput: AnalysisInput = {
+      ...V2_INPUT,
+      body: '[B010]\n如何构建高效的 Agent 团队\n\n[B011]\n项目需要稳定的资金支持才能长期运转。',
+      sourceBlocks: [
+        { id: 'B010', kind: 'heading', text: '如何构建高效的 Agent 团队' },
+        { id: 'B011', kind: 'paragraph', text: '项目需要稳定的资金支持才能长期运转。' },
+      ],
+    };
+    const firstBad = {
+      ...V2_VALID,
+      structure: [{ title: '资金', sourceBlockId: 'B010', sourceQuote: '项目需要稳定的资金支持' }],
+    };
+    const repairedValid: VisualSummaryV2 = {
+      ...V2_VALID,
+      structure: [{ title: '资金', sourceBlockId: 'B011', sourceQuote: '项目需要稳定的资金支持才能长期运转。' }],
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(okContent(JSON.stringify(firstBad)))
+      .mockResolvedValueOnce(okContent(JSON.stringify(repairedValid)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await analyzeContentV2(mismatchInput, SETTINGS);
+
+    expect(result).toEqual(repairedValid);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const repairBody = JSON.parse(fetchMock.mock.calls[1]![1]!.body as string);
+    const system = repairBody.messages[0].content as string;
+    expect(system).toContain('structure[0].sourceQuote not found in block B010');
+    expect(system).toContain('同时修正 ID 和 Quote');
+  });
 });

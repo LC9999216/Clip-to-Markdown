@@ -196,16 +196,17 @@ export function recoverVisualSummaryAnchors(
     const block = byId.get(item.sourceBlockId);
     // Block 不存在 → 原样保留（由调用方 validator 报告，绝不猜测其他 ID）。
     if (!block) return item;
-    // Quote 已在某个 Block 精确存在且跨块唯一 → 原样保留。
-    if (isUniqueAcrossBlocks(item.sourceQuote, input.sourceBlocks)) return item;
-    // Quote 在目标 Block 精确存在但跨块重复 → 尝试在同一块内扩展为更长且唯一的原文。
     if (block.text.includes(item.sourceQuote)) {
+      // Quote 已在目标 Block 精确存在且跨块唯一 → 原样保留。
+      if (isUniqueAcrossBlocks(item.sourceQuote, input.sourceBlocks)) return item;
+      // 跨块重复 → 尝试在同一目标块内扩展为更长且唯一的原文。
       const expansion = findExactUniqueExpansion(item.sourceQuote, block, input.sourceBlocks);
       if (!expansion) return item;
       changed = true;
       return { ...item, sourceQuote: expansion };
     }
-    // Quote 不在目标 Block → 沿用相似度恢复；不唯一或置信不足时保守失败。
+    // Quote 不在目标 Block：不得因它在其他 Block 唯一而提前保留，
+    // 进入目标 Block 内的相似度恢复；不唯一或置信不足时保守失败。
     const replacement = findReplacementQuote(item.sourceQuote, block, input.sourceBlocks);
     if (!replacement) return item;
     changed = true;

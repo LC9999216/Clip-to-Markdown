@@ -304,4 +304,27 @@ describe('recoverVisualSummaryAnchors 保守重匹配', () => {
       'structure[0].sourceQuote is not unique across sent blocks',
     ]);
   });
+
+  it('Quote 在其他块唯一但不属于声明块时，在目标块内相似度恢复并保持 ID', () => {
+    const wrongBlockInput: AnalysisInput = {
+      ...INPUT,
+      body: '[B010]\n用 Codex 打造数字员工团队\n\n[B011]\nCodex 打造的数字员工团队很高效',
+      sourceBlocks: [
+        { id: 'B010', kind: 'heading', text: '用 Codex 打造数字员工团队' },
+        { id: 'B011', kind: 'paragraph', text: 'Codex 打造的数字员工团队很高效' },
+      ],
+    };
+    const original = summary([
+      { title: '数字员工', sourceBlockId: 'B010', sourceQuote: 'Codex 打造的数字员工团队' },
+    ]);
+
+    const recovered = recoverVisualSummaryAnchors(original, wrongBlockInput);
+
+    expect(recovered).not.toBe(original);
+    expect(recovered.structure[0]).toMatchObject({
+      sourceBlockId: 'B010',
+      sourceQuote: '用 Codex 打造数字员工团队',
+    });
+    expect(validateVisualSummaryAnchors(recovered, wrongBlockInput)).toEqual([]);
+  });
 });
